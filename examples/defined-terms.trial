@@ -1,0 +1,19 @@
+FORM K-1.
+IN THE MATTER OF: defined-terms.
+
+OFF THE RECORD: every proper legal document begins by renaming
+OFF THE RECORD: everyone involved, so that the rest of the document
+OFF THE RECORD: may be conducted entirely in aliases.
+
+HEREINAFTER, the-accused SHALL MEAN "Josef K.".
+HEREINAFTER, the-tribunal SHALL MEAN "the Court of Inquiry".
+HEREINAFTER, the-objection SHALL MEAN SUSTAINED.
+HEREINAFTER, the-fine SHALL MEAN 500.
+
+ARTICLE 1.
+    PROCLAIM the-accused PLUS " v. " PLUS the-tribunal.
+    PROCLAIM "Fine assessed: " PLUS THE TRANSCRIPT OF the-fine PLUS " marks.".
+    SHOULD the-objection EQUAL SUSTAINED,
+        PROCLAIM "The objection of " PLUS the-accused
+            PLUS " is noted, sustained, and disregarded. The fine stands.".
+    ADJOURN INDEFINITELY.

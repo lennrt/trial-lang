@@ -1,0 +1,5 @@
+DEPOSITION OF: reconsideration.trial.
+EXPECT PROCLAMATION: About to consult a record that was never made..
+EXPECT PROCLAMATION: The motion is granted. The Court will not do this twice..
+EXPECT PROCLAMATION: The grounds, unsealed: there is no record of "the-missing-record". There is, however, a record of your asking.
+EXPECT ADJOURNMENT.

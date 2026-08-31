@@ -1,0 +1,611 @@
+(* =====================================================================
+   TRIALLANG, grammar, as amended
+   spec/grammar.ebnf
+
+   Notation: ISO-14977-flavored EBNF.
+     ,    concatenation           |    alternation
+     [ ]  optional                { }  zero or more
+     ( )  grouping                (* *)  commentary, off the record
+
+   Two lexical facts govern everything (see §L below):
+     1. KEYWORDS ARE UPPER-CASE, OFTEN MULTI-WORD, AND NON-NEGOTIABLE.
+        identifiers are lower-case. Capitalization alone distinguishes
+        the law from the accused: EXCEED is a statute, exceed is a
+        perfectly good variable name.
+     2. Statements end with a period. They are sentences. You are
+        being sentenced.
+   ===================================================================== *)
+
+(* ---- The case file -------------------------------------------------- *)
+
+case-file        = form-declaration , caption , { filing-clause } ,
+                   { incorporation } ,
+                   { exhibit-declaration | const-declaration } ,
+                   proceedings ,
+                   { office | exhibit-declaration | const-declaration } ;
+
+statute-file     = "FORM S-1" , terminator , caption , { filing-clause } ,
+                   { office | exhibit-declaration | const-declaration } ;
+(* A statute: a library. No articles; a statute legislates, it does
+   not litigate. Published with trial enact; claimed with
+   INCORPORATE BY REFERENCE. At least one office is required, or the
+   statute is void for vagueness. *)
+
+incorporation    = "INCORPORATE BY REFERENCE" , statute-name , terminator ;
+statute-name     = identifier ;
+(* K-1 and S-1; not K-2. The statute's latest enactment is fetched at
+   filing time and its offices, exhibit shapes, and defined terms are
+   spliced into the case, pinned by construction: the case keeps what
+   it incorporated no matter what the legislature does later. Since
+   v1.9 a statute may incorporate statutes, and incorporation is
+   transitive: what a statute stands on is spliced before it, each
+   statute exactly once however many roads lead to it, every pin on
+   file. *)
+
+form-declaration = ( "FORM K-1" | "FORM K-2" ) , terminator ;
+(* K-1 opens a case; K-2 is a supplemental filing, appended to a live
+   case (trial amend). A K-2 may not establish offices (the building
+   is full) and its referrals reach only its own articles. Filings
+   submitted on any other form are rejected pursuant to Article §4.2.
+   The text of Article §4.2 is not available at this time. *)
+
+caption          = "IN THE MATTER OF" , ":" , case-name , terminator ;
+case-name        = identifier ;
+
+filing-clause    = "FILED BY" , ":" , free-text , terminator ;
+(* Optional. Recorded verbatim in the filing topic. Never read. *)
+
+(* ---- Defined terms: constants ----------------------------------------- *)
+
+const-declaration
+                 = "HEREINAFTER" , "," , identifier , "SHALL MEAN" ,
+                   ( integer-literal | sum-literal | string-literal
+                   | finding-literal ) , terminator ;
+(* A compile-time constant. The literal is substituted wherever the
+   name appears as an operand; the term costs nothing at runtime and
+   leaves no trace in the records topic. A term may mean only a
+   literal; meaning an expression would require interpretation, which
+   is not this office. Definitions are not suggestions: recording over
+   a defined term, entering into one, summoning onto one, striking
+   one, defining it twice, or naming an office concern after it is a
+   rejected filing. A K-2 sees only its own defined terms. *)
+
+(* ---- Proceedings: the case in chief ---------------------------------- *)
+
+proceedings      = article , { article } ;
+
+article          = "ARTICLE" , article-number , terminator , { statement } ;
+article-number   = integer-literal ;
+(* Articles are labels. Gregor compiles them away into proceedings-topic
+   offsets. Numbers must be unique within the case; they need not be
+   consecutive, or ascending, or reasonable. Execution begins at the
+   first article in filing order, regardless of its number. *)
+
+(* ---- Statements ------------------------------------------------------ *)
+
+statement        = recording
+                 | entering
+                 | proclamation
+                 | summons
+                 | timed-summons
+                 | publish
+                 | gazette-await
+                 | license-grant
+                 | assignment
+                 | referral
+                 | conditional
+                 | petition
+                 | remand
+                 | adjournment
+                 | contempt
+                 | strike
+                 | service
+                 | commencement
+                 | motion
+                 | annex
+                 | substitute
+                 | inscribe
+                 | expunge
+                 | petition-under
+                 | archive-commit
+                 | patent-grant ;
+
+recording        = "LET IT BE RECORDED THAT" , identifier , "IS" ,
+                   expression , terminator ;
+(* Assignment. The record persists in the records topic, subject to
+   periodic purging of redundant entries at the Bureau's discretion
+   (log compaction; no schedule you may rely upon). *)
+
+entering         = "LET IT BE ENTERED IN" , identifier , "THAT" ,
+                   entry-name , "IS" , expression , terminator ;
+(* Amends one entry of the exhibit filed under the identifier, by
+   retrieving a copy, correcting it, and filing the corrected copy over
+   the old one. Exhibits are documents, not places: no other copy is
+   disturbed. Entering into anything that is not an exhibit, or
+   inventing an entry the exhibit does not comprise, is GUILTY. *)
+
+proclamation     = "PROCLAIM" , expression , terminator ;
+
+summons          = "AWAIT SUMMONS" , "," , "FILED UNDER" , identifier ,
+                   terminator ;
+(* Input is not requested. It is served upon you, via the summons
+   topic, when the Court is ready. *)
+
+publish          = "PUBLISH" , expression , "IN THE GAZETTE" ,
+                   terminator ;
+(* Court-wide broadcast: the transcript is appended to the-gazette,
+   keyed with the publishing case, inside this step's transaction.
+   Exactly-once publication. *)
+
+gazette-await    = "AWAIT THE GAZETTE" , "," , "FILED UNDER" ,
+                   identifier , terminator ;
+(* Blocks at this case's own gazette cursor (carried in the
+   attention) and consumes the next edition: every case reads every
+   edition, in order, at its own pace, exactly once. The gazette is
+   append-only, so reenactment holds with no ledger entry. *)
+
+selective-summons = "AWAIT SUMMONS FROM" , expression , "," ,
+                    "FILED UNDER" , identifier , terminator ;
+(* The selective receive: the expression names a case, and the Court
+   consumes the first summons bearing that case's seal, out of turn.
+   The records passed over stay where they are, unconsumed, and a
+   plain AWAIT SUMMONS receives them later in their original order.
+   The attention carries the offsets heard out of turn; the log is
+   never lied to. Operator summonses bear no seal and match no FROM. *)
+
+timed-summons    = "AWAIT SUMMONS" , [ "FROM" , expression ] ,
+                   "FOR AT MOST" , expression ,
+                   ( "DAY" | "DAYS" ) , "," , "FILED UNDER" ,
+                   identifier , terminator ,
+                   "FAILING WHICH" , "," , statement ;
+(* The receive with a deadline. Whichever comes first governs: a
+   summons is filed under the identifier and the proceedings continue;
+   the date passes and the proceedings turn to the FAILING WHICH arm,
+   which is mandatory, because a deadline without a contingency is not
+   a deadline. The term must be an integer number of court days >= 0.
+   The outcome is entered in the ledger, so a reenactment repeats it
+   even if the summons topic has since gained records. *)
+
+referral         = "REFER TO" , referral-target , terminator ;
+referral-target  = "ARTICLE" , article-number
+                 | "SECTION" , section-number ;
+(* SECTION referrals are lawful only within the office that contains
+   the section. Articles are not visible from inside an office, nor an
+   office's sections from the case in chief. Jurisdiction is
+   jurisdiction. *)
+
+conditional      = "SHOULD" , condition , "," , statement ,
+                   [ "FAILING WHICH" , "," , statement ] ;
+condition        = conjunction , { "OR IN THE ALTERNATIVE" , conjunction } ;
+conjunction      = clause , { "AND ALSO" , clause } ;
+clause           = expression , [ "FAIL TO" ] , comparator , expression ;
+comparator       = "EXCEED"
+                 | "FALL SHORT OF"
+                 | "EQUAL"
+                 | "DIFFER FROM" ;
+(* The consequence is a single statement, which may itself be a SHOULD;
+   nested SHOULDs conjoin:
+
+       SHOULD x EXCEED 0, SHOULD y EXCEED 0, PROCLAIM "both".
+
+   FAILING WHICH is the else-branch. Note that it follows the
+   consequence's terminating period, as a fresh clause:
+
+       SHOULD n EXCEED 10, PROCLAIM "large". FAILING WHICH, PROCLAIM "small".
+
+   It attaches to the nearest SHOULD, as failure does.
+
+   Clauses may be joined by AND ALSO (conjunction) and OR IN THE
+   ALTERNATIVE (disjunction). AND ALSO binds tighter; both associate
+   to the left; there is no grouping syntax for conditions. The
+   connectives do NOT short-circuit: every clause is heard, and a
+   verdict in either clause is a verdict regardless of the other. The
+   Court reads everything. Nest SHOULDs when a clause must be
+   protected from evaluation.
+
+   EXCEED and FALL SHORT OF apply to integers. EQUAL and DIFFER FROM
+   apply to any two values of the same standing; exhibits are compared
+   entry by entry, recursively; the Court checks every page. Comparing
+   values of different kinds is GUILTY. *)
+
+petition         = "PETITION THE OFFICE OF" , office-name ,
+                   [ "WITH" , argument-list ] , terminator ;
+(* Statement form of a call. Any finding REMANDed by the office is
+   discarded unread. *)
+
+remand           = "REMAND" , [ "WITH" , expression ] , terminator ;
+(* Lawful only within an office. REMAND in the case in chief is
+   GUILTY. *)
+
+adjournment      = "ADJOURN INDEFINITELY" , terminator
+                 | "ADJOURN FOR" , expression , ( "DAY" | "DAYS" ) ,
+                   terminator ;
+(* ADJOURN INDEFINITELY: indefinite postponement. The offset is
+   committed, the official goes home, the case is suspended and
+   resumable forever.
+
+   ADJOURN FOR n DAYS: a continuance. The matter sleeps n court days
+   (one court day is one second, by standing order; the Court is
+   efficient in this respect and only this one) and then resumes of
+   its own accord. The deadline is on file before any waiting starts,
+   so the timer survives the death of the official and resumes on any
+   machine; see spec/bytecode.md, the continuance protocol. A negative
+   term is GUILTY: the Court does not adjourn into the past. *)
+
+service          = "SERVE NOTICE OF" , expression , "UPON" , expression ,
+                   terminator ;
+(* Cross-case correspondence. The first expression is the notice; the
+   second must evaluate to a case number (a string), and that case must
+   be on file with this court. The notice is transcribed (as PROCLAIM
+   would publish it) and appended to the respondent's summons topic in
+   the same transaction as this instruction's other effects: served
+   exactly once, keyed with the serving case's number. The respondent
+   receives it through AWAIT SUMMONS like any other input. A case may
+   serve notice upon itself; the Court finds self-service consistent
+   with the general procedure. Service upon a value that is not a
+   string, or upon a case not on file, is GUILTY. *)
+
+commencement     = "COMMENCE PROCEEDINGS UPON" , expression , "," ,
+                   "FILED UNDER" , identifier , terminator ;
+(* Spawn. The expression is a string bearing a complete Form K-1
+   filing (line breaks are whitespace, so a filing fits in a string).
+   It is parsed, compiled, and filed exactly as `trial file` would
+   file it; the new case number is filed under the identifier. The
+   number is entered in the ledger in the same step, so a reenactment
+   re-serves it and opens nothing. The child starts empty and is not
+   convened; commencement is not process. A non-string source, or one
+   the compiler rejects, is GUILTY, and nothing is opened. *)
+
+motion           = "FILE A MOTION TO RECONSIDER" , "," ,
+                   "REFERRING TO ARTICLE" , integer ,
+                   [ "," , "THE GROUNDS FILED UNDER" , identifier ] ,
+                   terminator ;
+(* Verdict interception, once per case. While the motion is on file,
+   the first verdict that would issue is intercepted: the dossier is
+   impounded as the filing fee, pending appeals are dismissed with it,
+   the sealed particulars are filed under the grounds identifier (if
+   given), and the proceedings resume at the named article. The motion
+   is then spent; a second filing after the grant is GUILTY. Lawful
+   only in the case in chief. *)
+
+annex            = "ANNEX" , expression , "TO" , identifier , terminator ;
+(* Appends one item to the schedule filed under the identifier, by
+   retrieving a copy, extending it, and filing it back. Value
+   semantics: no other copy grows. Annexing to a non-schedule is
+   GUILTY; annexing to a defined term is a rejected filing. *)
+
+substitute       = "SUBSTITUTE" , expression , "FOR ITEM" , expression ,
+                   "OF" , identifier , terminator ;
+(* Replaces the item at the given 1-based position of the schedule
+   filed under the identifier. A position outside the schedule, a
+   non-integer position, or a non-schedule is GUILTY. *)
+
+inscribe         = "INSCRIBE" , expression , "UNDER" , expression ,
+                   "IN" , identifier , terminator ;
+(* Enters one entry in the register filed under the identifier, by
+   retrieving a copy, amending it, and filing it back. Value
+   semantics: no other copy learns of the son. A non-string key or a
+   non-register is GUILTY; inscribing in a defined term is a rejected
+   filing. *)
+
+expunge          = "EXPUNGE THE ENTRY UNDER" , expression ,
+                   "IN" , identifier , terminator ;
+(* Removes one entry from the register filed under the identifier,
+   the same copy-out protocol. Expunging what is not there succeeds
+   vacuously; the Court is no stranger to empty gestures. *)
+
+contempt         = "HOLD" , expression , "IN CONTEMPT" , terminator ;
+(* A verdict, on purpose: the expression is evaluated, transcribed,
+   and entered as the sealed particulars ("held in contempt: ...").
+   The assertion, panic, and abort facility; the Court sees no reason
+   to distinguish them. Final, like every verdict. *)
+
+strike           = "STRIKE" , identifier , "FROM THE RECORD" , terminator ;
+(* Removes the record from the fold by entering a tombstone (a genuine
+   Kafka tombstone) in the records topic; compaction may eventually
+   forget the key, at the Bureau's discretion. The log retains the
+   striking. Striking a record that does not exist is GUILTY; striking
+   a defined term, or an office striking one of its own concerns, is a
+   rejected filing. *)
+
+(* ---- Exhibits: structs ------------------------------------------------ *)
+
+exhibit-declaration
+                 = "THE EXHIBIT OF" , exhibit-name , "," , "COMPRISING" ,
+                   entry-list , terminator ;
+exhibit-name     = identifier ;
+entry-list       = entry-name , { "AND" , entry-name } ;
+entry-name       = identifier ;
+
+(* An exhibit declaration is pure paperwork: it establishes a shape and
+   emits no instructions. Declarations may precede the articles or
+   follow them, alongside the offices. An exhibit is offered (see
+   exhibit-offer, below) by filling in every declared entry: no more,
+   no fewer, none twice. Incomplete forms are rejected in their
+   entirety, at filing time.
+
+   Exhibits have value semantics: recording an exhibit under a second
+   name copies the document; amending one copy disturbs no other. An
+   entry may itself hold an exhibit; exhibits nest without limit,
+   which is what makes the language Turing-complete (see spec/spec.md
+   §18): a chain of two-entry exhibits is a stack of unbounded depth. *)
+
+(* ---- Offices: procedures --------------------------------------------- *)
+
+office           = "THE OFFICE OF" , office-name ,
+                   [ "," , "CONCERNING" , parameter-list ] , terminator ,
+                   { statement } , { section } ;
+office-name      = identifier ;
+parameter-list   = identifier , { "AND" , identifier } ;
+
+section          = "SECTION" , section-number , terminator , { statement } ;
+section-number   = integer-literal ;
+
+(* Offices appear after the final article. Parameters are the office's
+   only local records; all other names refer to the case's records.
+   Reaching the end of an office without REMANDing is an implicit
+   "REMAND.": the office simply stops corresponding. *)
+
+(* ---- Expressions ------------------------------------------------------ *)
+
+expression       = term , { additive-operator , term } ;
+additive-operator
+                 = "PLUS" | "LESS" ;
+(* PLUS upon two strings is joinder (concatenation). PLUS upon a string
+   and anything else is GUILTY. LESS is subtraction: ten LESS three is
+   seven, as any clerk can verify. *)
+
+term             = factor , { multiplicative-operator , factor } ;
+multiplicative-operator
+                 = "TIMES" | "APPORTIONED AMONG" | "NOTWITHSTANDING" ;
+(* APPORTIONED AMONG is integer division, truncated toward zero.
+   Apportioning among zero parties is an automatic verdict.
+   NOTWITHSTANDING is the remainder: "n NOTWITHSTANDING 15" is what
+   remains of n, 15 notwithstanding. *)
+
+factor           = integer-literal
+                 | sum-literal
+                 | string-literal
+                 | finding-literal
+                 | identifier
+                 | finding-of
+                 | exhibit-offer
+                 | inspection
+                 | measurement
+                 | excerpt
+                 | transcript
+                 | sum-certain
+                 | schedule-literal
+                 | item-at
+                 | register-literal
+                 | entry-at
+                 | roster-of
+                 | power-of
+                 | call-under
+                 | case-at-bar
+                 | discretion
+                 | date-of-presents
+                 | document-from
+                 | practice
+                 | standing
+                 | discovery
+                 | "(" , expression , ")" ;
+
+schedule-literal = "A SCHEDULE COMPRISING" , expression , { "AND" , expression }
+                 | "AN EMPTY SCHEDULE" ;
+(* An ordered list of values, heterogeneous, of any length, as annexed
+   to any competent contract. No establishment is required; schedules
+   have no fixed shape to establish. The ANDs are consumed greedily;
+   inside an enclosing AND-separated list, parenthesize, as one
+   would. *)
+
+item-at          = "THE ITEM AT" , expression , "IN" , factor ;
+(* One item of a schedule, 1-indexed. A position outside 1..length, a
+   non-integer position, or a non-schedule is GUILTY. *)
+
+register-literal = "A REGISTER COMPRISING" , expression , "UNDER" , expression ,
+                   { "AND" , expression , "UNDER" , expression }
+                 | "AN EMPTY REGISTER" ;
+(* Names to values: the third collection. Keys are strings; a later
+   entry under the same key corrects the earlier one. The ANDs are
+   consumed greedily, as a schedule's are. *)
+
+entry-at         = "THE ENTRY UNDER" , expression , "IN" , factor ;
+(* One entry of a register, by name. An absent entry, a non-string
+   key, or a non-register is GUILTY; consult the roster first. *)
+
+roster-of        = "THE ROSTER OF" , factor ;
+(* A schedule of the register's keys, in alphabetical order, because
+   the Court files everything alphabetically eventually. The roster is
+   the register's iterator and its existence test, and it is enough. *)
+
+power-of         = "A POWER OF ATTORNEY OVER THE OFFICE OF" , identifier ;
+(* The office as a value: its name, its instruction address, its
+   concerns, and the case that executed the instrument. An office is
+   an offset into the proceedings topic, so a function pointer here is
+   literally a pointer, valid forever because nothing is ever deleted.
+   Conferring an office that does not exist is a rejected filing. *)
+
+call-under       = "THE FINDING UNDER" , factor ,
+                   [ "REGARDING" , expression , { "AND" , expression } ] ;
+(* The dynamic consultation: the office is whichever one the power of
+   attorney confers. A non-power, a wrong number of matters, or an
+   instrument executed in another case's matter is GUILTY, at the
+   moment of exercise. *)
+
+petition-under   = "PETITION UNDER" , expression ,
+                   [ "WITH" , expression , { "AND" , expression } ] ,
+                   terminator ;
+(* The dynamic petition; any remanded finding is discarded, as the
+   static petition statement discards it. Same verdicts as
+   call-under. *)
+
+measurement      = "THE LENGTH OF" , factor ;
+(* Of a string, its length in Unicode code points; of an exhibit or a
+   register, its number of entries. Of an integer or a finding,
+   GUILTY: they have no length; they have, at most, magnitude. *)
+
+excerpt          = "AN EXCERPT OF" , factor ,
+                   "FROM" , expression , "TO" , expression ;
+(* Substring: 1-indexed, both ends inclusive, counted in code points.
+   Lawyers count from one, and no excerpt omits its last page. Bounds
+   must satisfy 1 <= i <= j <= length; anything else, including the
+   empty excerpt, is GUILTY. An excerpt of nothing is not an excerpt. *)
+
+transcript       = "THE TRANSCRIPT OF" , factor ;
+(* Any value, rendered as the string PROCLAIM would publish.
+   Transcription is always available. Interpretation is not offered. *)
+
+sum-certain      = "THE SUM CERTAIN OF" , factor ;
+(* The integer a string denotes (optional sign, digits, and nothing
+   else), or the integer itself, its sum having already been certain.
+   Anything else is GUILTY: the Court will not guess what you meant,
+   though it has recorded that you meant something. *)
+
+case-at-bar      = "THE CASE AT BAR" ;
+(* This case's own number, as a string. Every case knows its own
+   number; it is the one thing it was told. Useful as a return address
+   with SERVE NOTICE, and sufficient for a case to correspond with
+   itself. *)
+
+discretion       = "THE DISCRETION OF THE COURT BETWEEN" , expression ,
+                   "AND" , expression ;
+(* An integer between the two bounds, both inclusive, selected by a
+   process the Court does not explain and will not repeat. Bounds must
+   be integers with lower <= upper; anything else is GUILTY. The
+   selected value is pushed to the dossier like any other, so it
+   survives suspension and crashes; a reenactment, however, exercises
+   the discretion afresh (spec/spec.md §16). Inside an AND-separated
+   list, the BETWEEN consumes the first AND; parenthesize, as one
+   would. *)
+
+date-of-presents = "THE DATE OF THESE PRESENTS" ;
+(* The current wall-clock moment, in court days since the epoch (1970,
+   when the paperwork began). One court day is one second, by standing
+   order, so this is Unix time in seconds. Like the discretion, the
+   reading is entered in the ledger and re-served on reenactment;
+   replay is bit-exact (spec.md 14.4). *)
+
+archive-commit   = "COMMIT" , expression , "TO THE ARCHIVE AS" ,
+                   expression , terminator ;
+(* Enters the value in the case's archive topic (immutable; the offset
+   is the handle) and repoints the compacted catalog at it. The name
+   must be a string. Prior versions remain in the archive; version
+   history is the archive itself, and a lockfile is an offset. *)
+
+document-from    = "THE DOCUMENT" , factor , "FROM THE ARCHIVE" ;
+(* The current version of the document so cataloged. A name never
+   committed is GUILTY; the request, however, is archived. *)
+
+patent-grant     = "LET LETTERS PATENT ISSUE FOR" , invention-name , "," ,
+                   "DISCLOSING" , expression , "," ,
+                   "FOR A TERM OF" , expression , ( "DAYS" | "DAY" ) ,
+                   terminator ;
+invention-name   = identifier ;
+(* Files a claim with the court-wide patent office topic: disclosure
+   (public, mandatory; that is the bargain), holder (the case at bar),
+   grant date (the current court day, via the ledger), and term.
+   Priority is registry offset order: first to file is an integer
+   comparison. A claim in force on the name is GUILTY: anticipated by
+   prior art (another holder) or double patenting (you). *)
+
+practice         = "THE PRACTICE OF" , invention-name ;
+(* The disclosure, if the case at bar holds the letters or every term
+   has lapsed (the public domain). A claim in force held by another
+   case is GUILTY: infringement. Undisclosed inventions are GUILTY;
+   there is, however, then a record of your interest. *)
+
+license-grant    = "GRANT A LICENSE UNDER" , invention-name , "TO" ,
+                   expression , "," , "FOR A TERM OF" , expression ,
+                   ( "DAYS" | "DAY" ) , terminator ;
+(* A shared borrow of the invention: the licensee (a case number)
+   practices read-only while the license and the letters both run.
+   Only the holder grants; a license may not outlive the letters it
+   derives from. *)
+
+assignment       = "ASSIGN THE LETTERS FOR" , invention-name , "TO" ,
+                   expression , terminator ;
+(* A move: the assignee becomes the holder and the old holder's
+   practice becomes infringement (use after assignment). Refused while
+   licenses are outstanding; nothing moves while it is borrowed. The
+   examiner rejects, at filing time, a block that assigns and then
+   uses. *)
+
+standing         = "THE STANDING OF" , factor ;
+(* Another case's status, as far as the inquirer may know it: the
+   string "GUILTY", "IN GOOD STANDING", or "NO MATTER ON FILE". The
+   factor must evaluate to a case number (a string); anything else is
+   GUILTY. The reading is entered in the ledger in the same step, so
+   a reenactment is told what the world said the first time. *)
+
+discovery        = "THE RECORD" , identifier , "IN THE MATTER OF" ,
+                   factor ;
+(* Another case's record, read as its own Court would read it (last
+   writing wins, strikes honored). The factor must evaluate to a case
+   number. A respondent with no matter on file, or no such record, is
+   GUILTY; ask THE STANDING OF first if you are not sure. Read-only.
+   The reading is entered in the ledger in the same step. *)
+
+exhibit-offer    = "AN EXHIBIT OF" , exhibit-name , "WHEREIN" ,
+                   entry-init , { "AND" , entry-init } ;
+entry-init       = entry-name , "IS" , expression ;
+(* Constructs an exhibit. Every declared entry must be filled in;
+   see exhibit-declaration. Inside an enclosing AND-separated list
+   (arguments, other exhibits), an AND continues the entries only when
+   followed by ⟨entry-name IS⟩; otherwise it returns to the enclosing
+   list. When in doubt, parenthesize, as one would. *)
+
+inspection       = "THE" , entry-name , "ENTERED IN" , factor ;
+(* Reads one entry of an exhibit. Chains right-to-left:
+   THE a ENTERED IN THE b ENTERED IN k reads entry a of entry b of k.
+   Inspecting a non-exhibit, or an entry the exhibit does not bear,
+   is GUILTY; the exhibit is resealed. *)
+
+finding-of       = "THE FINDING OF" , office-name ,
+                   [ "REGARDING" , argument-list ] ;
+(* Expression form of a call. Consulting an office for its finding when
+   it REMANDs without one is GUILTY; of what, exactly, is sealed.
+   NOTE: an argument expression consumes operators greedily; when a
+   finding-of appears inside a larger expression, enclose it in
+   parentheses, as one would. *)
+
+argument-list    = expression , { "AND" , expression } ;
+
+finding-literal  = "SUSTAINED" | "OVERRULED" ;
+(* The booleans. There are two, which is already generous. *)
+
+(* ---- §L. Lexical matters ---------------------------------------------- *)
+
+terminator       = "." ;
+
+identifier       = lowercase-letter , { lowercase-letter | digit | "-" } ;
+
+integer-literal  = [ "-" ] , digit , { digit } ;
+(* 64-bit, two's complement. Overflow wraps silently, as is customary
+   in matters of accounting. *)
+
+sum-literal      = [ "-" ] , digit , { digit } , "." , digit , digit ;
+(* A sum certain: fixed-point money, exactly two figures after the
+   point, held as a 64-bit count of pennies. One figure or three is a
+   rejected filing. A period followed by a digit is a decimal point;
+   any other period is a terminator. No IEEE float exists in this
+   jurisdiction. *)
+
+string-literal   = '"' , { string-character } , '"' ;
+string-character = ? any character except '"', "\", or newline ?
+                 | "\" , ( '"' | "\" | "n" | "t" ) ;
+
+comment          = "OFF THE RECORD" , ":" , { ? any character except newline ? } ;
+(* Extends to end of line. Lexically discarded; permanently retained
+   in the filing topic nonetheless. Nothing is ever off the record. *)
+
+free-text        = { ? any character except "." or newline ? } ;
+
+lowercase-letter = ? "a" through "z" ? ;
+digit            = ? "0" through "9" ? ;
+
+(* Whitespace between tokens is ignored, though noted. Multi-word
+   keywords are sequences of upper-case words separated by whitespace;
+   the lexer matches them greedily. All keywords are reserved in upper
+   case only. This is the whole of the type system's opinion on
+   capitalization. *)

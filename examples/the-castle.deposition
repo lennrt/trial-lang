@@ -1,0 +1,46 @@
+DEPOSITION OF: the-castle.trial.
+ENACT: ../canon/statutes-of-trigonometry.trial.
+
+OFF THE RECORD: a scripted speedrun, deposed frame by frame. K. walks
+OFF THE RECORD: the corridor north (w), looks right and left and
+OFF THE RECORD: straightens up again (d, a, a, d), marches to the
+OFF THE RECORD: Castle wall (w), is refused by it twice (the last two
+OFF THE RECORD: strides move him nowhere), and gives up (q). Sixteen
+OFF THE RECORD: proclamations: fifteen frames and one resignation.
+
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: d.
+SERVE: a.
+SERVE: a.
+SERVE: d.
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: w.
+SERVE: q.
+
+EXPECT PROCLAMATION: "               \n               \n===            \n===-:-%%%%%%%%%\n=``````````````\n,,,,,,,,,,,,,,,\n...............\nday 1: K. stands at (8, 14), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n==             \n===-:-%%%%%%%%%\n=``````````````\n,,,,,,,,,,,,,,,\n...............\nday 2: K. stands at (8, 14), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n=              \n====:-%%%%%%%%%\n=``````````````\n,,,,,,,,,,,,,,,\n...............\nday 3: K. stands at (8, 13), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n      %%%%%%%%%\n==-=:-%%%%%%%%%\n```````````````\n,,,,,,,,,,,,,,,\n...............\nday 4: K. stands at (8, 13), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n     %%%%%%%%%%\n==--:%%%%%%%%%%\n```````````````\n,,,,,,,,,,,,,,,\n...............\nday 5: K. stands at (8, 12), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n  %%%%%%%%%%%%%\n--%%%%%%%%%%%%%\n```````````````\n,,,,,,,,,,,,,,,\n...............\nday 6: K. stands at (8, 12), bearing 95.".
+EXPECT PROCLAMATION: "               \n               \n     %%%%%%%%%%\n==--:%%%%%%%%%%\n```````````````\n,,,,,,,,,,,,,,,\n...............\nday 7: K. stands at (8, 12), bearing 90.".
+EXPECT PROCLAMATION: "               \n#              \n#       %%%%%%%\n#=-==---%%%%%%%\n#````````````%%\n,,,,,,,,,,,,,,,\n...............\nday 8: K. stands at (8, 12), bearing 85.".
+EXPECT PROCLAMATION: "               \n               \n     %%%%%%%%%%\n==--:%%%%%%%%%%\n```````````````\n,,,,,,,,,,,,,,,\n...............\nday 9: K. stands at (8, 12), bearing 90.".
+EXPECT PROCLAMATION: "               \n               \n     %%%%%%%%%%\n#==-:%%%%%%%%%%\n`````%%%%%%%%%%\n,,,,,,,,,,,,,,,\n...............\nday 10: K. stands at (8, 12), bearing 90.".
+EXPECT PROCLAMATION: "               \n    %%%%%%%%%%%\n    %%%%%%%%%%%\n===-%%%%%%%%%%%\n````%%%%%%%%%%%\n,,,,,,,,,,,,,,,\n...............\nday 11: K. stands at (8, 11), bearing 90.".
+EXPECT PROCLAMATION: "   %%%%%%%%%%%%\n   %%%%%%%%%%%%\n   %%%%%%%%%%%%\n==-%%%%%%%%%%%%\n```%%%%%%%%%%%%\n,,,%%%%%%%%%%%%\n...............\nday 12: K. stands at (8, 11), bearing 90.".
+EXPECT PROCLAMATION: "%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\nday 13: K. stands at (8, 10), bearing 90.".
+EXPECT PROCLAMATION: "%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\nday 14: K. stands at (8, 10), bearing 90.".
+EXPECT PROCLAMATION: "%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\n%%%%%%%%%%%%%%%\nday 15: K. stands at (8, 10), bearing 90.".
+EXPECT PROCLAMATION: "K. turns back for the night. The Castle has not received him, and the record shows he was here.".
+EXPECT RECORD ang: 90.
+EXPECT RECORD day: 15.
+EXPECT ADJOURNMENT.
+ALLOW 300 COURT DAYS.

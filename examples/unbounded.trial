@@ -1,0 +1,30 @@
+FORM K-1.
+IN THE MATTER OF: unbounded-memory.
+
+OFF THE RECORD: the Turing-completeness witness. An exhibit may hold
+OFF THE RECORD: an exhibit, so a chain of parcels is a stack of any
+OFF THE RECORD: depth: unbounded memory, built from paperwork alone.
+OFF THE RECORD: Ten squares go into the pile; ten squares come back
+OFF THE RECORD: out, in reverse, as everything eventually does.
+
+THE EXHIBIT OF parcel, COMPRISING contents AND remainder.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT pile IS 0.
+    LET IT BE RECORDED THAT depth IS 1.
+
+ARTICLE 2.
+    LET IT BE RECORDED THAT pile IS AN EXHIBIT OF parcel WHEREIN
+        contents IS depth TIMES depth AND remainder IS pile.
+    LET IT BE RECORDED THAT depth IS depth PLUS 1.
+    SHOULD depth FAIL TO EXCEED 10, REFER TO ARTICLE 2.
+
+ARTICLE 3.
+    SHOULD depth FAIL TO EXCEED 1, REFER TO ARTICLE 4.
+    PROCLAIM THE contents ENTERED IN pile.
+    LET IT BE RECORDED THAT pile IS THE remainder ENTERED IN pile.
+    LET IT BE RECORDED THAT depth IS depth LESS 1.
+    REFER TO ARTICLE 3.
+
+ARTICLE 4.
+    ADJOURN INDEFINITELY.

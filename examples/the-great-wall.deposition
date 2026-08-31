@@ -1,0 +1,11 @@
+DEPOSITION OF: the-great-wall.trial.
+ENACT: ../canon/statutes-of-arithmetic.trial.
+ENACT: ../canon/statutes-of-strings.trial.
+ENACT: ../canon/statutes-of-schedules.trial.
+
+EXPECT PROCLAMATION: sections reported: 4.
+EXPECT PROCLAMATION: li completed: 1175.
+EXPECT PROCLAMATION: longest section: 500.
+EXPECT PROCLAMATION: "so the wall grows. so the wall grows. so the wall grows. ".
+EXPECT PROCLAMATION: "no crew stands idle. The command is pleased, provisionally.".
+EXPECT ADJOURNMENT.

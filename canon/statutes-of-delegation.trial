@@ -1,0 +1,38 @@
+FORM S-1.
+IN THE MATTER OF: statutes-of-delegation.
+
+OFF THE RECORD: The statutes of delegation: map, filter, and fold,
+OFF THE RECORD: each an office taking a power of attorney as a
+OFF THE RECORD: concern. The canon shipped concrete folds in v1.9
+OFF THE RECORD: because the language had no office-as-value to pass;
+OFF THE RECORD: the New Advocate was admitted to the bar in v2.6 and
+OFF THE RECORD: this statute pays the debt.
+OFF THE RECORD:
+OFF THE RECORD: The counsel conferred must concern itself with one
+OFF THE RECORD: matter (applied-to-each, selected-by) or two
+OFF THE RECORD: (folded-with: the accumulation, then the item); a
+OFF THE RECORD: mismatch is a verdict at the moment of exercise, as
+OFF THE RECORD: it would be anywhere.
+
+THE OFFICE OF applied-to-each, CONCERNING counsel AND entries.
+    REMAND WITH THE FINDING OF applied-from REGARDING counsel AND entries AND 1 AND AN EMPTY SCHEDULE.
+
+THE OFFICE OF applied-from, CONCERNING counsel AND entries AND index AND accumulated.
+    SHOULD index EXCEED THE LENGTH OF entries, REMAND WITH accumulated.
+    ANNEX THE FINDING UNDER counsel REGARDING THE ITEM AT index IN entries TO accumulated.
+    REMAND WITH THE FINDING OF applied-from REGARDING counsel AND entries AND index PLUS 1 AND accumulated.
+
+THE OFFICE OF selected-by, CONCERNING counsel AND entries.
+    REMAND WITH THE FINDING OF selected-from REGARDING counsel AND entries AND 1 AND AN EMPTY SCHEDULE.
+
+THE OFFICE OF selected-from, CONCERNING counsel AND entries AND index AND accumulated.
+    SHOULD index EXCEED THE LENGTH OF entries, REMAND WITH accumulated.
+    SHOULD THE FINDING UNDER counsel REGARDING THE ITEM AT index IN entries EQUAL SUSTAINED, ANNEX THE ITEM AT index IN entries TO accumulated.
+    REMAND WITH THE FINDING OF selected-from REGARDING counsel AND entries AND index PLUS 1 AND accumulated.
+
+THE OFFICE OF folded-with, CONCERNING counsel AND entries AND opening.
+    REMAND WITH THE FINDING OF folded-from REGARDING counsel AND entries AND 1 AND opening.
+
+THE OFFICE OF folded-from, CONCERNING counsel AND entries AND index AND accumulated.
+    SHOULD index EXCEED THE LENGTH OF entries, REMAND WITH accumulated.
+    REMAND WITH THE FINDING OF folded-from REGARDING counsel AND entries AND index PLUS 1 AND (THE FINDING UNDER counsel REGARDING accumulated AND (THE ITEM AT index IN entries)).

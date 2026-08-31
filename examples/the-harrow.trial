@@ -1,0 +1,79 @@
+FORM K-1.
+IN THE MATTER OF: the-harrow.
+OFF THE RECORD: a Turing machine. The Harrow executes sentences; here
+OFF THE RECORD: the sentences are statements, which is the same thing.
+OFF THE RECORD: The tape is two stacks of nested exhibits (the cons
+OFF THE RECORD: cells of spec.md, section 18); the machine is the
+OFF THE RECORD: two-state busy beaver, which halts after 6 sentences
+OFF THE RECORD: with 4 marks on the tape. Its table:
+OFF THE RECORD:   A,0 -> write 1, move right, B
+OFF THE RECORD:   A,1 -> write 1, move left,  B
+OFF THE RECORD:   B,0 -> write 1, move left,  A
+OFF THE RECORD:   B,1 -> write 1, move right, halt
+OFF THE RECORD: Every write is 1, so only direction and state vary.
+OFF THE RECORD: A cell whose sym is -1 seals the bottom of a stack.
+
+THE EXHIBIT OF cell, COMPRISING sym AND rest.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT left IS AN EXHIBIT OF cell WHEREIN sym IS -1 AND rest IS 0.
+    LET IT BE RECORDED THAT right IS AN EXHIBIT OF cell WHEREIN sym IS -1 AND rest IS 0.
+    LET IT BE RECORDED THAT state IS "A".
+    LET IT BE RECORDED THAT steps IS 0.
+
+ARTICLE 2.
+    OFF THE RECORD: one transition per visit. Read the head symbol.
+    SHOULD state EQUAL "halt", REFER TO ARTICLE 6.
+    LET IT BE RECORDED THAT head IS THE sym ENTERED IN right.
+    SHOULD head EQUAL -1, LET IT BE RECORDED THAT head IS 0.
+    FAILING WHICH, LET IT BE RECORDED THAT right IS THE rest ENTERED IN right.
+    LET IT BE RECORDED THAT steps IS steps PLUS 1.
+    LET IT BE RECORDED THAT dir IS "R".
+    SHOULD state EQUAL "A" AND ALSO head EQUAL 1, LET IT BE RECORDED THAT dir IS "L".
+    SHOULD state EQUAL "B" AND ALSO head EQUAL 0, LET IT BE RECORDED THAT dir IS "L".
+    LET IT BE RECORDED THAT nxt IS "A".
+    SHOULD state EQUAL "A", LET IT BE RECORDED THAT nxt IS "B".
+    SHOULD state EQUAL "B" AND ALSO head EQUAL 1, LET IT BE RECORDED THAT nxt IS "halt".
+    LET IT BE RECORDED THAT state IS nxt.
+    SHOULD dir EQUAL "R", REFER TO ARTICLE 3.
+    REFER TO ARTICLE 4.
+
+ARTICLE 3.
+    OFF THE RECORD: write 1 and move right: the written cell joins the
+    OFF THE RECORD: left stack, and the head falls on the next right cell.
+    LET IT BE RECORDED THAT left IS AN EXHIBIT OF cell WHEREIN sym IS 1 AND rest IS left.
+    REFER TO ARTICLE 2.
+
+ARTICLE 4.
+    OFF THE RECORD: write 1 and move left: the written cell returns to
+    OFF THE RECORD: the right stack, then the top of the left stack (or
+    OFF THE RECORD: a fresh blank, if the tape must grow) becomes the head.
+    LET IT BE RECORDED THAT right IS AN EXHIBIT OF cell WHEREIN sym IS 1 AND rest IS right.
+    LET IT BE RECORDED THAT l IS THE sym ENTERED IN left.
+    SHOULD l EQUAL -1, LET IT BE RECORDED THAT l IS 0.
+    FAILING WHICH, LET IT BE RECORDED THAT left IS THE rest ENTERED IN left.
+    LET IT BE RECORDED THAT right IS AN EXHIBIT OF cell WHEREIN sym IS l AND rest IS right.
+    REFER TO ARTICLE 2.
+
+ARTICLE 6.
+    LET IT BE RECORDED THAT ones IS 0.
+
+ARTICLE 7.
+    OFF THE RECORD: the machine has halted; count the marks it left.
+    LET IT BE RECORDED THAT s IS THE sym ENTERED IN right.
+    SHOULD s EQUAL -1, REFER TO ARTICLE 8.
+    SHOULD s EQUAL 1, LET IT BE RECORDED THAT ones IS ones PLUS 1.
+    LET IT BE RECORDED THAT right IS THE rest ENTERED IN right.
+    REFER TO ARTICLE 7.
+
+ARTICLE 8.
+    LET IT BE RECORDED THAT s IS THE sym ENTERED IN left.
+    SHOULD s EQUAL -1, REFER TO ARTICLE 9.
+    SHOULD s EQUAL 1, LET IT BE RECORDED THAT ones IS ones PLUS 1.
+    LET IT BE RECORDED THAT left IS THE rest ENTERED IN left.
+    REFER TO ARTICLE 8.
+
+ARTICLE 9.
+    PROCLAIM "The machine has halted after " PLUS THE TRANSCRIPT OF steps PLUS " sentences.".
+    PROCLAIM "The tape bears " PLUS THE TRANSCRIPT OF ones PLUS " marks.".
+    ADJOURN INDEFINITELY.

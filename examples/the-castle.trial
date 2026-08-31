@@ -1,0 +1,233 @@
+FORM K-1.
+IN THE MATTER OF: the-castle.
+FILED BY: the land surveyor K, who was sent for and is still waiting to be received.
+
+OFF THE RECORD: Can it run DOOM? It can run this: a first-person
+OFF THE RECORD: raycaster, Wolfenstein-grade, over a village map held
+OFF THE RECORD: in a schedule of strings. The camera is a direction
+OFF THE RECORD: vector and a plane vector, fixed point, scaled by
+OFF THE RECORD: 1000; each of the 15 screen columns casts one ray
+OFF THE RECORD: through the plane and marches it until masonry; the
+OFF THE RECORD: march parameter is the perpendicular distance, so the
+OFF THE RECORD: walls stand straight without correction. Twenty-one
+OFF THE RECORD: rows of ASCII per frame, walls shaded by distance and
+OFF THE RECORD: by facing (south-facing stone catches the light,
+OFF THE RECORD: east-facing stone does not; the Court has been told
+OFF THE RECORD: this is called rendering).
+OFF THE RECORD:
+OFF THE RECORD: PROCLAIM is the framebuffer, one proclamation per
+OFF THE RECORD: frame. AWAIT SUMMONS is the controls: w/s to stride,
+OFF THE RECORD: a/d to turn, q to give up, which is the only ending
+OFF THE RECORD: offered. trial observe is the display. The
+OFF THE RECORD: trigonometry is incorporated from the canon.
+OFF THE RECORD:
+OFF THE RECORD: The village is 16 cells square. The walls marked #
+OFF THE RECORD: are the village; the walls marked C are the Castle,
+OFF THE RECORD: which stands in the middle, has an interior, and has
+OFF THE RECORD: no door. You may approach it. That is all.
+OFF THE RECORD:
+OFF THE RECORD: Against a live broker every instruction is a Kafka
+OFF THE RECORD: transaction, so this is DOOM at minutes per frame,
+OFF THE RECORD: every frame of it replayable, bit for bit, forever.
+OFF THE RECORD: In chambers (trial test) it renders instantly, which
+OFF THE RECORD: the deposition beside it demonstrates.
+
+INCORPORATE BY REFERENCE statutes-of-trigonometry.
+
+THE EXHIBIT OF impact, COMPRISING reach AND material AND facing.
+
+ARTICLE 1.
+    OFF THE RECORD: the village, surveyed once for the record, one
+    OFF THE RECORD: string per row of cells. The game never shows
+    OFF THE RECORD: this document; the game is what it looks like
+    OFF THE RECORD: from inside it. K. begins at (8.5, 14.5), in the
+    OFF THE RECORD: square before the corridor, facing north; north
+    OFF THE RECORD: is bearing 90, because east is 0 and the map
+    OFF THE RECORD: counts its rows downward, like every official
+    OFF THE RECORD: document.
+    LET IT BE RECORDED THAT village IS A SCHEDULE COMPRISING
+        "################" AND
+        "#..............#" AND
+        "#..##....##....#" AND
+        "#...#.....#....#" AND
+        "#...#..........#" AND
+        "#......CCCC....#" AND
+        "#..##..C..C..#.#" AND
+        "#..#...C..C..#.#" AND
+        "#..#...CCCC..#.#" AND
+        "#..............#" AND
+        "#.####....####.#" AND
+        "#....#....#....#" AND
+        "#....#....#....#" AND
+        "#..............#" AND
+        "#..............#" AND
+        "################".
+    LET IT BE RECORDED THAT sines IS THE FINDING OF the-table-of-sines.
+    LET IT BE RECORDED THAT px IS 8500.
+    LET IT BE RECORDED THAT py IS 14500.
+    LET IT BE RECORDED THAT ang IS 90.
+    LET IT BE RECORDED THAT day IS 0.
+    PETITION THE OFFICE OF the-compass.
+
+ARTICLE 2.
+    OFF THE RECORD: one proclamation, one frame.
+    LET IT BE RECORDED THAT day IS day PLUS 1.
+    PROCLAIM THE FINDING OF the-rendered-frame.
+
+ARTICLE 3.
+    OFF THE RECORD: the controls. Input is not requested; it is served.
+    AWAIT SUMMONS, FILED UNDER key.
+    LET IT BE RECORDED THAT key IS THE TRANSCRIPT OF key.
+    SHOULD key EQUAL "w", REFER TO ARTICLE 4.
+    SHOULD key EQUAL "s", REFER TO ARTICLE 5.
+    SHOULD key EQUAL "a", REFER TO ARTICLE 6.
+    SHOULD key EQUAL "d", REFER TO ARTICLE 7.
+    SHOULD key EQUAL "q", REFER TO ARTICLE 8.
+    OFF THE RECORD: any other summons is noted, retained, and disregarded.
+    REFER TO ARTICLE 3.
+
+ARTICLE 4.
+    PETITION THE OFFICE OF stride WITH 1.
+    REFER TO ARTICLE 2.
+
+ARTICLE 5.
+    PETITION THE OFFICE OF stride WITH -1.
+    REFER TO ARTICLE 2.
+
+ARTICLE 6.
+    LET IT BE RECORDED THAT ang IS (ang PLUS 115) NOTWITHSTANDING 120.
+    PETITION THE OFFICE OF the-compass.
+    REFER TO ARTICLE 2.
+
+ARTICLE 7.
+    LET IT BE RECORDED THAT ang IS (ang PLUS 5) NOTWITHSTANDING 120.
+    PETITION THE OFFICE OF the-compass.
+    REFER TO ARTICLE 2.
+
+ARTICLE 8.
+    PROCLAIM "K. turns back for the night. The Castle has not received him, and the record shows he was here.".
+    ADJOURN INDEFINITELY.
+
+OFF THE RECORD: the offices. Positions are in thousandths of a cell;
+OFF THE RECORD: a cell's coordinates are its position apportioned
+OFF THE RECORD: among 1000, and the map is consulted one character at
+OFF THE RECORD: a time, because the map is a document like everything
+OFF THE RECORD: else here.
+
+THE OFFICE OF the-cell, CONCERNING cx AND cy.
+    REMAND WITH AN EXCERPT OF (THE ITEM AT cy IN village) FROM cx TO cx.
+
+THE OFFICE OF the-compass.
+    OFF THE RECORD: consulted whenever the bearing changes. The
+    OFF THE RECORD: direction is where K. faces; the plane is the
+    OFF THE RECORD: camera, perpendicular to it, 660 per mille wide,
+    OFF THE RECORD: which the surveyors call a 67 degree field of view.
+    LET IT BE RECORDED THAT dirx IS THE FINDING OF cosine REGARDING ang AND sines.
+    LET IT BE RECORDED THAT diry IS THE FINDING OF sine REGARDING ang AND sines.
+    LET IT BE RECORDED THAT planex IS 0 LESS (diry TIMES 660) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT planey IS (dirx TIMES 660) APPORTIONED AMONG 1000.
+
+THE OFFICE OF stride, CONCERNING sign.
+    OFF THE RECORD: half a cell per step, each axis cleared separately,
+    OFF THE RECORD: so K. slides along walls instead of arguing with them.
+    LET IT BE RECORDED THAT mx IS px PLUS (sign TIMES dirx) APPORTIONED AMONG 2.
+    LET IT BE RECORDED THAT my IS py PLUS (sign TIMES diry) APPORTIONED AMONG 2.
+    SHOULD (THE FINDING OF the-cell REGARDING mx APPORTIONED AMONG 1000 AND py APPORTIONED AMONG 1000) EQUAL ".", LET IT BE RECORDED THAT px IS mx.
+    SHOULD (THE FINDING OF the-cell REGARDING px APPORTIONED AMONG 1000 AND my APPORTIONED AMONG 1000) EQUAL ".", LET IT BE RECORDED THAT py IS my.
+
+THE OFFICE OF the-ray, CONCERNING cam.
+    OFF THE RECORD: one ray, cast through the camera plane at cam
+    OFF THE RECORD: per mille off center, marched a tenth of a unit
+    OFF THE RECORD: at a time until masonry or twenty-four units of
+    OFF THE RECORD: perpendicular distance, whichever is struck
+    OFF THE RECORD: first. On arrival the ray reports which way the
+    OFF THE RECORD: wall it hit was facing: if its last step crossed
+    OFF THE RECORD: a column boundary and no row boundary, the stone
+    OFF THE RECORD: faces east or west, and is shaded accordingly.
+    LET IT BE RECORDED THAT rdx IS dirx PLUS (planex TIMES cam) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT rdy IS diry PLUS (planey TIMES cam) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT sx IS rdx APPORTIONED AMONG 10.
+    LET IT BE RECORDED THAT sy IS rdy APPORTIONED AMONG 10.
+    LET IT BE RECORDED THAT rx IS px.
+    LET IT BE RECORDED THAT ry IS py.
+    LET IT BE RECORDED THAT gone IS 0.
+SECTION 1.
+    LET IT BE RECORDED THAT rx IS rx PLUS sx.
+    LET IT BE RECORDED THAT ry IS ry PLUS sy.
+    LET IT BE RECORDED THAT gone IS gone PLUS 100.
+    LET IT BE RECORDED THAT struck IS THE FINDING OF the-cell REGARDING rx APPORTIONED AMONG 1000 AND ry APPORTIONED AMONG 1000.
+    SHOULD struck DIFFER FROM ".", REFER TO SECTION 2.
+    SHOULD gone FALL SHORT OF 24000, REFER TO SECTION 1.
+    REMAND WITH AN EXHIBIT OF impact WHEREIN reach IS gone AND material IS "." AND facing IS "south".
+SECTION 2.
+    LET IT BE RECORDED THAT side IS "south".
+    SHOULD (rx LESS sx) APPORTIONED AMONG 1000 DIFFER FROM rx APPORTIONED AMONG 1000,
+        SHOULD (ry LESS sy) APPORTIONED AMONG 1000 EQUAL ry APPORTIONED AMONG 1000,
+            LET IT BE RECORDED THAT side IS "east".
+    REMAND WITH AN EXHIBIT OF impact WHEREIN reach IS gone AND material IS struck AND facing IS side.
+
+THE OFFICE OF the-glyph, CONCERNING material AND side AND reach.
+    OFF THE RECORD: the village recedes @ # = - on lit faces and
+    OFF THE RECORD: # = - : on shaded ones; the Castle is % and then
+    OFF THE RECORD: +, and is never mistaken for the village,
+    OFF THE RECORD: whatever the distance or the light.
+    SHOULD material EQUAL "C", REFER TO SECTION 1.
+    SHOULD side EQUAL "east", REFER TO SECTION 2.
+    SHOULD reach FAIL TO EXCEED 2200, REMAND WITH "@".
+    SHOULD reach FAIL TO EXCEED 4500, REMAND WITH "#".
+    SHOULD reach FAIL TO EXCEED 8000, REMAND WITH "=".
+    REMAND WITH "-".
+SECTION 2.
+    SHOULD reach FAIL TO EXCEED 2200, REMAND WITH "#".
+    SHOULD reach FAIL TO EXCEED 4500, REMAND WITH "=".
+    SHOULD reach FAIL TO EXCEED 8000, REMAND WITH "-".
+    REMAND WITH ":".
+SECTION 1.
+    SHOULD side EQUAL "east", REFER TO SECTION 3.
+    SHOULD reach FAIL TO EXCEED 6000, REMAND WITH "%".
+    REMAND WITH "+".
+SECTION 3.
+    SHOULD reach FAIL TO EXCEED 3000, REMAND WITH "%".
+    REMAND WITH "+".
+
+THE OFFICE OF the-floor, CONCERNING row.
+    OFF THE RECORD: the ground gains conviction as it approaches.
+    SHOULD row EXCEED 6, REMAND WITH ".".
+    SHOULD row EXCEED 5, REMAND WITH ",".
+    REMAND WITH "`".
+
+THE OFFICE OF the-rendered-frame.
+    OFF THE RECORD: fifteen columns, one ray each, swept across the
+    OFF THE RECORD: camera plane; seven rows, ceiling above,
+    OFF THE RECORD: graded floor below, wall glyphs between, taller
+    OFF THE RECORD: as the masonry approaches. The last line is the
+    OFF THE RECORD: caption, which is also the save file.
+    LET IT BE RECORDED THAT heights IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT glyphs IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT col IS 1.
+SECTION 1.
+    LET IT BE RECORDED THAT struck-ray IS THE FINDING OF the-ray REGARDING (col LESS 8) TIMES 1000 APPORTIONED AMONG 7.
+    LET IT BE RECORDED THAT span IS THE reach ENTERED IN struck-ray.
+    LET IT BE RECORDED THAT tall IS 7000 APPORTIONED AMONG span.
+    SHOULD tall EXCEED 7, LET IT BE RECORDED THAT tall IS 7.
+    SHOULD (THE material ENTERED IN struck-ray) EQUAL ".", LET IT BE RECORDED THAT tall IS 0.
+    FAILING WHICH, SHOULD tall EQUAL 0, LET IT BE RECORDED THAT tall IS 1.
+    ANNEX tall TO heights.
+    ANNEX (THE FINDING OF the-glyph REGARDING (THE material ENTERED IN struck-ray) AND (THE facing ENTERED IN struck-ray) AND span) TO glyphs.
+    LET IT BE RECORDED THAT col IS col PLUS 1.
+    SHOULD col FAIL TO EXCEED 15, REFER TO SECTION 1.
+    LET IT BE RECORDED THAT frame IS "".
+    LET IT BE RECORDED THAT row IS 1.
+SECTION 2.
+    LET IT BE RECORDED THAT line IS "".
+    LET IT BE RECORDED THAT col IS 1.
+SECTION 3.
+    LET IT BE RECORDED THAT tall IS THE ITEM AT col IN heights.
+    LET IT BE RECORDED THAT lid IS (7 LESS tall) APPORTIONED AMONG 2.
+    SHOULD row FAIL TO EXCEED lid, LET IT BE RECORDED THAT line IS line PLUS " ". FAILING WHICH, SHOULD row EXCEED lid PLUS tall, LET IT BE RECORDED THAT line IS line PLUS THE FINDING OF the-floor REGARDING row. FAILING WHICH, LET IT BE RECORDED THAT line IS line PLUS THE ITEM AT col IN glyphs.
+    LET IT BE RECORDED THAT col IS col PLUS 1.
+    SHOULD col FAIL TO EXCEED 15, REFER TO SECTION 3.
+    LET IT BE RECORDED THAT frame IS frame PLUS line PLUS "\n".
+    LET IT BE RECORDED THAT row IS row PLUS 1.
+    SHOULD row FAIL TO EXCEED 7, REFER TO SECTION 2.
+    REMAND WITH frame PLUS "day " PLUS THE TRANSCRIPT OF day PLUS ": K. stands at (" PLUS THE TRANSCRIPT OF (px APPORTIONED AMONG 1000) PLUS ", " PLUS THE TRANSCRIPT OF (py APPORTIONED AMONG 1000) PLUS "), bearing " PLUS THE TRANSCRIPT OF ang PLUS ".".

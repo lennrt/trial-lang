@@ -1,0 +1,37 @@
+#!/bin/sh
+# The clerk who reads every filing before it reaches the docket.
+#
+# It checks the exact staged Go blobs without rewriting or re-staging the
+# working tree, then runs `go vet` and blocks the commit if either check fails.
+# Install once with `make hooks` (points core.hooksPath at .githooks); skip it
+# for a single commit with `git commit --no-verify`.
+set -e
+
+# Staged Go files (added / copied / modified).
+gofiles=$(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+[ -z "$gofiles" ] && exit 0
+
+# 1) Check the staged blobs, not possibly different working-tree copies.
+hook_tmp=$(mktemp -d "${TMPDIR:-/tmp}/triallang-hook.XXXXXX")
+trap 'rm -rf "$hook_tmp"' EXIT HUP INT TERM
+fmtfailed=0
+while IFS= read -r file; do
+  git show ":$file" >"$hook_tmp/original"
+  gofmt <"$hook_tmp/original" >"$hook_tmp/formatted"
+  if ! cmp -s "$hook_tmp/original" "$hook_tmp/formatted"; then
+    printf 'pre-commit: staged Go file is not gofmt-ed: %s\n' "$file" >&2
+    fmtfailed=1
+  fi
+done <<EOF
+$gofiles
+EOF
+if [ "$fmtfailed" -ne 0 ]; then
+  echo "pre-commit: run gofmt, review the changes, and stage them explicitly." >&2
+  exit 1
+fi
+
+# 2) Vet the module; a real problem blocks the commit.
+if ! go vet ./...; then
+  echo "pre-commit: 'go vet' failed; fix the issues above and re-commit." >&2
+  exit 1
+fi

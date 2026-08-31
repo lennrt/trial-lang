@@ -1,0 +1,39 @@
+FORM S-1.
+IN THE MATTER OF: statutes-of-strings.
+FILED BY: the legislature, in triplicate, each copy the reverse of the last.
+
+OFF THE RECORD: The statutes of strings. Positions are 1-indexed and
+OFF THE RECORD: measured in characters (code points), as everywhere
+OFF THE RECORD: in this jurisdiction; lawyers count from one.
+
+THE OFFICE OF repetition, CONCERNING text AND count.
+    SHOULD count FAIL TO EXCEED 0, REMAND WITH "".
+    REMAND WITH text PLUS (THE FINDING OF repetition REGARDING text AND count LESS 1).
+
+THE OFFICE OF reversal, CONCERNING text.
+    SHOULD THE LENGTH OF text FAIL TO EXCEED 1, REMAND WITH text.
+    REMAND WITH (AN EXCERPT OF text FROM THE LENGTH OF text TO THE LENGTH OF text) PLUS (THE FINDING OF reversal REGARDING AN EXCERPT OF text FROM 1 TO (THE LENGTH OF text) LESS 1).
+
+OFF THE RECORD: containment: SUSTAINED when the fragment appears in
+OFF THE RECORD: the document. The empty fragment appears in every
+OFF THE RECORD: document, including the empty one; the Court has
+OFF THE RECORD: reviewed the philosophy and declines to reopen it.
+
+THE OFFICE OF containment, CONCERNING document AND fragment.
+    SHOULD THE LENGTH OF fragment EQUAL 0, REMAND WITH SUSTAINED.
+    SHOULD THE FINDING OF position-of REGARDING document AND fragment EXCEED 0, REMAND WITH SUSTAINED.
+    REMAND WITH OVERRULED.
+
+OFF THE RECORD: position-of: the position of the first appearance of
+OFF THE RECORD: the fragment, or 0 when it does not appear (there is
+OFF THE RECORD: no position 0; lawyers count from one, so 0 is the
+OFF THE RECORD: courthouse basement, where nothing is ever found).
+
+THE OFFICE OF position-of, CONCERNING document AND fragment.
+    SHOULD THE LENGTH OF fragment EQUAL 0, REMAND WITH 0.
+    REMAND WITH THE FINDING OF position-from REGARDING document AND fragment AND 1.
+
+THE OFFICE OF position-from, CONCERNING document AND fragment AND index.
+    SHOULD index PLUS (THE LENGTH OF fragment) LESS 1 EXCEED THE LENGTH OF document, REMAND WITH 0.
+    SHOULD (AN EXCERPT OF document FROM index TO index PLUS (THE LENGTH OF fragment) LESS 1) EQUAL fragment, REMAND WITH index.
+    REMAND WITH THE FINDING OF position-from REGARDING document AND fragment AND index PLUS 1.

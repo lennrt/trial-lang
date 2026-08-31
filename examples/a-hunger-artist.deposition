@@ -1,0 +1,14 @@
+DEPOSITION OF: a-hunger-artist.trial.
+
+OFF THE RECORD: Two admirers attend, then the public loses interest,
+OFF THE RECORD: as the public does. The third day passes unattended
+OFF THE RECORD: and the fast concludes.
+
+SERVE: magnificent.
+SERVE: how thin he has become.
+
+EXPECT PROCLAMATION: day 1: an admirer remarks, magnificent.
+EXPECT PROCLAMATION: day 2: an admirer remarks, how thin he has become.
+EXPECT PROCLAMATION: "day 3: nobody came. The fast is concluded and the cage is swept out.".
+EXPECT RECORD day: 3.
+EXPECT ADJOURNMENT.

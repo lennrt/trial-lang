@@ -1,0 +1,19 @@
+# Root CLI build outputs.
+/trial
+/trial.exe
+/dist/
+/*.out
+/*.test
+# Optional local recording. The Orrery recording is the tracked README demo.
+/docs/the-procession.gif
+# Retired generated demo media. The example sources and depositions remain.
+/docs/the-castle.gif
+/docs/the-cornell-box.gif
+/docs/the-cornell-box.png
+/docs/the-cornell-box.txt
+# Security workflow outputs.
+/sbom.spdx.json
+/scorecard.json
+/.DS_Store
+/.idea/
+/.vscode/

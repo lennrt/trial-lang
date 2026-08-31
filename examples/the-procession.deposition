@@ -1,0 +1,56 @@
+DEPOSITION OF: the-procession.trial.
+
+OFF THE RECORD: Queue twenty-two ticks so the realtime animation is tested
+OFF THE RECORD: deterministically and without making the test suite wait.
+
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+SERVE: tick.
+
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 1 of 23\n[K...........]\ndirection: east --> | durable position: 1\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 2 of 23\n[.K..........]\ndirection: east --> | durable position: 2\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 3 of 23\n[..K.........]\ndirection: east --> | durable position: 3\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 4 of 23\n[...K........]\ndirection: east --> | durable position: 4\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 5 of 23\n[....K.......]\ndirection: east --> | durable position: 5\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 6 of 23\n[.....K......]\ndirection: east --> | durable position: 6\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 7 of 23\n[......K.....]\ndirection: east --> | durable position: 7\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 8 of 23\n[.......K....]\ndirection: east --> | durable position: 8\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 9 of 23\n[........K...]\ndirection: east --> | durable position: 9\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 10 of 23\n[.........K..]\ndirection: east --> | durable position: 10\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 11 of 23\n[..........K.]\ndirection: east --> | durable position: 11\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 12 of 23\n[...........K]\ndirection: east --> | durable position: 12\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 13 of 23\n[..........K.]\ndirection: <-- west | durable position: 11\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 14 of 23\n[.........K..]\ndirection: <-- west | durable position: 10\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 15 of 23\n[........K...]\ndirection: <-- west | durable position: 9\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 16 of 23\n[.......K....]\ndirection: <-- west | durable position: 8\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 17 of 23\n[......K.....]\ndirection: <-- west | durable position: 7\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 18 of 23\n[.....K......]\ndirection: <-- west | durable position: 6\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 19 of 23\n[....K.......]\ndirection: <-- west | durable position: 5\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 20 of 23\n[...K........]\ndirection: <-- west | durable position: 4\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 21 of 23\n[..K.........]\ndirection: <-- west | durable position: 3\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 22 of 23\n[.K..........]\ndirection: <-- west | durable position: 2\nstop the Court; restart it; K resumes from this frame".
+EXPECT PROCLAMATION: "TRIALLANG // A LIVE CASE\nframe 23 of 23\n[K...........]\ndirection: <-- west | durable position: 1\nstop the Court; restart it; K resumes from this frame".
+
+EXPECT RECORD frame: 23.
+EXPECT RECORD position: 1.
+EXPECT RECORD step: -1.
+EXPECT ADJOURNMENT.

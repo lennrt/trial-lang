@@ -1,0 +1,15 @@
+FORM K-1.
+IN THE MATTER OF: the-land-surveyor.
+OFF THE RECORD: a filesystem, in the only sense that matters here: an
+OFF THE RECORD: append-only archive of immutable documents, and a
+OFF THE RECORD: compacted catalog pointing each name at its current
+OFF THE RECORD: version. Saving appends and repoints; nothing is ever
+OFF THE RECORD: overwritten, so version history is the archive itself.
+
+ARTICLE 1.
+    COMMIT "I request admission to the Castle." TO THE ARCHIVE AS "petition".
+    COMMIT "I request admission to the village." TO THE ARCHIVE AS "petition".
+    COMMIT "I request a post as school janitor." TO THE ARCHIVE AS "petition".
+    PROCLAIM THE DOCUMENT "petition" FROM THE ARCHIVE.
+    PROCLAIM "The earlier drafts are retained, and will be considered.".
+    ADJOURN INDEFINITELY.

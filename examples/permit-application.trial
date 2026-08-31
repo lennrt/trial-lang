@@ -1,0 +1,29 @@
+FORM K-1.
+IN THE MATTER OF: permit-application.
+
+OFF THE RECORD: Form 91-B, Application for a Permit to Apply for a
+OFF THE RECORD: Permit. The applicant is served two summonses: one for
+OFF THE RECORD: a name, one for an age. Deficient applications are
+OFF THE RECORD: held in contempt, which is faster than rejecting them.
+
+HEREINAFTER, minimum-age SHALL MEAN 18.
+HEREINAFTER, maximum-age SHALL MEAN 65.
+
+ARTICLE 1.
+    AWAIT SUMMONS, FILED UNDER applicant.
+    AWAIT SUMMONS, FILED UNDER stated-age.
+
+ARTICLE 2.
+    OFF THE RECORD: ages arrive as integers or as strings, depending on
+    OFF THE RECORD: how the clerk was feeling. THE SUM CERTAIN accepts both.
+    LET IT BE RECORDED THAT age IS THE SUM CERTAIN OF stated-age.
+    SHOULD THE LENGTH OF applicant FALL SHORT OF 2,
+        HOLD "an applicant of insufficient length" IN CONTEMPT.
+    SHOULD age FALL SHORT OF minimum-age OR IN THE ALTERNATIVE age EXCEED maximum-age,
+        HOLD applicant PLUS " (aged " PLUS THE TRANSCRIPT OF age
+            PLUS ") is not of permissible age" IN CONTEMPT.
+
+ARTICLE 3.
+    PROCLAIM "Application received from " PLUS applicant PLUS ".".
+    PROCLAIM "It will be processed in due course.".
+    ADJOURN INDEFINITELY.

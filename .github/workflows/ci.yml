@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Check formatting
+        run: test -z "$(gofmt -l .)"
+      - name: Check module files
+        run: go mod tidy -diff
+      - run: go vet ./...
+      - run: CGO_ENABLED=0 go build ./...
+      - name: Cross-build Linux ARM64
+        run: CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build ./...
+      - run: go test -timeout=3m ./...
+      - name: Check generated demo
+        run: make demo-check
+      - run: go run ./cmd/trial test examples
+      - run: go run ./cmd/trial version
+      - name: Check public API snapshot
+        run: make api-check
+      - name: Check workflows
+        run: >-
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          -shellcheck= -pyflakes=
+      - uses: golangci/golangci-lint-action@db9de0fc1a667e1a49d2291a1a042dff081d78f6 # v9
+        with:
+          version: v2.13.2
+          args: run ./...
+      - name: Check goimports
+        run: golangci-lint fmt --diff
+
+  race:
+    name: Race detector
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go test -race -timeout=10m ./...
+
+  kafka:
+    name: Kafka integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      kafka:
+        image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - name: Wait for Kafka
+        run: |
+          set -euo pipefail
+          go build -o "$RUNNER_TEMP/trial" ./cmd/trial
+          for attempt in $(seq 1 30); do
+            if "$RUNNER_TEMP/trial" docket --broker localhost:9092 >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Kafka did not become ready within 60 seconds" >&2
+          exit 1
+      - name: Run integration tests
+        run: go test -timeout=10m ./internal/court -run '^(TestE2E|TestDifferential)' -count=1 -v
+        env:
+          TRIAL_E2E_BROKER: localhost:9092

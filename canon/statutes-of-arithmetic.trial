@@ -1,0 +1,35 @@
+FORM S-1.
+IN THE MATTER OF: statutes-of-arithmetic.
+FILED BY: the legislature, which counts on its fingers but counts correctly.
+
+OFF THE RECORD: The statutes of arithmetic: what the operators do not
+OFF THE RECORD: provide, the offices do. Every office here confines
+OFF THE RECORD: itself to its own concerns and petitions recursively,
+OFF THE RECORD: so the statutes are reentrant and leave no records
+OFF THE RECORD: behind in the incorporating case.
+
+THE OFFICE OF absolute-value, CONCERNING n.
+    SHOULD n FALL SHORT OF 0, REMAND WITH 0 LESS n.
+    REMAND WITH n.
+
+THE OFFICE OF maximum, CONCERNING a AND b.
+    SHOULD a EXCEED b, REMAND WITH a.
+    REMAND WITH b.
+
+THE OFFICE OF minimum, CONCERNING a AND b.
+    SHOULD a FALL SHORT OF b, REMAND WITH a.
+    REMAND WITH b.
+
+THE OFFICE OF signum, CONCERNING n.
+    SHOULD n EXCEED 0, REMAND WITH 1.
+    SHOULD n FALL SHORT OF 0, REMAND WITH 0 LESS 1.
+    REMAND WITH 0.
+
+THE OFFICE OF power, CONCERNING base AND exponent.
+    SHOULD exponent FALL SHORT OF 0, HOLD "a negative exponent asks for a fraction, and the Court keeps nothing finer than the penny" IN CONTEMPT.
+    SHOULD exponent EQUAL 0, REMAND WITH 1.
+    REMAND WITH base TIMES (THE FINDING OF power REGARDING base AND exponent LESS 1).
+
+THE OFFICE OF greatest-common-divisor, CONCERNING a AND b.
+    SHOULD b EQUAL 0, REMAND WITH THE FINDING OF absolute-value REGARDING a.
+    REMAND WITH THE FINDING OF greatest-common-divisor REGARDING b AND a NOTWITHSTANDING b.

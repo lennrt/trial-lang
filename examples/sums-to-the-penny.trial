@@ -1,0 +1,18 @@
+FORM K-1.
+IN THE MATTER OF: the-invoice.
+OFF THE RECORD: sums are fixed-point decimals with exactly two figures
+OFF THE RECORD: after the point. No IEEE float is ever consulted; the
+OFF THE RECORD: Court computes to the penny, truncates toward zero,
+OFF THE RECORD: and rounds in no one's favor.
+HEREINAFTER, the-hourly-rate SHALL MEAN 19.99.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT hours IS 3.
+    LET IT BE RECORDED THAT subtotal IS the-hourly-rate TIMES hours.
+    PROCLAIM "Subtotal: " PLUS THE TRANSCRIPT OF subtotal.
+    LET IT BE RECORDED THAT filing-fees IS 0.05.
+    LET IT BE RECORDED THAT total IS subtotal PLUS filing-fees.
+    PROCLAIM "Total, with fees: " PLUS THE TRANSCRIPT OF total.
+    PROCLAIM "Split three ways: " PLUS THE TRANSCRIPT OF (total APPORTIONED AMONG 3).
+    SHOULD 0.10 PLUS 0.20 EQUAL 0.30, PROCLAIM "0.10 plus 0.20 is exactly 0.30 in this jurisdiction.".
+    ADJOURN INDEFINITELY.

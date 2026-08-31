@@ -1,0 +1,61 @@
+FORM K-1.
+IN THE MATTER OF: the-procession.
+FILED BY: the moving party, who has been told the file is moving and would like to see it move.
+
+OFF THE RECORD: The gallery's small demonstration. K moves one place per
+OFF THE RECORD: court day. The picture is intentionally plain enough to read
+OFF THE RECORD: at a glance: a frame number, a twelve-place track, a direction,
+OFF THE RECORD: and the durable position held in the case's records.
+OFF THE RECORD:
+OFF THE RECORD: With no summonses waiting, AWAIT SUMMONS FOR AT MOST 1 DAY is
+OFF THE RECORD: the clock: one frame appears each second. A summons advances
+OFF THE RECORD: the next frame immediately, which lets the deposition test the
+OFF THE RECORD: whole animation without making CI watch the clock. Serve q at
+OFF THE RECORD: any time to adjourn early.
+OFF THE RECORD:
+OFF THE RECORD: Stop the Court between any two frames and convene it again.
+OFF THE RECORD: The frame, position, direction, timer, and program counter are
+OFF THE RECORD: already in the log. K resumes from the same place because the
+OFF THE RECORD: animation is not state held by the process; it is the case file.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT tracks IS A SCHEDULE COMPRISING
+        "[K...........]" AND
+        "[.K..........]" AND
+        "[..K.........]" AND
+        "[...K........]" AND
+        "[....K.......]" AND
+        "[.....K......]" AND
+        "[......K.....]" AND
+        "[.......K....]" AND
+        "[........K...]" AND
+        "[.........K..]" AND
+        "[..........K.]" AND
+        "[...........K]".
+    LET IT BE RECORDED THAT frame IS 0.
+    LET IT BE RECORDED THAT position IS 1.
+    LET IT BE RECORDED THAT step IS 1.
+
+ARTICLE 2.
+    LET IT BE RECORDED THAT frame IS frame PLUS 1.
+    LET IT BE RECORDED THAT direction IS "east -->".
+    SHOULD step EQUAL -1, LET IT BE RECORDED THAT direction IS "<-- west".
+    PROCLAIM "TRIALLANG // A LIVE CASE\nframe " PLUS (THE TRANSCRIPT OF frame)
+        PLUS " of 23\n" PLUS (THE ITEM AT position IN tracks)
+        PLUS "\ndirection: " PLUS direction PLUS " | durable position: "
+        PLUS (THE TRANSCRIPT OF position)
+        PLUS "\nstop the Court; restart it; K resumes from this frame".
+    SHOULD frame FAIL TO FALL SHORT OF 23, REFER TO ARTICLE 5.
+
+ARTICLE 3.
+    AWAIT SUMMONS FOR AT MOST 1 DAY, FILED UNDER tick. FAILING WHICH, REFER TO ARTICLE 4.
+    SHOULD tick EQUAL "q", REFER TO ARTICLE 5.
+
+ARTICLE 4.
+    SHOULD position EQUAL 12, LET IT BE RECORDED THAT step IS -1.
+    SHOULD position EQUAL 1, LET IT BE RECORDED THAT step IS 1.
+    LET IT BE RECORDED THAT position IS position PLUS step.
+    REFER TO ARTICLE 2.
+
+ARTICLE 5.
+    ADJOURN INDEFINITELY.

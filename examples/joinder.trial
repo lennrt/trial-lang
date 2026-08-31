@@ -1,0 +1,20 @@
+FORM K-1.
+IN THE MATTER OF: joinder.
+
+OFF THE RECORD: a case that opens another case. The new filing is an
+OFF THE RECORD: ordinary string (newlines are whitespace, so a whole
+OFF THE RECORD: Form K-1 fits in one); COMMENCE files it with the
+OFF THE RECORD: court and records the case number it earns. The
+OFF THE RECORD: parent then introduces itself by serving its own case
+OFF THE RECORD: number, and the two correspond like any other pair.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT charter IS
+        "FORM K-1. IN THE MATTER OF: the-junior-party. ARTICLE 1. AWAIT SUMMONS, FILED UNDER counterparty. SERVE NOTICE OF \"the junior party appears\" UPON counterparty. ADJOURN INDEFINITELY.".
+    COMMENCE PROCEEDINGS UPON charter, FILED UNDER junior.
+
+ARTICLE 2.
+    SERVE NOTICE OF THE CASE AT BAR UPON junior.
+    AWAIT SUMMONS, FILED UNDER appearance.
+    PROCLAIM appearance.
+    ADJOURN INDEFINITELY.

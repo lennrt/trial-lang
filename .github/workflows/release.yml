@@ -1,0 +1,105 @@
+# Build release archives from an existing tag after manual approval.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing semantic-version tag to release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: "1.27.0"
+  RELEASE_TAG: ${{ inputs.tag }}
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Validate tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "release tag must be semantic, for example v1.2.3" >&2
+            exit 1
+          fi
+          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG" || {
+            echo "release tag does not exist: $RELEASE_TAG" >&2
+            exit 1
+          }
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")" || {
+            echo "checkout does not match release tag: $RELEASE_TAG" >&2
+            exit 1
+          }
+      - name: Verify release revision
+        run: make verify
+      - name: Collect dependency licenses
+        run: >-
+          go run github.com/google/go-licenses/v2@v2.0.1 save ./cmd/trial
+          --save_path "$RUNNER_TEMP/trial-third-party-licenses"
+      - name: Cross-compile
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+          export TZ=UTC
+          source_date_epoch="$(git log -1 --format=%ct)"
+          mkdir -p dist
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            GOOS="${platform%/*}"; GOARCH="${platform#*/}"
+            ext=""; [ "$GOOS" = "windows" ] && ext=".exe"
+            out="dist/trial_${RELEASE_TAG}_${GOOS}_${GOARCH}"
+            CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
+              go build -trimpath -ldflags "-s -w -X main.version=${RELEASE_TAG}" \
+              -o "${out}/trial${ext}" ./cmd/trial
+            cp LICENSE README.md CHANGELOG.md "${out}/"
+            cp -R "$RUNNER_TEMP/trial-third-party-licenses" "${out}/THIRD_PARTY_LICENSES"
+            find "$out" -exec touch -h -d "@$source_date_epoch" {} +
+            if [ "$GOOS" = "windows" ]; then
+              (cd dist && find "$(basename "$out")" -type f -print | sort | \
+                zip -X -q "$(basename "$out").zip" -@)
+            else
+              tar --sort=name --mtime="@$source_date_epoch" --owner=0 --group=0 \
+                --numeric-owner -cf - -C dist "$(basename "$out")" | \
+                gzip -n > "${out}.tar.gz"
+            fi
+            rm -r "$out"
+          done
+          (cd dist && sha256sum ./*.tar.gz ./*.zip > checksums.txt)
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          prerelease=()
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            prerelease=(--prerelease)
+          fi
+          gh release create "$RELEASE_TAG" dist/* \
+            --verify-tag \
+            --draft \
+            "${prerelease[@]}" \
+            --title "$RELEASE_TAG" \
+            --notes "See CHANGELOG.md for changes, limits, and upgrade notes."
+          gh release edit "$RELEASE_TAG" --draft=false

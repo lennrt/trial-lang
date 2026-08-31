@@ -1,0 +1,8 @@
+DEPOSITION OF: sums-to-the-penny.trial.
+OFF THE RECORD: money arithmetic, witnessed to the penny.
+EXPECT PROCLAMATION: "Subtotal: 59.97".
+EXPECT PROCLAMATION: "Total, with fees: 60.02".
+EXPECT PROCLAMATION: "Split three ways: 20.00".
+EXPECT PROCLAMATION: "0.10 plus 0.20 is exactly 0.30 in this jurisdiction.".
+EXPECT RECORD total: 60.02.
+EXPECT ADJOURNMENT.

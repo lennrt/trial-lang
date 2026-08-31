@@ -1,0 +1,395 @@
+FORM K-1.
+IN THE MATTER OF: the-cornell-box.
+FILED BY: the visitor, admitted to the gallery on a day pass and not yet asked to leave.
+
+OFF THE RECORD: In the Gallery, the second entertainment. The-castle
+OFF THE RECORD: asked whether the machine could run DOOM; this asks
+OFF THE RECORD: whether it can hang the one painting every renderer is
+OFF THE RECORD: measured against. The Cornell box: a room with a red
+OFF THE RECORD: wall on the left, a green wall on the right, white
+OFF THE RECORD: everywhere else, two blocks on the floor (a tall one
+OFF THE RECORD: standing at the back-left, a short one squatting at
+OFF THE RECORD: the front-right, each turned a few degrees off square),
+OFF THE RECORD: and a light let into the ceiling. It is the still life
+OFF THE RECORD: of computer graphics, and here it is traced, not faked:
+OFF THE RECORD: one ray per pixel, cast from the eye through the image
+OFF THE RECORD: plane and intersected with the room and the two blocks
+OFF THE RECORD: by arithmetic alone, in a jurisdiction that owns no
+OFF THE RECORD: colour and no float and has learned to shade anyway.
+OFF THE RECORD:
+OFF THE RECORD: Every length is an integer, every angle an entry in the
+OFF THE RECORD: table of sines, every division truncated toward zero.
+OFF THE RECORD: The camera is a pinhole at a fixed point; each pixel
+OFF THE RECORD: fires a ray whose nearest intersection, among the five
+OFF THE RECORD: room walls and the two turned blocks, is found by
+OFF THE RECORD: solving for the ray parameter and keeping the least.
+OFF THE RECORD: A block is intersected in its own frame: the ray is
+OFF THE RECORD: rotated into the block's square, tested against a slab,
+OFF THE RECORD: and its surface normal rotated back out. The shade of
+OFF THE RECORD: the point is its reflectance times the light it can see:
+OFF THE RECORD: the cosine of the angle to the ceiling lamp, dimmed by
+OFF THE RECORD: distance, cut to a fifth where a block stands between
+OFF THE RECORD: the point and the lamp, lifted by a standing ambient
+OFF THE RECORD: that stands in for the light the walls bounce back. The
+OFF THE RECORD: red wall reflects less than the green, the green less
+OFF THE RECORD: than the white, so the three read apart as three greys
+OFF THE RECORD: without a label between them. That grey is then spent
+OFF THE RECORD: on a ramp of twenty-five glyphs, darkest to brightest,
+OFF THE RECORD: and the ramp is the only colour the Court will allow.
+OFF THE RECORD:
+OFF THE RECORD: PROCLAIM is the framebuffer: one proclamation, the
+OFF THE RECORD: whole canvas, `wide` by `tall`. It is set here to a size
+OFF THE RECORD: the chambers can develop in seconds and the deposition
+OFF THE RECORD: can hold; raise both to 256 and the same offices print
+OFF THE RECORD: the gallery's full 256 by 256 plate, in minutes, every
+OFF THE RECORD: pixel of it replayable, bit for bit, forever. There are
+OFF THE RECORD: no controls: a painting is not played, it is hung.
+
+INCORPORATE BY REFERENCE statutes-of-trigonometry.
+
+THE EXHIBIT OF strike, COMPRISING ok AND reach AND stuff AND nx AND ny AND nz.
+
+ARTICLE 1.
+    OFF THE RECORD: the record of the room and the instrument. Lengths
+    OFF THE RECORD: are integers; the room is 556 on a side, after the
+    OFF THE RECORD: measurements the discipline has always used. The ray
+    OFF THE RECORD: parameter is carried in sixty-five-thousandths so
+    OFF THE RECORD: that division keeps its figures.
+    LET IT BE RECORDED THAT sines IS THE FINDING OF the-table-of-sines.
+    LET IT BE RECORDED THAT kk IS 65536.
+    LET IT BE RECORDED THAT room IS 556.
+
+    OFF THE RECORD: the ceiling lamp: a rectangle let into the white
+    OFF THE RECORD: ceiling, and the point at its centre that the shading
+    OFF THE RECORD: reckons its light from.
+    LET IT BE RECORDED THAT lx0 IS 213.
+    LET IT BE RECORDED THAT lx1 IS 343.
+    LET IT BE RECORDED THAT lz0 IS 227.
+    LET IT BE RECORDED THAT lz1 IS 332.
+    LET IT BE RECORDED THAT lcx IS 278.
+    LET IT BE RECORDED THAT lcy IS 556.
+    LET IT BE RECORDED THAT lcz IS 279.
+
+    OFF THE RECORD: the two blocks, each a centre, three half-widths, and
+    OFF THE RECORD: a turn in table units (three degrees to the unit).
+    OFF THE RECORD: The tall block stands at the back-left turned a
+    OFF THE RECORD: little one way; the short block sits at the front-right
+    OFF THE RECORD: turned a little the other. Read one column per block.
+    LET IT BE RECORDED THAT bxcx IS A SCHEDULE COMPRISING 175 AND 385.
+    LET IT BE RECORDED THAT bxcy IS A SCHEDULE COMPRISING 165 AND 83.
+    LET IT BE RECORDED THAT bxcz IS A SCHEDULE COMPRISING 375 AND 165.
+    LET IT BE RECORDED THAT bxhx IS A SCHEDULE COMPRISING 80 AND 83.
+    LET IT BE RECORDED THAT bxhy IS A SCHEDULE COMPRISING 165 AND 83.
+    LET IT BE RECORDED THAT bxhz IS A SCHEDULE COMPRISING 80 AND 83.
+    OFF THE RECORD: each block's turn resolved once, to a cosine and a sine,
+    OFF THE RECORD: so a ray need not re-consult the table a hundred thousand
+    OFF THE RECORD: times a canvas.
+    LET IT BE RECORDED THAT bcoss IS A SCHEDULE COMPRISING (THE FINDING OF cosine REGARDING 5 AND sines) AND (THE FINDING OF cosine REGARDING 115 AND sines).
+    LET IT BE RECORDED THAT bsins IS A SCHEDULE COMPRISING (THE FINDING OF sine REGARDING 5 AND sines) AND (THE FINDING OF sine REGARDING 115 AND sines).
+
+    OFF THE RECORD: the camera: a pinhole at the eye, looking level up
+    OFF THE RECORD: the room, the image plane `focal` ahead and `half`
+    OFF THE RECORD: to each side, which the surveyors call a thirty
+    OFF THE RECORD: degree field of view.
+    LET IT BE RECORDED THAT ex IS 278.
+    LET IT BE RECORDED THAT ey IS 285.
+    LET IT BE RECORDED THAT ez IS -880.
+    LET IT BE RECORDED THAT focal IS 1180.
+    LET IT BE RECORDED THAT half IS 310.
+
+    OFF THE RECORD: the light and the shading constants. lp is the lamp's
+    OFF THE RECORD: power, da softens the distance falloff, the ambients
+    OFF THE RECORD: stand in for bounced light (a base, a bias for how the
+    OFF THE RECORD: surface faces, and a lift with height), and shadow is
+    OFF THE RECORD: the divisor for a point the lamp cannot see.
+    LET IT BE RECORDED THAT lp IS 4200.
+    LET IT BE RECORDED THAT da IS 1100.
+    LET IT BE RECORDED THAT ambbase IS 320.
+    LET IT BE RECORDED THAT ambdir IS 130.
+    LET IT BE RECORDED THAT ambht IS 150.
+    LET IT BE RECORDED THAT shadow IS 3.
+
+    OFF THE RECORD: the ramp, darkest to brightest: the twenty-five greys
+    OFF THE RECORD: the jurisdiction is permitted, and their count.
+    LET IT BE RECORDED THAT ramp IS " .,:;irsvzXA253hMHGS#9B&@".
+    LET IT BE RECORDED THAT nr IS 25.
+
+    OFF THE RECORD: the canvas. Held at sixteen by eight so the
+    OFF THE RECORD: chambers develop it in seconds and the deposition can
+    OFF THE RECORD: hold it; the columns run double the rows so a terminal's
+    OFF THE RECORD: tall character cells show the square room square. Set
+    OFF THE RECORD: both to 256 for the gallery's full plate.
+    LET IT BE RECORDED THAT wide IS 16.
+    LET IT BE RECORDED THAT tall IS 8.
+
+    PROCLAIM THE FINDING OF the-rendered-frame.
+    ADJOURN INDEFINITELY.
+
+OFF THE RECORD: the offices.
+
+THE OFFICE OF the-square-root, CONCERNING n.
+    OFF THE RECORD: an integer square root by Newton's method, for the
+    OFF THE RECORD: distance to the lamp; the jurisdiction has no other.
+    SHOULD n FAIL TO EXCEED 0, REMAND WITH 0.
+    LET IT BE RECORDED THAT qx IS n.
+    LET IT BE RECORDED THAT qy IS (n PLUS 1) APPORTIONED AMONG 2.
+SECTION 1.
+    SHOULD qy FAIL TO FALL SHORT OF qx, REMAND WITH qx.
+    LET IT BE RECORDED THAT qx IS qy.
+    LET IT BE RECORDED THAT qy IS (qx PLUS (n APPORTIONED AMONG qx)) APPORTIONED AMONG 2.
+    REFER TO SECTION 1.
+
+THE OFFICE OF the-albedo, CONCERNING mat.
+    OFF THE RECORD: reflectance, per surface. Red reflects least, then
+    OFF THE RECORD: green, then the white of walls and floor; the blocks
+    OFF THE RECORD: are a near-white stone.
+    SHOULD mat EQUAL 1, REMAND WITH 300.
+    SHOULD mat EQUAL 2, REMAND WITH 470.
+    SHOULD mat EQUAL 3, REMAND WITH 850.
+    REMAND WITH 1000.
+
+THE OFFICE OF the-plane, CONCERNING ox AND oy AND oz AND vx AND vy AND vz AND axis AND val AND mat.
+    OFF THE RECORD: one axis-aligned wall. Solve the ray for the plane at
+    OFF THE RECORD: `val` on `axis`, in front of the eye and inside the
+    OFF THE RECORD: room's square, and report the hit, its outward normal
+    OFF THE RECORD: (scaled by a thousand), and whether the lamp is let
+    OFF THE RECORD: into it.
+    LET IT BE RECORDED THAT pdd IS vx.
+    SHOULD axis EQUAL 1, LET IT BE RECORDED THAT pdd IS vy.
+    SHOULD axis EQUAL 2, LET IT BE RECORDED THAT pdd IS vz.
+    SHOULD pdd EQUAL 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    LET IT BE RECORDED THAT poc IS ox.
+    SHOULD axis EQUAL 1, LET IT BE RECORDED THAT poc IS oy.
+    SHOULD axis EQUAL 2, LET IT BE RECORDED THAT poc IS oz.
+    LET IT BE RECORDED THAT pps IS (val LESS poc) TIMES kk APPORTIONED AMONG pdd.
+    SHOULD pps FAIL TO EXCEED 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    LET IT BE RECORDED THAT ppx IS ox PLUS pps TIMES vx APPORTIONED AMONG kk.
+    LET IT BE RECORDED THAT ppy IS oy PLUS pps TIMES vy APPORTIONED AMONG kk.
+    LET IT BE RECORDED THAT ppz IS oz PLUS pps TIMES vz APPORTIONED AMONG kk.
+    SHOULD ppx FALL SHORT OF 0 OR IN THE ALTERNATIVE ppx EXCEED room OR IN THE ALTERNATIVE ppy FALL SHORT OF 0 OR IN THE ALTERNATIVE ppy EXCEED room OR IN THE ALTERNATIVE ppz FALL SHORT OF 0 OR IN THE ALTERNATIVE ppz EXCEED room, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    LET IT BE RECORDED THAT psign IS -1000.
+    SHOULD pdd FALL SHORT OF 0, LET IT BE RECORDED THAT psign IS 1000.
+    LET IT BE RECORDED THAT pnx IS 0.
+    LET IT BE RECORDED THAT pny IS 0.
+    LET IT BE RECORDED THAT pnz IS 0.
+    SHOULD axis EQUAL 0, LET IT BE RECORDED THAT pnx IS psign.
+    SHOULD axis EQUAL 1, LET IT BE RECORDED THAT pny IS psign.
+    SHOULD axis EQUAL 2, LET IT BE RECORDED THAT pnz IS psign.
+    LET IT BE RECORDED THAT plm IS mat.
+    SHOULD axis EQUAL 1 AND ALSO val EQUAL room AND ALSO ppx FAIL TO FALL SHORT OF lx0 AND ALSO ppx FAIL TO EXCEED lx1 AND ALSO ppz FAIL TO FALL SHORT OF lz0 AND ALSO ppz FAIL TO EXCEED lz1, LET IT BE RECORDED THAT plm IS 4.
+    REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 1 AND reach IS pps AND stuff IS plm AND nx IS pnx AND ny IS pny AND nz IS pnz.
+
+THE OFFICE OF the-swap.
+    OFF THE RECORD: order the slab's two crossings, and remember that the
+    OFF THE RECORD: near face was the far side of the box.
+    LET IT BE RECORDED THAT ttmp IS t1.
+    LET IT BE RECORDED THAT t1 IS t2.
+    LET IT BE RECORDED THAT t2 IS ttmp.
+    LET IT BE RECORDED THAT enlo IS 0.
+
+THE OFFICE OF the-set-near, CONCERNING t AND axis AND enter.
+    LET IT BE RECORDED THAT tmn IS t.
+    LET IT BE RECORDED THAT axh IS axis.
+    LET IT BE RECORDED THAT losd IS enter.
+
+THE OFFICE OF the-slab, CONCERNING lo AND half2 AND ld AND axis.
+    OFF THE RECORD: one axis of the slab test: cross the two faces at
+    OFF THE RECORD: plus and minus the half-width, narrow the surviving
+    OFF THE RECORD: interval, and report whether the ray is still inside
+    OFF THE RECORD: the box. A ray parallel to the slab survives only if
+    OFF THE RECORD: it already lies between the faces.
+    SHOULD ld EQUAL 0, REFER TO SECTION 1.
+    LET IT BE RECORDED THAT t1 IS ((0 LESS half2) LESS lo) TIMES kk APPORTIONED AMONG ld.
+    LET IT BE RECORDED THAT t2 IS (half2 LESS lo) TIMES kk APPORTIONED AMONG ld.
+    LET IT BE RECORDED THAT enlo IS 1.
+    SHOULD t1 EXCEED t2, PETITION THE OFFICE OF the-swap.
+    SHOULD t1 EXCEED tmn, PETITION THE OFFICE OF the-set-near WITH t1 AND axis AND enlo.
+    SHOULD t2 FALL SHORT OF tmx, LET IT BE RECORDED THAT tmx IS t2.
+    SHOULD tmn EXCEED tmx, REMAND WITH 0.
+    REMAND WITH 1.
+SECTION 1.
+    OFF THE RECORD: parallel to the slab: inside only if already between
+    OFF THE RECORD: the two faces.
+    SHOULD lo FALL SHORT OF (0 LESS half2), REMAND WITH 0.
+    SHOULD lo EXCEED half2, REMAND WITH 0.
+    REMAND WITH 1.
+
+THE OFFICE OF the-hit-box, CONCERNING ox AND oy AND oz AND vx AND vy AND vz AND k.
+    OFF THE RECORD: the ray against a turned block. Carry the ray into
+    OFF THE RECORD: the block's own frame (translate to its centre, rotate
+    OFF THE RECORD: by its turn), run the three slabs against a square
+    OFF THE RECORD: box, and rotate the struck face's normal back into the
+    OFF THE RECORD: room. A miss anywhere is a miss.
+    LET IT BE RECORDED THAT bcos IS THE ITEM AT k IN bcoss.
+    LET IT BE RECORDED THAT bsin IS THE ITEM AT k IN bsins.
+    LET IT BE RECORDED THAT bcx IS THE ITEM AT k IN bxcx.
+    LET IT BE RECORDED THAT bcy IS THE ITEM AT k IN bxcy.
+    LET IT BE RECORDED THAT bcz IS THE ITEM AT k IN bxcz.
+    LET IT BE RECORDED THAT bhx IS THE ITEM AT k IN bxhx.
+    LET IT BE RECORDED THAT bhy IS THE ITEM AT k IN bxhy.
+    LET IT BE RECORDED THAT bhz IS THE ITEM AT k IN bxhz.
+    LET IT BE RECORDED THAT bcapx IS ox LESS bcx.
+    LET IT BE RECORDED THAT bcapz IS oz LESS bcz.
+    LET IT BE RECORDED THAT lox IS (bcapx TIMES bcos LESS bcapz TIMES bsin) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT loz IS (bcapx TIMES bsin PLUS bcapz TIMES bcos) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT loy IS oy LESS bcy.
+    LET IT BE RECORDED THAT ldx IS (vx TIMES bcos LESS vz TIMES bsin) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT ldz IS (vx TIMES bsin PLUS vz TIMES bcos) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT ldy IS vy.
+    LET IT BE RECORDED THAT tmn IS 0.
+    LET IT BE RECORDED THAT tmx IS 4611686018427387904.
+    LET IT BE RECORDED THAT axh IS 0.
+    LET IT BE RECORDED THAT losd IS 1.
+    SHOULD (THE FINDING OF the-slab REGARDING lox AND bhx AND ldx AND 0) EQUAL 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    SHOULD (THE FINDING OF the-slab REGARDING loy AND bhy AND ldy AND 1) EQUAL 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    SHOULD (THE FINDING OF the-slab REGARDING loz AND bhz AND ldz AND 2) EQUAL 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    SHOULD tmn FAIL TO EXCEED 0, REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 0 AND reach IS 0 AND stuff IS 0 AND nx IS 0 AND ny IS 0 AND nz IS 0.
+    LET IT BE RECORDED THAT nvv IS -1000.
+    SHOULD losd EQUAL 0, LET IT BE RECORDED THAT nvv IS 1000.
+    LET IT BE RECORDED THAT lnx IS 0.
+    LET IT BE RECORDED THAT lny IS 0.
+    LET IT BE RECORDED THAT lnz IS 0.
+    SHOULD axh EQUAL 0, LET IT BE RECORDED THAT lnx IS nvv.
+    SHOULD axh EQUAL 1, LET IT BE RECORDED THAT lny IS nvv.
+    SHOULD axh EQUAL 2, LET IT BE RECORDED THAT lnz IS nvv.
+    LET IT BE RECORDED THAT wnx IS (lnx TIMES bcos PLUS lnz TIMES bsin) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT wnz IS ((0 LESS lnx) TIMES bsin PLUS lnz TIMES bcos) APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT wny IS lny.
+    REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS 1 AND reach IS tmn AND stuff IS 3 AND nx IS wnx AND ny IS wny AND nz IS wnz.
+
+THE OFFICE OF the-adopt, CONCERNING cand.
+    OFF THE RECORD: keep the nearer of two hits as the standing best.
+    LET IT BE RECORDED THAT bok IS 1.
+    LET IT BE RECORDED THAT brs IS THE reach ENTERED IN cand.
+    LET IT BE RECORDED THAT bmat IS THE stuff ENTERED IN cand.
+    LET IT BE RECORDED THAT bnx IS THE nx ENTERED IN cand.
+    LET IT BE RECORDED THAT bny IS THE ny ENTERED IN cand.
+    LET IT BE RECORDED THAT bnz IS THE nz ENTERED IN cand.
+
+THE OFFICE OF the-consider, CONCERNING axis AND val AND mat.
+    OFF THE RECORD: solve one wall against the standing ray and keep it if
+    OFF THE RECORD: it is the nearest thing struck so far.
+    LET IT BE RECORDED THAT cand IS THE FINDING OF the-plane REGARDING gox AND goy AND goz AND gvx AND gvy AND gvz AND axis AND val AND mat.
+    SHOULD (THE ok ENTERED IN cand) EQUAL 1 AND ALSO (THE reach ENTERED IN cand) FALL SHORT OF brs, PETITION THE OFFICE OF the-adopt WITH cand.
+
+THE OFFICE OF the-consider-box, CONCERNING k.
+    OFF THE RECORD: the same, for a block.
+    LET IT BE RECORDED THAT cand IS THE FINDING OF the-hit-box REGARDING gox AND goy AND goz AND gvx AND gvy AND gvz AND k.
+    SHOULD (THE ok ENTERED IN cand) EQUAL 1 AND ALSO (THE reach ENTERED IN cand) FALL SHORT OF brs, PETITION THE OFFICE OF the-adopt WITH cand.
+
+THE OFFICE OF the-trace, CONCERNING ox AND oy AND oz AND vx AND vy AND vz.
+    OFF THE RECORD: the nearest surface the ray meets. Only the walls the
+    OFF THE RECORD: ray runs toward can be struck, so a ray tests one wall
+    OFF THE RECORD: per axis it moves along, plus the back wall it always
+    OFF THE RECORD: faces, plus the two blocks; the least reach is kept.
+    LET IT BE RECORDED THAT gox IS ox.
+    LET IT BE RECORDED THAT goy IS oy.
+    LET IT BE RECORDED THAT goz IS oz.
+    LET IT BE RECORDED THAT gvx IS vx.
+    LET IT BE RECORDED THAT gvy IS vy.
+    LET IT BE RECORDED THAT gvz IS vz.
+    LET IT BE RECORDED THAT bok IS 0.
+    LET IT BE RECORDED THAT brs IS 4611686018427387904.
+    LET IT BE RECORDED THAT bmat IS 0.
+    LET IT BE RECORDED THAT bnx IS 0.
+    LET IT BE RECORDED THAT bny IS 0.
+    LET IT BE RECORDED THAT bnz IS 0.
+    SHOULD vx FALL SHORT OF 0, PETITION THE OFFICE OF the-consider WITH 0 AND 0 AND 1.
+    SHOULD vx EXCEED 0, PETITION THE OFFICE OF the-consider WITH 0 AND room AND 2.
+    SHOULD vy FALL SHORT OF 0, PETITION THE OFFICE OF the-consider WITH 1 AND 0 AND 0.
+    SHOULD vy EXCEED 0, PETITION THE OFFICE OF the-consider WITH 1 AND room AND 0.
+    PETITION THE OFFICE OF the-consider WITH 2 AND room AND 0.
+    PETITION THE OFFICE OF the-consider-box WITH 1.
+    PETITION THE OFFICE OF the-consider-box WITH 2.
+    REMAND WITH AN EXHIBIT OF strike WHEREIN ok IS bok AND reach IS brs AND stuff IS bmat AND nx IS bnx AND ny IS bny AND nz IS bnz.
+
+THE OFFICE OF the-occluded, CONCERNING px AND py AND pz AND sx AND sy AND sz.
+    OFF THE RECORD: does a block stand between the point and the lamp? A
+    OFF THE RECORD: block struck before the ray reaches the lamp (at one
+    OFF THE RECORD: whole kk of parameter) casts the point into shadow.
+    LET IT BE RECORDED THAT oc1 IS THE FINDING OF the-hit-box REGARDING px AND py AND pz AND sx AND sy AND sz AND 1.
+    SHOULD (THE ok ENTERED IN oc1) EQUAL 1 AND ALSO (THE reach ENTERED IN oc1) EXCEED 0 AND ALSO (THE reach ENTERED IN oc1) FALL SHORT OF kk, REMAND WITH 1.
+    LET IT BE RECORDED THAT oc2 IS THE FINDING OF the-hit-box REGARDING px AND py AND pz AND sx AND sy AND sz AND 2.
+    SHOULD (THE ok ENTERED IN oc2) EQUAL 1 AND ALSO (THE reach ENTERED IN oc2) EXCEED 0 AND ALSO (THE reach ENTERED IN oc2) FALL SHORT OF kk, REMAND WITH 1.
+    REMAND WITH 0.
+
+THE OFFICE OF the-shade, CONCERNING px AND py AND pz AND nx AND ny AND nz AND mat.
+    OFF THE RECORD: the grey of a point, from nothing but what light
+    OFF THE RECORD: reaches it. The lamp itself is full white. For any
+    OFF THE RECORD: other surface: the cosine to the lamp, dimmed by
+    OFF THE RECORD: distance, shadowed if a block intervenes, multiplied
+    OFF THE RECORD: by the surface's reflectance, tone-mapped into range,
+    OFF THE RECORD: and lifted by the standing ambient. Normals arrive
+    OFF THE RECORD: scaled by a thousand, so the cosine is the dot over
+    OFF THE RECORD: the distance.
+    SHOULD mat EQUAL 4, REMAND WITH 1000.
+    LET IT BE RECORDED THAT slx IS lcx LESS px.
+    LET IT BE RECORDED THAT sly IS lcy LESS py.
+    LET IT BE RECORDED THAT slz IS lcz LESS pz.
+    LET IT BE RECORDED THAT sd2 IS slx TIMES slx PLUS sly TIMES sly PLUS slz TIMES slz.
+    LET IT BE RECORDED THAT sdst IS THE FINDING OF the-square-root REGARDING sd2.
+    SHOULD sdst EQUAL 0, LET IT BE RECORDED THAT sdst IS 1.
+    LET IT BE RECORDED THAT sndl IS nx TIMES slx PLUS ny TIMES sly PLUS nz TIMES slz.
+    SHOULD sndl FALL SHORT OF 0, LET IT BE RECORDED THAT sndl IS 0.
+    LET IT BE RECORDED THAT scos IS sndl APPORTIONED AMONG sdst.
+    LET IT BE RECORDED THAT sraw IS scos TIMES lp APPORTIONED AMONG (sdst PLUS da).
+    LET IT BE RECORDED THAT sox IS px PLUS nx TIMES 4 APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT soy IS py PLUS ny TIMES 4 APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT soz IS pz PLUS nz TIMES 4 APPORTIONED AMONG 1000.
+    SHOULD (THE FINDING OF the-occluded REGARDING sox AND soy AND soz AND slx AND sly AND slz) EQUAL 1, LET IT BE RECORDED THAT sraw IS sraw APPORTIONED AMONG shadow.
+    LET IT BE RECORDED THAT salb IS THE FINDING OF the-albedo REGARDING mat.
+    LET IT BE RECORDED THAT sambk IS ambbase PLUS ambdir TIMES ny APPORTIONED AMONG 1000 PLUS ambht TIMES py APPORTIONED AMONG room.
+    LET IT BE RECORDED THAT samb IS sambk TIMES salb APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT sdir IS sraw TIMES salb APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT slit IS sdir TIMES 1000 APPORTIONED AMONG (sdir PLUS 1000).
+    LET IT BE RECORDED THAT sval IS samb PLUS (1000 LESS samb) TIMES slit APPORTIONED AMONG 1000.
+    SHOULD sval EXCEED 1000, LET IT BE RECORDED THAT sval IS 1000.
+    SHOULD sval FALL SHORT OF 0, LET IT BE RECORDED THAT sval IS 0.
+    REMAND WITH sval.
+
+THE OFFICE OF the-ray-dir, CONCERNING i AND j AND cols AND rows.
+    OFF THE RECORD: the ray for pixel (i, j), zero-indexed: an offset
+    OFF THE RECORD: across and up the image plane, and the focal length
+    OFF THE RECORD: ahead. The camera is level, so the plane is not
+    OFF THE RECORD: turned. Recorded to dx, dy, dz for the caller.
+    LET IT BE RECORDED THAT dx IS 2 TIMES half TIMES i APPORTIONED AMONG (cols LESS 1) LESS half.
+    LET IT BE RECORDED THAT dy IS half LESS 2 TIMES half TIMES j APPORTIONED AMONG (rows LESS 1).
+    LET IT BE RECORDED THAT dz IS focal.
+
+THE OFFICE OF the-ramp, CONCERNING val.
+    OFF THE RECORD: spend a grey on the ramp: index by brightness, one to
+    OFF THE RECORD: twenty-five, and hand back the single glyph.
+    LET IT BE RECORDED THAT ridx IS val TIMES (nr LESS 1) APPORTIONED AMONG 1000 PLUS 1.
+    SHOULD ridx FALL SHORT OF 1, LET IT BE RECORDED THAT ridx IS 1.
+    SHOULD ridx EXCEED nr, LET IT BE RECORDED THAT ridx IS nr.
+    REMAND WITH AN EXCERPT OF ramp FROM ridx TO ridx.
+
+THE OFFICE OF the-emit, CONCERNING hit.
+    OFF THE RECORD: turn a struck ray into a glyph: find the point along
+    OFF THE RECORD: the ray, shade it, spend it on the ramp, and append.
+    LET IT BE RECORDED THAT epx IS ex PLUS (THE reach ENTERED IN hit) TIMES dx APPORTIONED AMONG kk.
+    LET IT BE RECORDED THAT epy IS ey PLUS (THE reach ENTERED IN hit) TIMES dy APPORTIONED AMONG kk.
+    LET IT BE RECORDED THAT epz IS ez PLUS (THE reach ENTERED IN hit) TIMES dz APPORTIONED AMONG kk.
+    LET IT BE RECORDED THAT eval IS THE FINDING OF the-shade REGARDING epx AND epy AND epz AND (THE nx ENTERED IN hit) AND (THE ny ENTERED IN hit) AND (THE nz ENTERED IN hit) AND (THE stuff ENTERED IN hit).
+    LET IT BE RECORDED THAT rnline IS rnline PLUS THE FINDING OF the-ramp REGARDING eval.
+
+THE OFFICE OF the-rendered-frame.
+    OFF THE RECORD: the whole canvas, one ray per pixel, swept left to
+    OFF THE RECORD: right and top to bottom, the rows joined into one
+    OFF THE RECORD: proclamation. A ray that meets nothing (which, from
+    OFF THE RECORD: inside a closed room, it does not) is left blank.
+    LET IT BE RECORDED THAT rnframe IS "".
+    LET IT BE RECORDED THAT rnrow IS 1.
+SECTION 1.
+    LET IT BE RECORDED THAT rnline IS "".
+    LET IT BE RECORDED THAT rncol IS 1.
+SECTION 2.
+    PETITION THE OFFICE OF the-ray-dir WITH (rncol LESS 1) AND (rnrow LESS 1) AND wide AND tall.
+    LET IT BE RECORDED THAT rst IS THE FINDING OF the-trace REGARDING ex AND ey AND ez AND dx AND dy AND dz.
+    SHOULD (THE ok ENTERED IN rst) EQUAL 1, PETITION THE OFFICE OF the-emit WITH rst. FAILING WHICH, LET IT BE RECORDED THAT rnline IS rnline PLUS " ".
+    LET IT BE RECORDED THAT rncol IS rncol PLUS 1.
+    SHOULD rncol FAIL TO EXCEED wide, REFER TO SECTION 2.
+    LET IT BE RECORDED THAT rnframe IS rnframe PLUS rnline PLUS "\n".
+    LET IT BE RECORDED THAT rnrow IS rnrow PLUS 1.
+    SHOULD rnrow FAIL TO EXCEED tall, REFER TO SECTION 1.
+    REMAND WITH rnframe.

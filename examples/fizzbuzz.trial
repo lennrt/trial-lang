@@ -1,0 +1,21 @@
+FORM K-1.
+IN THE MATTER OF: form-15-b-compliance.
+FILED BY: the undersigned, under protest.
+
+OFF THE RECORD: the classic compliance report, items 1 through 100.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT n IS 1.
+
+ARTICLE 2.
+    LET IT BE RECORDED THAT report IS "".
+    SHOULD n NOTWITHSTANDING 3 EQUAL 0,
+        LET IT BE RECORDED THAT report IS report PLUS "Fizz".
+    SHOULD n NOTWITHSTANDING 5 EQUAL 0,
+        LET IT BE RECORDED THAT report IS report PLUS "Buzz".
+    SHOULD report EQUAL "", PROCLAIM n. FAILING WHICH, PROCLAIM report.
+    LET IT BE RECORDED THAT n IS n PLUS 1.
+    SHOULD n FAIL TO EXCEED 100, REFER TO ARTICLE 2.
+
+ARTICLE 3.
+    ADJOURN INDEFINITELY.

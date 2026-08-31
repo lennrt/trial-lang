@@ -1,0 +1,19 @@
+package canon // import "github.com/lennrt/trial-lang/canon"
+
+Package canon embeds the standard Form S-1 statutes.
+
+VARIABLES
+
+var FS embed.FS
+var Order = Files()
+    Order lists the canon in dependency order.
+
+    Deprecated: use Files. This mutable variable remains for source
+    compatibility. Production code does not read it.
+
+
+FUNCTIONS
+
+func Files() []string
+    Files lists the canon in dependency order. The returned slice belongs to the
+    caller and may be changed.

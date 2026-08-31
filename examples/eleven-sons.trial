@@ -1,0 +1,40 @@
+FORM K-1.
+IN THE MATTER OF: eleven-sons.
+FILED BY: a father, for the record, with reservations.
+
+OFF THE RECORD: Kafka's father describes his eleven sons, one keyed
+OFF THE RECORD: entry after another, each praised and then undercut
+OFF THE RECORD: in the same breath. A register is the third
+OFF THE RECORD: collection: names to values, value semantics, and no
+OFF THE RECORD: order except the one the roster imposes, which is
+OFF THE RECORD: alphabetical, because the Court files everything
+OFF THE RECORD: alphabetically eventually. The sons were born in one
+OFF THE RECORD: order and are proclaimed in another; neither order
+OFF THE RECORD: is the father's preference, which is the point.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT sons IS AN EMPTY REGISTER.
+    INSCRIBE "handsome, but a trifle shallow" UNDER "first" IN sons.
+    INSCRIBE "at home in the world, and it shows" UNDER "second" IN sons.
+    INSCRIBE "beautiful, and not to my taste" UNDER "third" IN sons.
+    INSCRIBE "open-hearted; one worries" UNDER "fourth" IN sons.
+    INSCRIBE "kind, and impossible to praise" UNDER "fifth" IN sons.
+    INSCRIBE "thoughtful, or at least stooped" UNDER "sixth" IN sons.
+    INSCRIBE "witty in a way the age rejects" UNDER "seventh" IN sons.
+    INSCRIBE "my child of sorrow, who keeps his distance" UNDER "eighth" IN sons.
+    INSCRIBE "elegant, with the wrong friends" UNDER "ninth" IN sons.
+    INSCRIBE "so earnest he is suspected of irony" UNDER "tenth" IN sons.
+    INSCRIBE "delicate, but the delicacy is a kind of strength" UNDER "eleventh" IN sons.
+    PROCLAIM "I have " PLUS THE TRANSCRIPT OF THE LENGTH OF sons PLUS " sons.".
+    LET IT BE RECORDED THAT roll IS THE ROSTER OF sons.
+    LET IT BE RECORDED THAT i IS 0.
+
+ARTICLE 2.
+    LET IT BE RECORDED THAT i IS i PLUS 1.
+    LET IT BE RECORDED THAT son IS THE ITEM AT i IN roll.
+    PROCLAIM "the " PLUS son PLUS ": " PLUS THE ENTRY UNDER son IN sons.
+    SHOULD i FALL SHORT OF THE LENGTH OF sons, REFER TO ARTICLE 2.
+
+ARTICLE 3.
+    PROCLAIM "These are my eleven sons. The Court has filed them in its own order; so, I suppose, have I.".
+    ADJOURN INDEFINITELY.

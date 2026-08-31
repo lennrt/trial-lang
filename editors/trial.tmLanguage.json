@@ -1,0 +1,80 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "triallang",
+  "scopeName": "source.trial",
+  "fileTypes": ["trial", "deposition"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#sum" },
+    { "include": "#integer" },
+    { "include": "#form" },
+    { "include": "#heading" },
+    { "include": "#finding" },
+    { "include": "#control" },
+    { "include": "#statement" },
+    { "include": "#builtin" },
+    { "include": "#keyword" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "OFF\\s+THE\\s+RECORD\\s*:.*$",
+      "name": "comment.line.off-the-record.trial"
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.trial",
+      "patterns": [
+        { "match": "\\\\[\"\\\\nt]", "name": "constant.character.escape.trial" }
+      ]
+    },
+    "sum": {
+      "match": "-?\\b[0-9]+\\.[0-9]{2}\\b",
+      "name": "constant.numeric.sum.trial"
+    },
+    "integer": {
+      "match": "-?\\b[0-9]+\\b",
+      "name": "constant.numeric.integer.trial"
+    },
+    "form": {
+      "match": "\\b(FORM)\\s+(K-1|K-2|S-1)\\b",
+      "captures": {
+        "1": { "name": "keyword.other.form.trial" },
+        "2": { "name": "entity.name.type.form.trial" }
+      }
+    },
+    "heading": {
+      "match": "\\b(ARTICLE|SECTION|ENACTMENT)\\s+([0-9]+)",
+      "captures": {
+        "1": { "name": "entity.name.section.trial" },
+        "2": { "name": "constant.numeric.heading.trial" }
+      }
+    },
+    "finding": {
+      "match": "\\b(SUSTAINED|OVERRULED)\\b",
+      "name": "constant.language.finding.trial"
+    },
+    "control": {
+      "match": "\\b(SHOULD|FAILING WHICH|REFER TO(?: ARTICLE| SECTION)?|ADJOURN(?: INDEFINITELY| FOR)?|REMAND(?: WITH)?|PETITION THE OFFICE OF|AWAIT(?: SUMMONS| THE GAZETTE)?|FOR AT MOST|AND ALSO|OR IN THE ALTERNATIVE|FAIL TO)\\b",
+      "name": "keyword.control.trial"
+    },
+    "statement": {
+      "match": "\\b(LET IT BE (?:RECORDED|ENTERED)|LET LETTERS PATENT ISSUE FOR|PROCLAIM|PUBLISH|SERVE NOTICE OF|COMMENCE PROCEEDINGS UPON|ENTER JUDGMENT AGAINST|ON THE GROUNDS OF|FILE A MOTION TO RECONSIDER|HOLD|IN CONTEMPT|STRIKE|FROM THE RECORD|ANNEX|SUBSTITUTE|COMMIT|TO THE ARCHIVE AS|INCORPORATE BY REFERENCE|HEREINAFTER|SHALL MEAN|FILED UNDER|FILED BY|IN THE MATTER OF|IN THE GAZETTE|REFERRING TO ARTICLE|THE GROUNDS FILED UNDER|DISCLOSING|FOR A TERM OF|CONCERNING|COMPRISING|WHEREIN|REGARDING|UPON|DAYS?|THE OFFICE OF|THE EXHIBIT OF)\\b",
+      "name": "keyword.other.statement.trial"
+    },
+    "builtin": {
+      "match": "\\b(THE (?:FINDING|STANDING|RECORD|LENGTH|TRANSCRIPT|ITEM|DISCRETION|PRACTICE|DOCUMENT|CASE AT BAR|DATE OF THESE PRESENTS|SUM CERTAIN) OF?|AN? (?:EXHIBIT|EXCERPT|SCHEDULE|EMPTY SCHEDULE) ?(?:OF|COMPRISING)?|PLUS|LESS|TIMES|APPORTIONED AMONG|NOTWITHSTANDING|EXCEED|EQUAL|FALL SHORT OF|DIFFER FROM|ENTERED IN|FROM THE ARCHIVE|BETWEEN)\\b",
+      "name": "support.function.builtin.trial"
+    },
+    "keyword": {
+      "match": "\\b[A-Z][A-Z0-9-]*\\b",
+      "name": "keyword.other.trial"
+    },
+    "identifier": {
+      "match": "\\b[a-z][a-z0-9-]*\\b",
+      "name": "variable.other.trial"
+    }
+  }
+}

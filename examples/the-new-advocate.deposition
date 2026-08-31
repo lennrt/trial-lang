@@ -1,0 +1,8 @@
+DEPOSITION OF: the-new-advocate.trial.
+ENACT: ../canon/statutes-of-delegation.trial.
+
+EXPECT PROCLAMATION: charges at Granicus, flanks burdened, dust attending.
+EXPECT PROCLAMATION: reads Granicus by quiet lamplight.
+EXPECT PROCLAMATION: A SCHEDULE (reads the code of the field by quiet lamplight; reads the register of wounds by quiet lamplight; reads the settled peace by quiet lamplight).
+EXPECT PROCLAMATION: "So perhaps it is best, as Bucephalus has done, to bury oneself in the old books.".
+EXPECT ADJOURNMENT.

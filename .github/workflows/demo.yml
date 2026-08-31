@@ -1,0 +1,56 @@
+# Record the Orrery demo for review. This workflow does not write to the
+# repository or publish the artifact.
+name: Demo
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: demo-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27.0"
+
+jobs:
+  recording:
+    name: Record Orrery
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - name: Build trial
+        run: go build -o trial ./cmd/trial
+      - name: Install recording tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/ttyd" \
+            https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          echo "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55  $RUNNER_TEMP/ttyd" \
+            | sha256sum --check --strict
+          sudo install -m 0755 "$RUNNER_TEMP/ttyd" /usr/local/bin/ttyd
+          go install github.com/charmbracelet/vhs@v0.11.0
+      - name: Check generated demo
+        run: make demo-check
+      - name: Record demo
+        run: |
+          set -euo pipefail
+          chmod +x docs/the-orrery-demo.sh
+          vhs docs/the-orrery.tape
+      - name: Upload recording for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: the-orrery
+          path: docs/the-orrery.gif
+          if-no-files-found: error

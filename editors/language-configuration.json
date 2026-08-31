@@ -1,0 +1,11 @@
+{
+  "comments": {
+    "lineComment": "OFF THE RECORD:"
+  },
+  "brackets": [["(", ")"]],
+  "autoClosingPairs": [
+    { "open": "(", "close": ")" },
+    { "open": "\"", "close": "\"" }
+  ],
+  "surroundingPairs": [["(", ")"], ["\"", "\""]]
+}
