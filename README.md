@@ -1,3 +1,5 @@
+![trial-lang — ASCII court records and a path into the Court](docs/hero.png)
+
 # triallang
 
 *A programming language you do not run. You are summoned.*
