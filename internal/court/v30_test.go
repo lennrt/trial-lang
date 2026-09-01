@@ -278,3 +278,43 @@ func TestAppealUnconvened(t *testing.T) {
 		t.Fatalf("proclamations = %q", got)
 	}
 }
+
+func TestAppealTranslatesSparseInputOffsets(t *testing.T) {
+	log, c := convene(t, `FORM K-1.
+IN THE MATTER OF: sparse-appeal.
+ARTICLE 1.
+    PUBLISH "edition" IN THE GAZETTE.
+    AWAIT THE GAZETTE, FILED UNDER edition.
+    AWAIT SUMMONS, FILED UNDER notice.
+    ADJOURN INDEFINITELY.
+`, "notice")
+	if out := proceed(t, log, c); out != OutcomeAdjourned {
+		t.Fatalf("expected adjournment, got %v", out)
+	}
+	sparse := &sparseOffsetLog{Log: log, caseID: c.ID}
+
+	for _, test := range []struct {
+		name string
+		step int64
+	}{
+		{name: "current state", step: AppealAsItStands},
+		{name: "historical state", step: 10_000},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			appealed, err := Appeal(t.Context(), sparse, c, test.step)
+			if err != nil {
+				t.Fatal(err)
+			}
+			attention, err := sparse.Attention(t.Context(), appealed)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if attention.Summons != 1 {
+				t.Fatalf("summons cursor = %d, want dense cursor 1", attention.Summons)
+			}
+			if want := sparseCursor(1); attention.Gazette != want {
+				t.Fatalf("gazette cursor = %d, want source cursor %d", attention.Gazette, want)
+			}
+		})
+	}
+}

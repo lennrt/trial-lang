@@ -15,8 +15,9 @@ import (
 type MatterReport struct {
 	Case         docket.Case
 	PC           int64
-	End          int64 // where the proceedings currently end
+	End          int64 // number of visible instructions currently filed
 	Lag          int64 // End - PC: instructions filed and not yet reached
+	EndKnown     bool  // false when the proceedings snapshot could not be read
 	Started      bool
 	StackDepth   int
 	AppealsDepth int
@@ -40,13 +41,14 @@ func ReportDocket(ctx context.Context, log docket.Log) ([]MatterReport, error) {
 			out = append(out, r)
 			continue
 		}
-		end, err := log.End(ctx, c.Proceedings())
-		if err != nil {
-			end = st.PC
-		}
-		r.PC, r.End, r.Started = st.PC, end, st.Started
-		if r.Lag = end - st.PC; r.Lag < 0 {
-			r.Lag = 0
+		proceedings, err := log.ReadAll(ctx, c.Proceedings())
+		endKnown, endErr := err == nil, err
+		r.PC, r.Started, r.EndKnown = st.PC, st.Started, endKnown
+		if endKnown {
+			r.End = int64(len(proceedings))
+			if r.Lag = r.End - st.PC; r.Lag < 0 {
+				r.Lag = 0
+			}
 		}
 		r.StackDepth, r.AppealsDepth = st.StackDepth, st.AppealsDepth
 		switch {
@@ -60,6 +62,8 @@ func ReportDocket(ctx context.Context, log docket.Log) ([]MatterReport, error) {
 			r.Status = "awaiting a summons until " + st.AwaitingUntil.Format(time.RFC3339)
 		case !st.Started:
 			r.Status = "never yet convened"
+		case !endKnown:
+			r.Status = fmt.Sprintf("proceedings count unavailable: %v", endErr)
 		case r.Lag == 0:
 			r.Status = "at the end of its proceedings (apparent acquittal)"
 		default:

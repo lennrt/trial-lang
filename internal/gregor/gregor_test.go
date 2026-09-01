@@ -85,6 +85,21 @@ func TestParseRejections(t *testing.T) {
 	}
 }
 
+func TestControlFlowTargetOverflow(t *testing.T) {
+	for name, statement := range map[string]string{
+		"referral": "REFER TO ARTICLE 999999999999999999999.",
+		"motion":   "FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE 999999999999999999999.",
+	} {
+		t.Run(name, func(t *testing.T) {
+			src := "FORM K-1.\nIN THE MATTER OF: x.\nARTICLE 1.\n" + statement
+			_, err := Parse(src)
+			if err == nil || !strings.Contains(err.Error(), "outside the 64-bit range") {
+				t.Fatalf("Parse() error = %v, want a 64-bit range rejection", err)
+			}
+		})
+	}
+}
+
 func TestCompileCounting(t *testing.T) {
 	src := `FORM K-1.
 IN THE MATTER OF: counting.
@@ -139,6 +154,56 @@ func TestCompileRejections(t *testing.T) {
 		if _, err := Compile(prog); err == nil {
 			t.Errorf("%s: compilation should have been rejected and was not", name)
 		}
+	}
+}
+
+func TestUseAfterAssignmentChecksNestedExpressions(t *testing.T) {
+	practice := Practice{Name: "flight", Line: 3}
+	emptyRegister := RegisterLit{Line: 3}
+	str := StrLit{Val: "key"}
+	cases := map[string]Stmt{
+		"selective receive":       Summons{From: practice, Name: "reply", Line: 3},
+		"timed selective receive": TimedSummons{From: practice, Days: IntLit{Val: 1}, Name: "reply", Else: Adjourn{Line: 3}, Line: 3},
+		"register value": Proclaim{Expr: RegisterLit{Entries: []RegisterInit{{
+			Value: practice,
+			Key:   str,
+		}}, Line: 3}, Line: 3},
+		"register key": Proclaim{Expr: RegisterLit{Entries: []RegisterInit{{
+			Value: IntLit{Val: 1},
+			Key:   practice,
+		}}, Line: 3}, Line: 3},
+		"entry key":       Proclaim{Expr: EntryAt{Key: practice, Of: emptyRegister, Line: 3}, Line: 3},
+		"entry register":  Proclaim{Expr: EntryAt{Key: str, Of: practice, Line: 3}, Line: 3},
+		"roster":          Proclaim{Expr: RosterOf{Of: practice, Line: 3}, Line: 3},
+		"dynamic finding": Proclaim{Expr: CallUnder{Power: practice, Line: 3}, Line: 3},
+		"inscription value": Inscribe{
+			Value: practice,
+			Key:   str,
+			Name:  "register",
+			Line:  3,
+		},
+		"inscription key": Inscribe{
+			Value: IntLit{Val: 1},
+			Key:   practice,
+			Name:  "register",
+			Line:  3,
+		},
+		"expungement key": Expunge{Key: practice, Name: "register", Line: 3},
+		"dynamic petition": PetitionUnder{
+			Power: practice,
+			Line:  3,
+		},
+	}
+	assignment := AssignLetters{Name: "flight", To: StrLit{Val: "case-000000000000000000000001"}, Line: 2}
+	for name, stmt := range cases {
+		t.Run(name, func(t *testing.T) {
+			if err := examineBlock([]Stmt{assignment, stmt}); err == nil {
+				t.Fatal("use after assignment was not rejected")
+			}
+		})
+	}
+	if err := examineBlock([]Stmt{Proclaim{Expr: practice, Line: 1}, assignment}); err != nil {
+		t.Fatalf("practice before assignment was rejected: %v", err)
 	}
 }
 

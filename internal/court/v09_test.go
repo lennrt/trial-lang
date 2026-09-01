@@ -154,7 +154,7 @@ THE OFFICE OF doubling, CONCERNING n.
     REMAND WITH n.
 `)
 	var rej *gregor.RejectedFiling
-	if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "established twice") {
+	if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "established more than once") {
 		t.Fatalf("expected a duplicate-office rejection, got %v", err)
 	}
 }
@@ -172,8 +172,8 @@ ARTICLE 1.
 	}
 }
 
-// TestStatuteMayNotLitigate: articles are rejected in statutes, and a
-// statute without offices is void for vagueness.
+// TestStatuteMayNotLitigate checks that statutes reject articles and require
+// at least one office.
 func TestStatuteMayNotLitigate(t *testing.T) {
 	_, err := gregor.Parse(`FORM S-1.
 IN THE MATTER OF: overreach.
@@ -187,8 +187,8 @@ ARTICLE 1.
 	_, err = gregor.Parse(`FORM S-1.
 IN THE MATTER OF: vagueness.
 `)
-	if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "void for vagueness") {
-		t.Fatalf("expected void-for-vagueness, got %v", err)
+	if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "at least one office") {
+		t.Fatalf("expected a missing-office rejection, got %v", err)
 	}
 }
 

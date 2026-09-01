@@ -1,7 +1,7 @@
 package court
 
 // v2.6 "The New Advocate": powers of attorney, the office as a value.
-// An office is an offset into the proceedings topic, so a function
+// An office is a logical address in the proceedings, so a function
 // pointer here is literally a pointer; the instrument records the
 // office's name, address, concerns, and the case that executed it,
 // and is enforceable in that case alone.

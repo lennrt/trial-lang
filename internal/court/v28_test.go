@@ -9,12 +9,254 @@ package court
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/lennrt/trial-lang/internal/docket"
 	"github.com/lennrt/trial-lang/internal/law"
 )
+
+// sparseOffsetLog presents the offsets MemoryLog would expose if invisible
+// transaction records occupied two out of every three positions.
+type sparseOffsetLog struct {
+	docket.Log
+	caseID string
+}
+
+// sparseProceedingsLog exposes Kafka-like physical gaps through the generic
+// topic methods while retaining the logical FetchProceeding contract.
+type sparseProceedingsLog struct {
+	docket.Log
+	caseID string
+}
+
+type failingProceedingsReadLog struct {
+	docket.Log
+	caseID string
+	err    error
+}
+
+// collapsedHeardLog presents two dense summons records at physical offsets 0
+// and 2. Raw attention 1/[2] is equivalent to dense attention 2/[].
+type collapsedHeardLog struct {
+	docket.Log
+	caseID string
+}
+
+func (l *collapsedHeardLog) ReadAll(ctx context.Context, topic string) ([]docket.Record, error) {
+	records, err := l.Log.ReadAll(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+	if topic == (docket.Case{ID: l.caseID}).Summons() && len(records) >= 2 {
+		records[0].Offset = 0
+		records[1].Offset = 2
+	}
+	return records, nil
+}
+
+func (l *collapsedHeardLog) Attention(ctx context.Context, c docket.Case) (docket.Attention, error) {
+	attention, err := l.Log.Attention(ctx, c)
+	if err != nil {
+		return docket.Attention{}, err
+	}
+	if c.ID == l.caseID && attention.Summons == 2 && len(attention.Heard) == 0 {
+		attention.Summons = 1
+		attention.Heard = []int64{2}
+	}
+	return attention, nil
+}
+
+func (l *failingProceedingsReadLog) ReadAll(ctx context.Context, topic string) ([]docket.Record, error) {
+	if topic == (docket.Case{ID: l.caseID}).Proceedings() {
+		return nil, l.err
+	}
+	return l.Log.ReadAll(ctx, topic)
+}
+
+func (l *sparseProceedingsLog) ReadAll(ctx context.Context, topic string) ([]docket.Record, error) {
+	records, err := l.Log.ReadAll(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+	if topic == (docket.Case{ID: l.caseID}).Proceedings() {
+		for i := range records {
+			records[i].Offset = sparseOffset(records[i].Offset)
+		}
+	}
+	return records, nil
+}
+
+func (l *sparseProceedingsLog) End(ctx context.Context, topic string) (int64, error) {
+	if topic != (docket.Case{ID: l.caseID}).Proceedings() {
+		return l.Log.End(ctx, topic)
+	}
+	records, err := l.Log.ReadAll(ctx, topic)
+	if err != nil || len(records) == 0 {
+		return 0, err
+	}
+	return sparseOffset(records[len(records)-1].Offset) + 2, nil
+}
+
+func (l *sparseProceedingsLog) Fetch(ctx context.Context, topic string, offset int64, wait bool) (*docket.Record, error) {
+	if topic == (docket.Case{ID: l.caseID}).Proceedings() {
+		return nil, errors.New("court used a physical proceedings offset")
+	}
+	return l.Log.Fetch(ctx, topic, offset, wait)
+}
+
+func (l *sparseProceedingsLog) FetchProceeding(ctx context.Context, c docket.Case, pc int64, wait bool) (*docket.Record, error) {
+	return l.Log.FetchProceeding(ctx, c, pc, wait)
+}
+
+func sparseOffset(offset int64) int64 { return offset*3 + 1 }
+
+func sparseCursor(cursor int64) int64 {
+	if cursor == 0 {
+		return 0
+	}
+	return sparseOffset(cursor-1) + 1
+}
+
+func TestDenseCursorRequiresAVisiblePredecessor(t *testing.T) {
+	records := []docket.Record{{Offset: 1}, {Offset: 4}}
+	for _, test := range []struct {
+		cursor int64
+		want   int64
+		valid  bool
+	}{
+		{cursor: 0, want: 0, valid: true},
+		{cursor: 2, want: 1, valid: true},
+		{cursor: 5, want: 2, valid: true},
+		{cursor: -1},
+		{cursor: 1},
+		{cursor: 3},
+		{cursor: 1_000_000_000},
+	} {
+		got, err := denseCursor(records, test.cursor)
+		if test.valid && (err != nil || got != test.want) {
+			t.Errorf("denseCursor(%d) = %d, %v; want %d", test.cursor, got, err, test.want)
+		}
+		if !test.valid && err == nil {
+			t.Errorf("denseCursor(%d) = %d, nil; want an error", test.cursor, got)
+		}
+	}
+}
+
+func TestAuditAndAppealRejectImpossibleInputCursors(t *testing.T) {
+	for _, field := range []string{"summons", "gazette"} {
+		t.Run(field, func(t *testing.T) {
+			ctx := t.Context()
+			log := docket.NewMemoryLog()
+			c, err := File(ctx, log, `FORM K-1.
+IN THE MATTER OF: bad-input-cursor.
+ARTICLE 1.
+    ADJOURN INDEFINITELY.
+`)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := log.Append(ctx, c.Summons(), nil, []byte("notice")); err != nil {
+				t.Fatal(err)
+			}
+			if err := log.EnsureTopic(ctx, GazetteTopic); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := log.Append(ctx, GazetteTopic, nil, []byte("edition")); err != nil {
+				t.Fatal(err)
+			}
+			step := docket.Step{PC: 0, Summons: 1, Gazette: 1}
+			if field == "summons" {
+				step.Summons = 1_000_000_000
+			} else {
+				step.Gazette = 1_000_000_000
+			}
+			if err := log.Commit(ctx, c, step); err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := Audit(ctx, log, c); err == nil || !strings.Contains(err.Error(), "invalid "+field+" cursor") {
+				t.Fatalf("Audit error = %v, want invalid %s cursor", err, field)
+			}
+			if _, err := Appeal(ctx, log, c, AppealAsItStands); err == nil || !strings.Contains(err.Error(), "invalid "+field+" cursor") {
+				t.Fatalf("Appeal error = %v, want invalid %s cursor", err, field)
+			}
+		})
+	}
+}
+
+func TestAuditAndAppealCanonicalizeHeardAtDenseCursor(t *testing.T) {
+	ctx := t.Context()
+	memory := docket.NewMemoryLog()
+	c, err := File(ctx, memory, `FORM K-1.
+IN THE MATTER OF: collapsed-heard-cursor.
+ARTICLE 1.
+    AWAIT SUMMONS, FILED UNDER first.
+    AWAIT SUMMONS FROM "case-sender-b", FILED UNDER second.
+    ADJOURN INDEFINITELY.
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memory.Append(ctx, c.Summons(), []byte("case-sender-a"), []byte("first")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := memory.Append(ctx, c.Summons(), []byte("case-sender-b"), []byte("second")); err != nil {
+		t.Fatal(err)
+	}
+	if out := proceed(t, memory, c); out != OutcomeAdjourned {
+		t.Fatalf("outcome = %v, want adjourned", out)
+	}
+	log := &collapsedHeardLog{Log: memory, caseID: c.ID}
+	report, err := Audit(ctx, log, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Consistent() {
+		t.Fatalf("collapsed heard cursor audited dirty: %v", report.Findings)
+	}
+	appealed, err := Appeal(ctx, log, c, AppealAsItStands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attention, err := memory.Attention(ctx, appealed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attention.Summons != 2 || len(attention.Heard) != 0 {
+		t.Fatalf("appealed attention = %+v, want canonical summons 2 with no heard offsets", attention)
+	}
+}
+
+func (l *sparseOffsetLog) ReadAll(ctx context.Context, topic string) ([]docket.Record, error) {
+	records, err := l.Log.ReadAll(ctx, topic)
+	if err != nil {
+		return nil, err
+	}
+	caseFile := docket.Case{ID: l.caseID}
+	if topic == caseFile.Dossier() || topic == caseFile.Summons() || topic == GazetteTopic {
+		for i := range records {
+			records[i].Offset = sparseOffset(records[i].Offset)
+		}
+	}
+	return records, nil
+}
+
+func (l *sparseOffsetLog) Attention(ctx context.Context, c docket.Case) (docket.Attention, error) {
+	attention, err := l.Log.Attention(ctx, c)
+	if err != nil {
+		return docket.Attention{}, err
+	}
+	if c.ID == l.caseID {
+		attention.Summons = sparseCursor(attention.Summons)
+		attention.Gazette = sparseCursor(attention.Gazette)
+		for i := range attention.Heard {
+			attention.Heard[i] = sparseOffset(attention.Heard[i])
+		}
+	}
+	return attention, nil
+}
 
 func TestRecordsDifferReportsFirstName(t *testing.T) {
 	actual := map[string]law.Value{"z-last": law.Int(1), "a-first": law.Int(2)}
@@ -123,6 +365,150 @@ ARTICLE 1.
 	got := proclamations(t, log, c)
 	if len(got) != 3 || got[0] != "42" || got[1] != "42" || got[2] != "42" {
 		t.Fatalf("proclamations = %q", got)
+	}
+}
+
+func TestAuditNormalizesSparseTopicOffsets(t *testing.T) {
+	log, c := convene(t, `FORM K-1.
+IN THE MATTER OF: sparse-offsets.
+ARTICLE 1.
+    PUBLISH "edition" IN THE GAZETTE.
+    AWAIT THE GAZETTE, FILED UNDER edition.
+    AWAIT SUMMONS, FILED UNDER notice.
+    PROCLAIM edition PLUS notice.
+    ADJOURN INDEFINITELY.
+`, " received")
+	if out := proceed(t, log, c); out != OutcomeAdjourned {
+		t.Fatalf("expected adjournment, got %v", out)
+	}
+	if err := Reenact(t.Context(), log, c); err != nil {
+		t.Fatal(err)
+	}
+	if out := proceed(t, log, c); out != OutcomeAdjourned {
+		t.Fatalf("reenactment: expected adjournment, got %v", out)
+	}
+
+	report, err := Audit(t.Context(), &sparseOffsetLog{Log: log, caseID: c.ID}, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Consistent() {
+		t.Fatalf("sparse-offset record audited dirty: %v", report.Findings)
+	}
+}
+
+func TestLogicalProceedingsIgnorePhysicalOffsetGaps(t *testing.T) {
+	ctx := t.Context()
+	memory := docket.NewMemoryLog()
+	c, err := File(ctx, memory, `FORM K-1.
+IN THE MATTER OF: logical-proceedings.
+ARTICLE 1.
+    LET IT BE RECORDED THAT n IS 1.
+    PROCLAIM "initial".
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := &sparseProceedingsLog{Log: memory, caseID: c.ID}
+	court := &Court{Log: log, Case: c}
+	if out, err := court.Proceed(ctx); err != nil || out != OutcomeApparentAcquittal {
+		t.Fatalf("initial proceedings: outcome=%v error=%v", out, err)
+	}
+	if _, err := Amend(ctx, log, c, `FORM K-2.
+IN THE MATTER OF: logical-proceedings.
+ARTICLE 2.
+    SHOULD n EQUAL 1, REFER TO ARTICLE 4.
+    PROCLAIM "wrong branch".
+ARTICLE 3.
+    PROCLAIM "wrong fallthrough".
+ARTICLE 4.
+    PROCLAIM n.
+    LET IT BE RECORDED THAT n IS n PLUS 1.
+    SHOULD n FAIL TO EXCEED 2, REFER TO ARTICLE 4.
+ARTICLE 5.
+    PROCLAIM "done".
+`); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := court.Proceed(ctx); err != nil || out != OutcomeApparentAcquittal {
+		t.Fatalf("amended proceedings: outcome=%v error=%v", out, err)
+	}
+	if got, want := strings.Join(proclamations(t, memory, c), "|"), "initial|1|2|done"; got != want {
+		t.Fatalf("proclamations = %q, want %q", got, want)
+	}
+
+	report, err := Audit(ctx, log, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Consistent() {
+		t.Fatalf("sparse proceedings audited dirty: %v", report.Findings)
+	}
+	profile, err := Profile(ctx, log, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !profile.Consistent || profile.Executed == 0 {
+		t.Fatalf("profile = %+v", profile)
+	}
+	proceedings, err := log.ReadAll(ctx, c.Proceedings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range profile.Lines {
+		if line.PC < 0 || line.PC >= int64(len(proceedings)) {
+			t.Fatalf("profile reported physical PC %d for %d logical instructions", line.PC, len(proceedings))
+		}
+	}
+
+	docketReport, err := ReportDocket(ctx, log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docketReport) != 1 || !docketReport[0].EndKnown || docketReport[0].End != int64(len(proceedings)) || docketReport[0].Lag != 0 {
+		t.Fatalf("docket report = %+v, want logical end %d with no lag", docketReport, len(proceedings))
+	}
+
+	appealed, err := Appeal(ctx, log, c, AppealAsItStands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := Reenact(ctx, log, appealed); err != nil {
+		t.Fatal(err)
+	}
+	appealCourt := &Court{Log: log, Case: appealed}
+	if out, err := appealCourt.Proceed(ctx); err != nil || out != OutcomeApparentAcquittal {
+		t.Fatalf("appealed replay: outcome=%v error=%v", out, err)
+	}
+	if got, want := strings.Join(proclamations(t, memory, appealed), "|"), "initial|1|2|done|initial|1|2|done"; got != want {
+		t.Fatalf("appealed proclamations = %q, want %q", got, want)
+	}
+}
+
+func TestReportDocketDoesNotInferAcquittalWithoutProceedingsCount(t *testing.T) {
+	ctx := t.Context()
+	log, c := convene(t, `FORM K-1.
+IN THE MATTER OF: unavailable-proceedings-count.
+ARTICLE 1.
+    PROCLAIM "done".
+`)
+	if out := proceed(t, log, c); out != OutcomeApparentAcquittal {
+		t.Fatalf("outcome = %v, want apparent acquittal", out)
+	}
+
+	readErr := errors.New("snapshot exceeds the configured record limit")
+	reports, err := ReportDocket(ctx, &failingProceedingsReadLog{Log: log, caseID: c.ID, err: readErr})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 1 {
+		t.Fatalf("reports = %d, want 1", len(reports))
+	}
+	if got, want := reports[0].Status, "proceedings count unavailable: "+readErr.Error(); got != want {
+		t.Fatalf("status = %q, want %q", got, want)
+	}
+	if reports[0].EndKnown || reports[0].End != 0 || reports[0].Lag != 0 {
+		t.Fatalf("unknown proceedings count exposed invented values: %+v", reports[0])
 	}
 }
 

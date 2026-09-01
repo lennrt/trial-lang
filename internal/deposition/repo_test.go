@@ -1,7 +1,6 @@
 package deposition
 
-// Every deposition shipped in examples/ is heard here, so trial test
-// and go test agree about what the witnesses will say.
+// Repository depositions must pass through the same runner as trial test.
 
 import (
 	"context"
@@ -30,18 +29,18 @@ func TestRepoDepositions(t *testing.T) {
 			}
 			dep, err := Parse(string(src))
 			if err != nil {
-				t.Fatalf("the deposition would not parse: %v", err)
+				t.Fatalf("parse deposition: %v", err)
 			}
 			if err := LoadEnactments(dep, filepath.Dir(path)); err != nil {
-				t.Fatalf("the statutes could not be located: %v", err)
+				t.Fatalf("load statutes: %v", err)
 			}
 			prog, err := os.ReadFile(filepath.Join(filepath.Dir(path), dep.Program))
 			if err != nil {
-				t.Fatalf("the deposed could not be located: %v", err)
+				t.Fatalf("read program: %v", err)
 			}
 			res := Run(context.Background(), string(prog), dep)
 			if !res.OK() {
-				t.Fatalf("the testimony contradicts the record:\n  %v", res.Contradictions)
+				t.Fatalf("deposition failed:\n  %v", res.Contradictions)
 			}
 		})
 	}

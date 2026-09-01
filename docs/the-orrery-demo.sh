@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Play the exact Orrery deposition as a colored terminal animation. With a
+# Play the Orrery deposition as a colored terminal animation. With a
 # case number, follow the same frames from a live Kafka-backed case.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -70,7 +70,7 @@ fi
 # The deposition queues explicit ticks. It tests every byte of every frame.
 "${trial[@]}" test --transcript examples/the-orrery.deposition |
   awk '
-    /THE WITNESS PROCLAIMED/ { live = 1; next }
+    /^[[:space:]]+OUTPUT \([0-9]+ entries\):[[:space:]]*$/ { live = 1; next }
     live && /^          / {
       print substr($0, 11)
       lines++

@@ -76,8 +76,8 @@ proceedings      = article , { article } ;
 
 article          = "ARTICLE" , article-number , terminator , { statement } ;
 article-number   = integer-literal ;
-(* Articles are labels. Gregor compiles them away into proceedings-topic
-   offsets. Numbers must be unique within the case; they need not be
+(* Articles are labels. Gregor compiles them away into logical instruction
+   addresses. Numbers must be unique within the case; they need not be
    consecutive, or ascending, or reasonable. Execution begins at the
    first article in filing order, regardless of its number. *)
 
@@ -220,7 +220,7 @@ remand           = "REMAND" , [ "WITH" , expression ] , terminator ;
 adjournment      = "ADJOURN INDEFINITELY" , terminator
                  | "ADJOURN FOR" , expression , ( "DAY" | "DAYS" ) ,
                    terminator ;
-(* ADJOURN INDEFINITELY: indefinite postponement. The offset is
+(* ADJOURN INDEFINITELY: indefinite postponement. The next program counter is
    committed, the official goes home, the case is suspended and
    resumable forever.
 
@@ -420,9 +420,9 @@ roster-of        = "THE ROSTER OF" , factor ;
 
 power-of         = "A POWER OF ATTORNEY OVER THE OFFICE OF" , identifier ;
 (* The office as a value: its name, instruction address, concerns, and
-   executing case. The address is an offset into append-only proceedings and
-   remains valid while that history is retained. Conferring an unknown office
-   is a rejected filing. *)
+   executing case. The address is a zero-based position among visible
+   proceedings records and remains valid while that append-only history is
+   retained. Conferring an unknown office is a rejected filing. *)
 
 call-under       = "THE FINDING UNDER" , factor ,
                    [ "REGARDING" , expression , { "AND" , expression } ] ;

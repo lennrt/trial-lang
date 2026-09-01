@@ -52,8 +52,11 @@ func Appeal(ctx context.Context, log docket.Log, c docket.Case, atStep int64) (d
 	if err != nil {
 		return docket.Case{}, err
 	}
+	partial := func(err error) (docket.Case, error) {
+		return n, fmt.Errorf("appeal %s may be partial; inspect that case before retrying: %w", n.ID, err)
+	}
 	if err := log.CreateCaseTopics(ctx, n); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	moveFrom := func(src docket.Log, fromTopic, toTopic string, limit int64) error {
 		recs, err := src.ReadAll(ctx, fromTopic)
@@ -78,23 +81,23 @@ func Appeal(ctx context.Context, log docket.Log, c docket.Case, atStep int64) (d
 	// between tellings, and a chambers replay re-serves its own
 	// notices, whose duplicates the appeal declines to inherit.
 	if err := moveFrom(log, c.Filing(), n.Filing(), -1); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	note := fmt.Sprintf("OFF THE RECORD: ON APPEAL FROM %s, taken as it stands.", c.ID)
 	if atStep != AppealAsItStands {
 		note = fmt.Sprintf("OFF THE RECORD: ON APPEAL FROM %s, taken as it stood after step %d.", c.ID, atStep)
 	}
 	if _, err := log.Append(ctx, n.Filing(), []byte("appeal"), []byte(note)); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	if err := moveFrom(log, c.Proceedings(), n.Proceedings(), -1); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	if err := moveFrom(log, c.Summons(), n.Summons(), -1); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	if err := move(c.Ledger(), n.Ledger(), ledgerEnd); err != nil {
-		return docket.Case{}, err
+		return partial(err)
 	}
 	for _, t := range []struct{ from, to string }{
 		{c.Dossier(), n.Dossier()},
@@ -106,7 +109,7 @@ func Appeal(ctx context.Context, log docket.Log, c docket.Case, atStep int64) (d
 		{c.Catalog(), n.Catalog()},
 	} {
 		if err := move(t.from, t.to, -1); err != nil {
-			return docket.Case{}, err
+			return partial(err)
 		}
 	}
 
@@ -115,12 +118,35 @@ func Appeal(ctx context.Context, log docket.Log, c docket.Case, atStep int64) (d
 	// step seats the new case's attention where the old one's was.
 	att, err := source.Attention(ctx, c)
 	if err != nil {
-		return docket.Case{}, err
+		return partial(err)
+	}
+	summons, err := source.ReadAll(ctx, c.Summons())
+	if err != nil {
+		return partial(err)
+	}
+	att, err = normalizeSummonsAttention(att, summons)
+	if err != nil {
+		return partial(err)
+	}
+	gazette, err := log.ReadAll(ctx, GazetteTopic)
+	if err != nil && !errors.Is(err, docket.ErrTopicNotFound) {
+		return partial(err)
+	}
+	if atStep != AppealAsItStands {
+		att.Gazette, err = sourceCursor(gazette, att.Gazette)
+		if err != nil {
+			return partial(err)
+		}
+	} else if _, err := denseCursor(gazette, att.Gazette); err != nil {
+		return partial(fmt.Errorf("invalid gazette cursor: %w", err))
 	}
 	if att.Started {
 		step := docket.Step{PC: att.PC, Summons: att.Summons, Ledger: att.Ledger, Gazette: att.Gazette, Heard: att.Heard}
 		if err := log.Commit(ctx, n, step); err != nil {
-			return docket.Case{}, err
+			if _, ambiguous := errors.AsType[*docket.AmbiguousCommitError](err); ambiguous {
+				return partial(fmt.Errorf("final attention transaction is ambiguous: %w", err))
+			}
+			return partial(err)
 		}
 	}
 	return n, nil
@@ -191,10 +217,10 @@ replay:
 // where in its own paperwork each beginning falls.
 func reenactmentMarkers(dossier []docket.Record) []int64 {
 	var markers []int64
-	for _, r := range dossier {
+	for i, r := range dossier {
 		var ev dossierEvent
 		if json.Unmarshal(r.Value, &ev) == nil && ev.Op == "REENACTMENT" {
-			markers = append(markers, r.Offset)
+			markers = append(markers, int64(i))
 		}
 	}
 	return markers

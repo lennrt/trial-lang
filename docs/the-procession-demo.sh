@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# With no argument, replay the exact deposition as an accelerated in-place
-# animation. With a case number, follow the genuine one-frame-per-day case.
+# With no argument, replay the deposition as an accelerated in-place animation.
+# With a case number, follow the one-frame-per-day case.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -35,7 +35,7 @@ fi
 # The deposition queues explicit ticks so CI and this recording need not wait.
 "${trial[@]}" test --transcript examples/the-procession.deposition |
   awk '
-    /THE WITNESS PROCLAIMED/ { live = 1; next }
+    /^[[:space:]]+OUTPUT \([0-9]+ entries\):[[:space:]]*$/ { live = 1; next }
     live && /^          / {
       line = substr($0, 11)
       if (line != "") print line

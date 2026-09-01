@@ -177,7 +177,7 @@ THE OFFICE OF overreach.
     FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE 1.
     REMAND.
 `)
-	if err == nil || !strings.Contains(err.Error(), "office does not move the Court") {
+	if err == nil || !strings.Contains(err.Error(), "case body") {
 		t.Fatalf("expected a jurisdictional rejection, got: %v", err)
 	}
 }

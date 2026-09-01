@@ -37,14 +37,15 @@ var (
 	ErrResourceLimit = errors.New("resource limit exceeded")
 )
 
-// AmbiguousCommitError reports that Kafka did not confirm whether a commit
-// completed. Recovery must read Attention before retrying the step.
+// AmbiguousCommitError reports that Kafka did not confirm whether a transaction
+// completed. Callers must reread the operation's authoritative state before
+// retrying.
 type AmbiguousCommitError struct {
 	Err error
 }
 
 func (e *AmbiguousCommitError) Error() string {
-	return "commit outcome is ambiguous; recover attention before retrying: " + e.Err.Error()
+	return "transaction outcome is ambiguous; reread authoritative state before retrying: " + e.Err.Error()
 }
 
 func (e *AmbiguousCommitError) Unwrap() error { return e.Err }
@@ -80,7 +81,7 @@ func ParseCase(id string) (Case, error) {
 func (c Case) topic(kind string) string { return c.ID + "." + kind }
 
 func (c Case) Filing() string        { return c.topic("filing") }        // the .trial source, as filed
-func (c Case) Proceedings() string   { return c.topic("proceedings") }   // bytecode; offset = instruction address
+func (c Case) Proceedings() string   { return c.topic("proceedings") }   // bytecode; visible index = instruction address
 func (c Case) Dossier() string       { return c.topic("dossier") }       // operand-stack event log
 func (c Case) Appeals() string       { return c.topic("appeals") }       // call-stack event log
 func (c Case) Records() string       { return c.topic("records") }       // variables (compacted)
@@ -94,14 +95,15 @@ func (c Case) AttentionTopic() string {
 	return c.topic("attention") // authoritative program counter
 }
 
-// Group is the consumer group whose committed offset on the proceedings
-// topic mirrors the program counter for standard Kafka tooling.
+// Group is the consumer group whose proceedings offset is the physical Kafka
+// cursor equivalent to the logical program counter.
 func (c Case) Group() string { return "the-court." + c.ID }
 
 // SummonsGroup tracks how much of the summons topic has been served.
 func (c Case) SummonsGroup() string { return "the-court." + c.ID + ".summons" }
 
-// StatuteTopic names the filing topic of an enacted statute.
+// StatuteTopic names the filing topic of an enacted statute. Callers pass a
+// parsed triallang identifier.
 func StatuteTopic(name string) string { return "statute-" + name + ".filing" }
 
 // AllTopics lists every topic in the case file.
@@ -113,10 +115,9 @@ func (c Case) AllTopics() []string {
 	}
 }
 
-// Record is one entry in a topic. Offsets are assigned by the Log. The
-// proceedings topic is written outside transactions and therefore has dense
-// offsets that serve as instruction addresses; transactional topics may have
-// gaps occupied by Kafka control records.
+// Record is one entry in a topic. Offsets are assigned by the Log and may have
+// gaps occupied by Kafka control records. Proceedings use their order among
+// visible records, rather than these physical offsets, as instruction addresses.
 type Record struct {
 	Offset int64
 	Key    []byte
@@ -175,6 +176,12 @@ type Log interface {
 	// If wait is false, it returns nil.
 	Fetch(ctx context.Context, topic string, offset int64, wait bool) (*Record, error)
 
+	// FetchProceeding returns the instruction at a logical program counter. The
+	// counter is the zero-based position among visible committed proceedings,
+	// independent of physical Kafka offsets. The returned record's Offset is the
+	// logical counter. At the current end, wait has the same meaning as Fetch.
+	FetchProceeding(ctx context.Context, c Case, pc int64, wait bool) (*Record, error)
+
 	// Commit applies one execution step atomically: all appends land
 	// and the attention advances, or none of it happened. On Kafka
 	// this is a transaction; the attention topic is authoritative, and the
@@ -191,13 +198,14 @@ type Log interface {
 	// DeleteCaseTopics permanently deletes the case topics.
 	DeleteCaseTopics(ctx context.Context, c Case) error
 
-	// ListCases returns at most MaxCases cases or ErrResourceLimit.
+	// ListCases returns canonical case identifiers in ascending order. It
+	// returns at most MaxCases cases or ErrResourceLimit.
 	ListCases(ctx context.Context) ([]Case, error)
 
 	// EnsureTopic opens a retained, single-partition topic if it does not exist.
 	EnsureTopic(ctx context.Context, topic string) error
 
-	// ListStatutes returns enacted statute names.
+	// ListStatutes returns triallang identifiers in ascending order.
 	ListStatutes(ctx context.Context) ([]string, error)
 
 	// Close releases resources. It is safe to call more than once. Callers
@@ -255,4 +263,19 @@ func checkSnapshotSize(records, bytes int) error {
 		return fmt.Errorf("%w: snapshot exceeds %d bytes", ErrResourceLimit, MaxReadBytes)
 	}
 	return nil
+}
+
+// validStatuteName reports whether name has the identifier form accepted by
+// the triallang lexer. Topic listings are external input, even when the court
+// normally creates every topic itself.
+func validStatuteName(name string) bool {
+	if name == "" || name[0] < 'a' || name[0] > 'z' {
+		return false
+	}
+	for _, c := range name[1:] {
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+			return false
+		}
+	}
+	return true
 }

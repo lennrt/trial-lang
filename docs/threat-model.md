@@ -1,8 +1,6 @@
 # Threat model
 
-Revision reviewed: `314c52e3ff5bb7e07c1dde430666820c8b228f41`
-
-Review date: 2026-08-31
+Review date: 2026-09-01
 
 Status: design review only. This is not a security certification.
 
@@ -66,11 +64,20 @@ treat diagnostics as untrusted display data.
 ### Court to Kafka
 
 Execution effects and attention advance in one Kafka transaction. Reads use
-`read_committed`. A commit timeout returns `AmbiguousCommitError`. Recovery
-must read the attention record before retrying.
+`read_committed`. A transaction timeout returns `AmbiguousCommitError`.
+Execution recovery must read attention before retrying; paperwork recovery must
+inspect every affected topic. A filing failure that may have left a case behind
+returns its minted identifier for that inspection. A definite population
+failure returns no case after successful cleanup.
 
-Paperwork batches use a separate transaction. Case-topic creation rolls back
-new topics after a partial failure.
+Service, amendment, enactment, and reenactment are not safe to retry blindly
+after an ambiguous result: the first transaction may already be committed.
+The CLI and MCP responses identify the affected case or statute and direct the
+caller to inspect it first.
+
+Paperwork batches use a separate transaction. Case-topic creation attempts to
+roll back every newly created topic after a partial failure; the recovery
+identifier is still returned when the result cannot be proven clean.
 
 Residual risks:
 
@@ -92,6 +99,8 @@ Residual risks:
 | Paperwork-batch appends | 100,000 and 64 MiB |
 | Cases in one listing | 100,000 |
 | Selective-receive offsets | 100,000 |
+| Logical proceedings-offset cache | 65,536 mappings |
+| Idle retained Kafka consumers or transaction producers | 16 of each |
 | MCP or LSP message | 16 MiB |
 | MCP source | 4 MiB |
 | Open LSP documents | 128 documents, 4 MiB each |

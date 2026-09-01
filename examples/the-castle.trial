@@ -1,36 +1,10 @@
 FORM K-1.
 IN THE MATTER OF: the-castle.
-FILED BY: the land surveyor K, who was sent for and is still waiting to be received.
-
-OFF THE RECORD: Can it run DOOM? It can run this: a first-person
-OFF THE RECORD: raycaster, Wolfenstein-grade, over a village map held
-OFF THE RECORD: in a schedule of strings. The camera is a direction
-OFF THE RECORD: vector and a plane vector, fixed point, scaled by
-OFF THE RECORD: 1000; each of the 15 screen columns casts one ray
-OFF THE RECORD: through the plane and marches it until masonry; the
-OFF THE RECORD: march parameter is the perpendicular distance, so the
-OFF THE RECORD: walls stand straight without correction. Twenty-one
-OFF THE RECORD: rows of ASCII per frame, walls shaded by distance and
-OFF THE RECORD: by facing (south-facing stone catches the light,
-OFF THE RECORD: east-facing stone does not; the Court has been told
-OFF THE RECORD: this is called rendering).
-OFF THE RECORD:
-OFF THE RECORD: PROCLAIM is the framebuffer, one proclamation per
-OFF THE RECORD: frame. AWAIT SUMMONS is the controls: w/s to stride,
-OFF THE RECORD: a/d to turn, q to give up, which is the only ending
-OFF THE RECORD: offered. trial observe is the display. The
-OFF THE RECORD: trigonometry is incorporated from the canon.
-OFF THE RECORD:
-OFF THE RECORD: The village is 16 cells square. The walls marked #
-OFF THE RECORD: are the village; the walls marked C are the Castle,
-OFF THE RECORD: which stands in the middle, has an interior, and has
-OFF THE RECORD: no door. You may approach it. That is all.
-OFF THE RECORD:
-OFF THE RECORD: Against a live broker every instruction is a Kafka
-OFF THE RECORD: transaction, so this is DOOM at minutes per frame,
-OFF THE RECORD: every frame of it replayable, bit for bit, forever.
-OFF THE RECORD: In chambers (trial test) it renders instantly, which
-OFF THE RECORD: the deposition beside it demonstrates.
+OFF THE RECORD: A first-person raycaster over a 16 by 16 map. Camera values use
+OFF THE RECORD: fixed-point integers scaled by 1000. Each of 15 columns casts a
+OFF THE RECORD: ray; the 21-row ASCII framebuffer is one proclamation.
+OFF THE RECORD: Serve w/s to move, a/d to turn, or q to stop. The trigonometry
+OFF THE RECORD: comes from the bundled canon. Use trial test for brokerless runs.
 
 INCORPORATE BY REFERENCE statutes-of-trigonometry.
 

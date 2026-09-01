@@ -14,7 +14,7 @@ CASE COMMANDS
   trial proceed <case>            Start or resume a case
     --docket                      Process current and future docket entries
     --expedited n                 Commit at most n instructions per step
-    -q, --quiet                   Print no ceremony; use the exit status
+    -q, --quiet                   Suppress progress output; use the exit status
   trial observe <case>            Follow case output
     --from-the-beginning          Read all committed output
   trial serve <case> <value>...   Send input values to a case
@@ -133,8 +133,21 @@ func helpFor(name string) (string, bool) {
 	}
 	b.WriteString("USAGE\n")
 	b.WriteString(strings.Join(out, "\n"))
-	b.WriteString("\n\nFLAGS\n  --broker <addr>  Kafka address; default localhost:9092 or TRIAL_BROKER\n  -h, --help       Show this help\n\nRun \"trial help\" for all commands.")
+	b.WriteString("\n\nFLAGS\n")
+	if acceptsBroker(name) {
+		b.WriteString("  --broker <addr>  Kafka address; default localhost:9092 or TRIAL_BROKER\n")
+	}
+	b.WriteString("  -h, --help       Show this help\n\nRun \"trial help\" for all commands.")
 	return b.String(), true
+}
+
+func acceptsBroker(name string) bool {
+	switch name {
+	case "summon", "dismiss", "test", "counsel", "help", "version":
+		return false
+	default:
+		return true
+	}
 }
 
 // wantsHelp reports whether an option before "--" requests help.

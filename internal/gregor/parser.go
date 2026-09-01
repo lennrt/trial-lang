@@ -28,9 +28,7 @@ func (p *parser) atWord(w string) bool {
 	return t.kind == tokWord && t.text == w
 }
 
-// peekAt looks n tokens past the current one without consuming anything;
-// the parser, like everyone here, is permitted to read ahead in the file
-// but not to act on what it finds there.
+// peekAt returns the token n positions ahead without consuming it.
 func (p *parser) peekAt(n int) token {
 	if p.pos+n >= len(p.toks) {
 		return p.toks[len(p.toks)-1]
@@ -59,7 +57,7 @@ func (p *parser) expectWords(words ...string) error {
 	for _, w := range words {
 		t := p.next()
 		if t.kind != tokWord || t.text != w {
-			return reject(t.line, t.col, "expected the word %q, encountered %s %q; the required phrasing is not optional", w, t.kind, t.text)
+			return reject(t.line, t.col, "expected the word %q, encountered %s %q", w, t.kind, t.text)
 		}
 	}
 	return nil
@@ -68,9 +66,17 @@ func (p *parser) expectWords(words ...string) error {
 func (p *parser) expectPeriod() error {
 	t := p.next()
 	if t.kind != tokPeriod {
-		return reject(t.line, t.col, "a statement must end with a period; encountered %s %q instead. Statements are sentences. You are being sentenced", t.kind, t.text)
+		return reject(t.line, t.col, "expected a period, encountered %s %q", t.kind, t.text)
 	}
 	return nil
+}
+
+func parseInteger(t token) (int64, error) {
+	n, err := strconv.ParseInt(t.text, 10, 64)
+	if err != nil {
+		return 0, reject(t.line, t.col, "integer %q is outside the 64-bit range", t.text)
+	}
+	return n, nil
 }
 
 func (p *parser) parseCaseFile() (*Program, error) {
@@ -90,7 +96,7 @@ func (p *parser) parseCaseFile() (*Program, error) {
 	case formTok.kind == tokWord && formTok.text == "S-1":
 		prog.Form = "S-1"
 	default:
-		return nil, reject(formTok.line, formTok.col, "filings are accepted on Form K-1 (a case), Form K-2 (a supplemental filing), or Form S-1 (a statute); %q is not a form, whatever it is", formTok.text)
+		return nil, reject(formTok.line, formTok.col, "expected Form K-1, K-2, or S-1; encountered %q", formTok.text)
 	}
 	if err := p.expectPeriod(); err != nil {
 		return nil, err
@@ -129,9 +135,8 @@ func (p *parser) parseCaseFile() (*Program, error) {
 		}
 	}
 
-	// INCORPORATE BY REFERENCE statute-name. Statutes are spliced in at
-	// filing time; the clerk fetches the enacted text and Gregor
-	// compiles it as though you had typed it, which, legally, you did.
+	// INCORPORATE BY REFERENCE statute-name. Filing resolves and compiles the
+	// enacted source with the case.
 	for p.atWord("INCORPORATE") {
 		incTok := p.next()
 		if err := p.expectWords("BY", "REFERENCE"); err != nil {
@@ -144,17 +149,14 @@ func (p *parser) parseCaseFile() (*Program, error) {
 		if err := p.expectPeriod(); err != nil {
 			return nil, err
 		}
-		// A statute may incorporate statutes (since v1.9, the law
-		// accumulates transitively); a supplemental filing still may not.
+		// Statutes may incorporate other statutes; supplemental filings may not.
 		if prog.Form == "K-2" {
-			return nil, reject(incTok.line, incTok.col, "a supplemental filing may not incorporate a statute; incorporation is performed at the opening of the case, and the case is open")
+			return nil, reject(incTok.line, incTok.col, "a supplemental filing may not incorporate a statute")
 		}
 		prog.Incorporations = append(prog.Incorporations, Incorporation{Name: nameTok.text, Line: incTok.line})
 	}
 
-	// Exhibits and defined terms may be established before the
-	// articles, definitions being the one kind of paperwork the Court
-	// likes to see early.
+	// Exhibits and defined terms may appear before the articles.
 	for {
 		if p.atWord("THE") && p.wordAt(1) == "EXHIBIT" {
 			ex, err := p.parseExhibitDecl()
@@ -175,17 +177,16 @@ func (p *parser) parseCaseFile() (*Program, error) {
 		break
 	}
 
-	// Articles. A statute has none: a statute legislates, it does not
-	// litigate. A case must have at least one.
+	// Statutes have no articles. Cases require at least one.
 	if prog.Form == "S-1" {
 		if p.atWord("ARTICLE") {
 			t := p.peek()
-			return nil, reject(t.line, t.col, "a statute may not contain an ARTICLE; articles are proceedings, and a statute proceeds against no one in particular")
+			return nil, reject(t.line, t.col, "a statute may not contain an ARTICLE")
 		}
 	} else {
 		if !p.atWord("ARTICLE") {
 			t := p.peek()
-			return nil, reject(t.line, t.col, "a case must contain at least one ARTICLE; a filing with no proceedings is a confession")
+			return nil, reject(t.line, t.col, "a case must contain at least one ARTICLE")
 		}
 		for p.atWord("ARTICLE") {
 			art, err := p.parseArticle()
@@ -217,7 +218,7 @@ func (p *parser) parseCaseFile() (*Program, error) {
 		}
 		if prog.Form == "K-2" {
 			t := p.peek()
-			return nil, reject(t.line, t.col, "a supplemental filing may not establish an office; the building is full")
+			return nil, reject(t.line, t.col, "a supplemental filing may not establish an office")
 		}
 		off, err := p.parseOffice()
 		if err != nil {
@@ -231,7 +232,7 @@ func (p *parser) parseCaseFile() (*Program, error) {
 	}
 	if prog.Form == "S-1" && len(prog.Offices) == 0 {
 		t := p.peek()
-		return nil, reject(t.line, t.col, "a statute that establishes no office regulates nothing, and is void for vagueness")
+		return nil, reject(t.line, t.col, "a statute must establish at least one office")
 	}
 	return prog, nil
 }
@@ -245,9 +246,9 @@ func (p *parser) parseNumberedHeading(word string) (int64, int, error) {
 	if err != nil {
 		return 0, 0, err
 	}
-	n, err := strconv.ParseInt(numTok.text, 10, 64)
+	n, err := parseInteger(numTok)
 	if err != nil {
-		return 0, 0, reject(numTok.line, numTok.col, "the number %q could not be entered into the ledger", numTok.text)
+		return 0, 0, err
 	}
 	if err := p.expectPeriod(); err != nil {
 		return 0, 0, err
@@ -307,9 +308,8 @@ func (p *parser) parseExhibitDecl() (ExhibitDecl, error) {
 	return ex, nil
 }
 
-// parseConstDecl reads HEREINAFTER, name SHALL MEAN literal.
-// A defined term. It is substituted at compile time wherever the name
-// appears; the meaning, once assigned, is not revisited.
+// parseConstDecl reads HEREINAFTER, name SHALL MEAN literal. The compiler
+// substitutes the literal wherever the name appears.
 func (p *parser) parseConstDecl() (ConstDecl, error) {
 	line := p.peek().line
 	if err := p.expectWords("HEREINAFTER"); err != nil {
@@ -330,16 +330,16 @@ func (p *parser) parseConstDecl() (ConstDecl, error) {
 	switch {
 	case t.kind == tokInt:
 		p.next()
-		n, err := strconv.ParseInt(t.text, 10, 64)
+		n, err := parseInteger(t)
 		if err != nil {
-			return ConstDecl{}, reject(t.line, t.col, "the number %q exceeds what the ledger can hold", t.text)
+			return ConstDecl{}, err
 		}
 		e = IntLit{Val: n}
 	case t.kind == tokSum:
 		p.next()
 		m, ok := law.ParseSum(t.text)
 		if !ok {
-			return ConstDecl{}, reject(t.line, t.col, "the sum %q could not be entered into the ledger", t.text)
+			return ConstDecl{}, reject(t.line, t.col, "sum %q is outside the 64-bit range", t.text)
 		}
 		e = SumLit{Mantissa: m}
 	case t.kind == tokString:
@@ -352,7 +352,7 @@ func (p *parser) parseConstDecl() (ConstDecl, error) {
 		p.next()
 		e = FindingLit{Val: false}
 	default:
-		return ConstDecl{}, reject(t.line, t.col, "a defined term must mean an integer, a sum, a string, SUSTAINED, or OVERRULED; it may not mean %s %q, which would require interpretation, which is not this office", t.kind, t.text)
+		return ConstDecl{}, reject(t.line, t.col, "a defined term must be an integer, sum, string, SUSTAINED, or OVERRULED; encountered %s %q", t.kind, t.text)
 	}
 	if err := p.expectPeriod(); err != nil {
 		return ConstDecl{}, err
@@ -465,7 +465,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			unit := p.next()
 			if unit.kind != tokWord || (unit.text != "DAYS" && unit.text != "DAY") {
-				return nil, reject(unit.line, unit.col, "patent terms run in DAYS; %q is not a unit of court time, whatever else it measures", unit.text)
+				return nil, reject(unit.line, unit.col, "a patent term must use DAY or DAYS; encountered %s %q", unit.kind, unit.text)
 			}
 			if err := p.expectPeriod(); err != nil {
 				return nil, err
@@ -527,7 +527,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			return Entering{Name: nameTok.text, Field: fieldTok.text, Expr: e, Line: t.line}, nil
 		}
 		bad := p.peek()
-		return nil, reject(bad.line, bad.col, "a thing may be RECORDED (in the records) or ENTERED IN an exhibit; %q is neither, and has been done to no one", bad.text)
+		return nil, reject(bad.line, bad.col, "expected RECORDED or ENTERED; encountered %q", bad.text)
 
 	case "PROCLAIM":
 		p.next()
@@ -542,8 +542,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 
 	case "AWAIT":
 		p.next()
-		// AWAIT THE GAZETTE, FILED UNDER x. The court-wide broadcast,
-		// read at this case's own cursor, at this case's own pace.
+		// AWAIT THE GAZETTE, FILED UNDER x. Each case has its own cursor.
 		if p.atWord("THE") {
 			if err := p.expectWords("THE", "GAZETTE"); err != nil {
 				return nil, err
@@ -566,9 +565,8 @@ func (p *parser) parseStatement() (Stmt, error) {
 		if err := p.expectWords("SUMMONS"); err != nil {
 			return nil, err
 		}
-		// AWAIT SUMMONS FROM c: the selective receive. The Court
-		// listens for one voice among the folk; every record passed
-		// over remains where it is, awaiting its own turn.
+		// AWAIT SUMMONS FROM c selects a sender without consuming records from
+		// other senders.
 		var from Expr
 		if p.atWord("FROM") {
 			p.next()
@@ -578,11 +576,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			from = f
 		}
-		// AWAIT SUMMONS FOR AT MOST n DAYS, FILED UNDER x. FAILING
-		// WHICH, statement. The receive with a deadline; the artist
-		// waits publicly, and there is a limit to it. The FAILING WHICH
-		// arm is mandatory: a deadline without a contingency is not a
-		// deadline, it is a decoration.
+		// A timed summons requires a FAILING WHICH arm.
 		if p.atWord("FOR") {
 			p.next()
 			if err := p.expectWords("AT", "MOST"); err != nil {
@@ -594,7 +588,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			unit := p.next()
 			if unit.kind != tokWord || (unit.text != "DAYS" && unit.text != "DAY") {
-				return nil, reject(unit.line, unit.col, "summonses are awaited in DAYS; %q is not a unit of court time, whatever else it measures", unit.text)
+				return nil, reject(unit.line, unit.col, "a summons timeout must use DAY or DAYS; encountered %s %q", unit.kind, unit.text)
 			}
 			if _, err := p.expectKind(tokComma, "before FILED UNDER"); err != nil {
 				return nil, err
@@ -611,7 +605,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			if !p.atWord("FAILING") {
 				bad := p.peek()
-				return nil, reject(bad.line, bad.col, "a summons awaited FOR AT MOST some term must state what FAILING WHICH; a deadline without a contingency is not a deadline")
+				return nil, reject(bad.line, bad.col, "a timed summons must include FAILING WHICH")
 			}
 			p.next()
 			if err := p.expectWords("WHICH"); err != nil {
@@ -622,7 +616,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			if !p.startsStatement() {
 				bad := p.peek()
-				return nil, reject(bad.line, bad.col, "FAILING WHICH must be followed by a consequence; encountered %s %q, which consequences nothing", bad.kind, bad.text)
+				return nil, reject(bad.line, bad.col, "FAILING WHICH must be followed by a statement; encountered %s %q", bad.kind, bad.text)
 			}
 			els, err := p.parseStatement()
 			if err != nil {
@@ -659,13 +653,16 @@ func (p *parser) parseStatement() (Stmt, error) {
 			toSection = true
 		default:
 			bad := p.peek()
-			return nil, reject(bad.line, bad.col, "one may refer only to an ARTICLE or a SECTION; %q is outside all jurisdiction", bad.text)
+			return nil, reject(bad.line, bad.col, "expected ARTICLE or SECTION; encountered %q", bad.text)
 		}
 		numTok, err := p.expectKind(tokInt, "identifying the referral")
 		if err != nil {
 			return nil, err
 		}
-		n, _ := strconv.ParseInt(numTok.text, 10, 64)
+		n, err := parseInteger(numTok)
+		if err != nil {
+			return nil, err
+		}
 		if err := p.expectPeriod(); err != nil {
 			return nil, err
 		}
@@ -682,15 +679,14 @@ func (p *parser) parseStatement() (Stmt, error) {
 		}
 		if !p.startsStatement() {
 			bad := p.peek()
-			return nil, reject(bad.line, bad.col, "a SHOULD must be followed by a consequence; encountered %s %q, which consequences nothing", bad.kind, bad.text)
+			return nil, reject(bad.line, bad.col, "SHOULD must be followed by a statement; encountered %s %q", bad.kind, bad.text)
 		}
 		then, err := p.parseStatement()
 		if err != nil {
 			return nil, err
 		}
 		cnd := Conditional{Cond: cond, Then: then, Line: t.line}
-		// FAILING WHICH, statement: the one-armed SHOULD acquires a
-		// second arm. It attaches to the nearest SHOULD, as failure does.
+		// FAILING WHICH attaches to the nearest SHOULD.
 		if p.atWord("FAILING") {
 			p.next()
 			if err := p.expectWords("WHICH"); err != nil {
@@ -701,7 +697,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			if !p.startsStatement() {
 				bad := p.peek()
-				return nil, reject(bad.line, bad.col, "FAILING WHICH must be followed by a consequence; encountered %s %q, which consequences nothing", bad.kind, bad.text)
+				return nil, reject(bad.line, bad.col, "FAILING WHICH must be followed by a statement; encountered %s %q", bad.kind, bad.text)
 			}
 			els, err := p.parseStatement()
 			if err != nil {
@@ -713,8 +709,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 
 	case "PETITION":
 		p.next()
-		// PETITION UNDER expr [WITH a AND b]. The dynamic petition:
-		// the office is whichever one the power of attorney confers.
+		// PETITION UNDER uses the office carried by a power of attorney.
 		if p.atWord("UNDER") {
 			p.next()
 			power, err := p.parseExpression()
@@ -772,9 +767,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 
 	case "ADJOURN":
 		p.next()
-		// ADJOURN FOR expr DAYS. is a continuance: the matter sleeps and
-		// resumes of its own accord. ADJOURN INDEFINITELY is the same
-		// motion with the resumption left to someone who never comes.
+		// ADJOURN FOR sets a continuance; ADJOURN INDEFINITELY suspends.
 		if p.atWord("FOR") {
 			p.next()
 			e, err := p.parseExpression()
@@ -783,7 +776,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 			}
 			unit := p.next()
 			if unit.kind != tokWord || (unit.text != "DAYS" && unit.text != "DAY") {
-				return nil, reject(unit.line, unit.col, "continuances are granted in DAYS; %q is not a unit of court time, whatever else it measures", unit.text)
+				return nil, reject(unit.line, unit.col, "a continuance must use DAY or DAYS; encountered %s %q", unit.kind, unit.text)
 			}
 			if err := p.expectPeriod(); err != nil {
 				return nil, err
@@ -823,10 +816,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Serve{Value: val, Target: target, Line: t.line}, nil
 
 	case "ENTER":
-		// ENTER JUDGMENT AGAINST expr, ON THE GROUNDS OF expr. The
-		// sentence from the bed: a verdict entered in another case's
-		// file, carried out at once, or at any rate at the condemned's
-		// next step. Jurisdiction is parental and strict.
+		// ENTER JUDGMENT records a verdict in a case commenced by this case.
 		p.next()
 		if err := p.expectWords("JUDGMENT", "AGAINST"); err != nil {
 			return nil, err
@@ -927,10 +917,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Inscribe{Value: val, Key: key, Name: nameTok.text, Line: t.line}, nil
 
 	case "EXPUNGE":
-		// EXPUNGE THE ENTRY UNDER expr IN name. Removes one entry from
-		// the register filed under the name; expunging what is not
-		// there succeeds vacuously. The Court is no stranger to empty
-		// gestures.
+		// EXPUNGE removes a register entry. An absent entry is a no-op.
 		p.next()
 		if err := p.expectWords("THE", "ENTRY", "UNDER"); err != nil {
 			return nil, err
@@ -952,10 +939,8 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Expunge{Key: key, Name: nameTok.text, Line: t.line}, nil
 
 	case "COMMENCE":
-		// COMMENCE PROCEEDINGS UPON expr, FILED UNDER name. A new case
-		// is opened upon the filing (a string bearing Form K-1) and its
-		// case number is filed under the name. The new case starts with
-		// nothing of its parent's; every accusation begins alone.
+		// COMMENCE files a Form K-1 string as a new case and stores its case
+		// number under name. The new case does not inherit parent state.
 		p.next()
 		if err := p.expectWords("PROCEEDINGS", "UPON"); err != nil {
 			return nil, err
@@ -980,12 +965,8 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Commence{Source: src, Name: nameTok.text, Line: t.line}, nil
 
 	case "FILE":
-		// FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE
-		// GROUNDS FILED UNDER name]. The motion sits on the docket until
-		// a verdict would issue, whereupon the Court, exactly once per
-		// case, reconsiders instead: the dossier is impounded as the
-		// filing fee, the appeals are dismissed with it, and the
-		// proceedings resume at the named article.
+		// A motion intercepts one verdict, clears both stacks, and resumes at
+		// the named article.
 		p.next()
 		if err := p.expectWords("A", "MOTION", "TO", "RECONSIDER"); err != nil {
 			return nil, err
@@ -1000,7 +981,10 @@ func (p *parser) parseStatement() (Stmt, error) {
 		if err != nil {
 			return nil, err
 		}
-		n, _ := strconv.ParseInt(numTok.text, 10, 64)
+		n, err := parseInteger(numTok)
+		if err != nil {
+			return nil, err
+		}
 		m := Motion{Article: n, Line: t.line}
 		if p.peek().kind == tokComma {
 			p.next()
@@ -1019,10 +1003,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return m, nil
 
 	case "GRANT":
-		// GRANT A LICENSE UNDER name TO expr, FOR A TERM OF expr DAYS.
-		// A shared, read-only borrow of the invention: the licensee may
-		// practice while the license and the letters both run. A license
-		// may not outlive the letters it derives from.
+		// A license permits practice until it or the patent expires.
 		p.next()
 		if err := p.expectWords("A", "LICENSE", "UNDER"); err != nil {
 			return nil, err
@@ -1050,7 +1031,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		}
 		unit := p.next()
 		if unit.kind != tokWord || (unit.text != "DAYS" && unit.text != "DAY") {
-			return nil, reject(unit.line, unit.col, "license terms run in DAYS; %q is not a unit of court time, whatever else it measures", unit.text)
+			return nil, reject(unit.line, unit.col, "a license term must use DAY or DAYS; encountered %s %q", unit.kind, unit.text)
 		}
 		if err := p.expectPeriod(); err != nil {
 			return nil, err
@@ -1058,9 +1039,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return LicenseGrant{Name: nameTok.text, To: to, Term: term, Line: t.line}, nil
 
 	case "ASSIGN":
-		// ASSIGN THE LETTERS FOR name TO expr. The letters move; the
-		// previous holder keeps nothing, including the right to practice
-		// what he disclosed. Refused while licenses are outstanding.
+		// Assignment transfers ownership and is refused while licenses remain.
 		p.next()
 		if err := p.expectWords("THE", "LETTERS", "FOR"); err != nil {
 			return nil, err
@@ -1082,9 +1061,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return AssignLetters{Name: nameTok.text, To: to, Line: t.line}, nil
 
 	case "PUBLISH":
-		// PUBLISH expr IN THE GAZETTE. Court-wide broadcast: the
-		// transcript is appended to the one gazette everyone reads,
-		// within this instruction's own transaction.
+		// PUBLISH appends to the court-wide gazette in this transaction.
 		p.next()
 		e, err := p.parseExpression()
 		if err != nil {
@@ -1099,9 +1076,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Publish{Expr: e, Line: t.line}, nil
 
 	case "COMMIT":
-		// COMMIT expr TO THE ARCHIVE AS expr. The document is entered in
-		// the archive, immutably; the catalog is repointed to it. The
-		// previous version is not deleted. Nothing is ever deleted.
+		// COMMIT appends an immutable archive version and updates its catalog entry.
 		p.next()
 		val, err := p.parseExpression()
 		if err != nil {
@@ -1120,8 +1095,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return ArchiveCommit{Value: val, Name: name, Line: t.line}, nil
 
 	case "HOLD":
-		// HOLD expr IN CONTEMPT. A verdict, on purpose. The expression
-		// is evaluated, displayed, and entered as the particulars.
+		// HOLD evaluates the expression and records its display as verdict details.
 		p.next()
 		e, err := p.parseExpression()
 		if err != nil {
@@ -1136,8 +1110,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 		return Contempt{Expr: e, Line: t.line}, nil
 
 	case "STRIKE":
-		// STRIKE name FROM THE RECORD. The record is struck from the
-		// fold and retained in the log, which is both.
+		// STRIKE removes a record from folded state but not from the log.
 		p.next()
 		nameTok, err := p.expectKind(tokIdent, "naming the record struck")
 		if err != nil {
@@ -1230,7 +1203,7 @@ func (p *parser) parseClause() (Cond, error) {
 		}
 		cond.Cmp = CmpDiffer
 	default:
-		return nil, reject(t.line, t.col, "%q is not a comparison recognized in this jurisdiction; the recognized comparisons are EXCEED, FALL SHORT OF, EQUAL, and DIFFER FROM", t.text)
+		return nil, reject(t.line, t.col, "expected EXCEED, FALL SHORT OF, EQUAL, or DIFFER FROM; encountered %q", t.text)
 	}
 	right, err := p.parseExpression()
 	if err != nil {
@@ -1324,16 +1297,16 @@ func (p *parser) parseFactor() (Expr, error) {
 	switch t.kind {
 	case tokInt:
 		p.next()
-		n, err := strconv.ParseInt(t.text, 10, 64)
+		n, err := parseInteger(t)
 		if err != nil {
-			return nil, reject(t.line, t.col, "the number %q exceeds what the ledger can hold", t.text)
+			return nil, err
 		}
 		return IntLit{Val: n}, nil
 	case tokSum:
 		p.next()
 		m, ok := law.ParseSum(t.text)
 		if !ok {
-			return nil, reject(t.line, t.col, "the sum %q could not be entered into the ledger", t.text)
+			return nil, reject(t.line, t.col, "sum %q is outside the 64-bit range", t.text)
 		}
 		return SumLit{Mantissa: m}, nil
 	case tokString:
@@ -1361,15 +1334,11 @@ func (p *parser) parseFactor() (Expr, error) {
 			p.next()
 			return FindingLit{Val: false}, nil
 		case "A":
-			// A SCHEDULE COMPRISING e AND e AND e, or A REGISTER
-			// COMPRISING e UNDER k AND e UNDER k. The ANDs are consumed
-			// greedily; inside an enclosing AND-separated list,
-			// parenthesize, as one would.
+			// Schedule and register literals consume AND-separated entries
+			// greedily. Parentheses disambiguate an enclosing list.
 			p.next()
 			if p.atWord("POWER") {
-				// A POWER OF ATTORNEY OVER THE OFFICE OF f: the office,
-				// as a value; the right to petition it, wherever the
-				// instrument travels within the case.
+				// A power of attorney carries an office as a value.
 				p.next()
 				if err := p.expectWords("OF", "ATTORNEY", "OVER", "THE", "OFFICE", "OF"); err != nil {
 					return nil, err
@@ -1439,11 +1408,10 @@ func (p *parser) parseFactor() (Expr, error) {
 					return RegisterLit{Line: t.line}, nil
 				}
 				bad := p.peek()
-				return nil, reject(bad.line, bad.col, "the Court keeps empty SCHEDULEs and empty REGISTERs; an empty %q is not an emptiness it recognizes", bad.text)
+				return nil, reject(bad.line, bad.col, "expected SCHEDULE or REGISTER after AN EMPTY; encountered %q", bad.text)
 			}
 			if p.wordAt(1) == "EXCERPT" {
-				// AN EXCERPT OF factor FROM expr TO expr: a substring,
-				// 1-indexed, both ends inclusive. Lawyers count from one.
+				// Excerpt bounds are 1-indexed and inclusive.
 				p.next()
 				if err := p.expectWords("EXCERPT", "OF"); err != nil {
 					return nil, err
@@ -1494,9 +1462,7 @@ func (p *parser) parseFactor() (Expr, error) {
 					return nil, err
 				}
 				lit.Fields = append(lit.Fields, FieldInit{Name: fTok.text, Expr: e})
-				// AND continues the entries only when what follows reads
-				// as one (ident IS …); otherwise the AND belongs to some
-				// enclosing list, and the exhibit rests.
+				// AND continues the exhibit only when followed by ident IS.
 				if p.atWord("AND") && p.peekAt(1).kind == tokIdent && p.wordAt(2) == "IS" {
 					p.next()
 					continue
@@ -1507,8 +1473,7 @@ func (p *parser) parseFactor() (Expr, error) {
 		case "THE":
 			p.next()
 			if p.atWord("CASE") {
-				// THE CASE AT BAR: the case's own number, a string. Every
-				// case knows its own number; it is the one thing it was told.
+				// THE CASE AT BAR returns the current case number as a string.
 				p.next()
 				if err := p.expectWords("AT", "BAR"); err != nil {
 					return nil, err
@@ -1543,9 +1508,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return EntryAt{Key: selector, Of: of, Line: t.line}, nil
 			}
 			if p.atWord("ROSTER") {
-				// THE ROSTER OF r: a schedule of the register's keys, in
-				// alphabetical order, because the Court files everything
-				// alphabetically eventually.
+				// THE ROSTER OF returns register keys in alphabetical order.
 				p.next()
 				if err := p.expectWords("OF"); err != nil {
 					return nil, err
@@ -1557,9 +1520,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return RosterOf{Of: of, Line: t.line}, nil
 			}
 			if p.atWord("DATE") {
-				// THE DATE OF THESE PRESENTS: the current moment, measured
-				// in court days since the epoch (1970, when the paperwork
-				// began). A court day is one second; see the spec.
+				// THE DATE OF THESE PRESENTS returns seconds since the Unix epoch.
 				p.next()
 				if err := p.expectWords("OF", "THESE", "PRESENTS"); err != nil {
 					return nil, err
@@ -1567,9 +1528,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Presents{Line: t.line}, nil
 			}
 			if p.atWord("DOCUMENT") {
-				// THE DOCUMENT expr FROM THE ARCHIVE: the current version
-				// of a document the case has committed. The archive keeps
-				// every version; the catalog points at the one that counts.
+				// THE DOCUMENT reads the version selected by the archive catalog.
 				p.next()
 				name, err := p.parseFactor()
 				if err != nil {
@@ -1581,9 +1540,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return DocumentFrom{Name: name, Line: t.line}, nil
 			}
 			if p.atWord("PRACTICE") {
-				// THE PRACTICE OF name: the disclosed invention, if the
-				// case at bar holds the letters or the term has lapsed.
-				// Otherwise it is infringement, which explains itself.
+				// THE PRACTICE OF reads a disclosure when access rules allow it.
 				p.next()
 				if err := p.expectWords("OF"); err != nil {
 					return nil, err
@@ -1595,9 +1552,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Practice{Name: nameTok.text, Line: t.line}, nil
 			}
 			if p.atWord("DISCRETION") {
-				// THE DISCRETION OF THE COURT BETWEEN a AND b: an integer
-				// the Court selects, inclusive of both bounds, by a process
-				// it does not explain and will not repeat.
+				// THE DISCRETION OF THE COURT selects an integer in the inclusive range.
 				p.next()
 				if err := p.expectWords("OF", "THE", "COURT", "BETWEEN"); err != nil {
 					return nil, err
@@ -1616,9 +1571,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Discretion{Lo: lo, Hi: hi, Line: t.line}, nil
 			}
 			if p.atWord("LENGTH") {
-				// THE LENGTH OF factor: of a string, its characters; of
-				// an exhibit, its entries. Everything else has only
-				// magnitude, or not even that.
+				// THE LENGTH OF counts string runes or collection entries.
 				p.next()
 				if err := p.expectWords("OF"); err != nil {
 					return nil, err
@@ -1630,10 +1583,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Measure{Of: of, Line: t.line}, nil
 			}
 			if p.atWord("RECORD") {
-				// THE RECORD name IN THE MATTER OF factor: discovery.
-				// One case reads another's record, through the ledger,
-				// so what it did with the answer replays even after the
-				// respondent has moved on.
+				// Discovery reads another case's record through the replay ledger.
 				p.next()
 				nameTok, err := p.expectKind(tokIdent, "naming the record discovered")
 				if err != nil {
@@ -1649,10 +1599,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Discovery{Name: nameTok.text, Of: of, Line: t.line}, nil
 			}
 			if p.atWord("STANDING") {
-				// THE STANDING OF factor: another case's status, as far
-				// as this case is permitted to know it. The reading is
-				// entered in the ledger, so the answer repeats even when
-				// the world does not.
+				// THE STANDING OF reads another case's status through the replay ledger.
 				p.next()
 				if err := p.expectWords("OF"); err != nil {
 					return nil, err
@@ -1664,9 +1611,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Standing{Of: of, Line: t.line}, nil
 			}
 			if p.atWord("TRANSCRIPT") {
-				// THE TRANSCRIPT OF factor: any value, rendered as the
-				// string PROCLAIM would publish. Transcription is always
-				// available. Interpretation is not offered.
+				// THE TRANSCRIPT OF renders a value as PROCLAIM would.
 				p.next()
 				if err := p.expectWords("OF"); err != nil {
 					return nil, err
@@ -1678,8 +1623,7 @@ func (p *parser) parseFactor() (Expr, error) {
 				return Transcript{Of: of, Line: t.line}, nil
 			}
 			if p.atWord("SUM") {
-				// THE SUM CERTAIN OF factor: the integer a string
-				// denotes, exactly and entirely, or a verdict.
+				// THE SUM CERTAIN OF parses a complete numeric string.
 				p.next()
 				if err := p.expectWords("CERTAIN", "OF"); err != nil {
 					return nil, err
@@ -1692,9 +1636,7 @@ func (p *parser) parseFactor() (Expr, error) {
 			}
 			if p.atWord("FINDING") {
 				p.next()
-				// THE FINDING UNDER expr REGARDING …: the dynamic
-				// consultation; the office is whichever one the power
-				// of attorney confers.
+				// THE FINDING UNDER calls the office carried by a power of attorney.
 				if p.atWord("UNDER") {
 					p.next()
 					power, err := p.parseFactor()
@@ -1744,5 +1686,5 @@ func (p *parser) parseFactor() (Expr, error) {
 		}
 	case tokEOF, tokPeriod, tokComma, tokColon, tokRParen:
 	}
-	return nil, reject(t.line, t.col, "expected a value and encountered %s %q; the Court cannot weigh what has not been entered into evidence", t.kind, t.text)
+	return nil, reject(t.line, t.col, "expected a value, encountered %s %q", t.kind, t.text)
 }

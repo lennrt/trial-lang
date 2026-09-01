@@ -1,11 +1,7 @@
 FORM K-1.
 IN THE MATTER OF: the-appeals-process.
 
-OFF THE RECORD: the Collatz conjecture, restated as procedure. Every
-OFF THE RECORD: case, however large its number, eventually reaches 1,
-OFF THE RECORD: the final court, from which there is no further appeal.
-OFF THE RECORD: This has been observed in every case ever filed and
-OFF THE RECORD: proven in none, which the Court considers adequate.
+OFF THE RECORD: Apply the Collatz iteration to 27 and count the steps to 1.
 
 ARTICLE 1.
     LET IT BE RECORDED THAT case-number IS 27.

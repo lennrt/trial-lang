@@ -1,12 +1,14 @@
 package docket
 
 import (
+	"container/list"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +19,26 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+const (
+	// The logical-to-physical cache is shared by the whole KafkaLog. It retains
+	// offsets only, never instruction bodies, and has a fixed aggregate bound.
+	maxProceedingCacheEntries = 65_536
+	// A miss caches a modest forward window so sequential execution does not
+	// rescan the topic for every instruction or evict every other active case.
+	maxProceedingCacheWindow = 1_024
+	// Idle Kafka clients are heavier than offset mappings and may retain fetch
+	// buffers. Active operations are pinned and can temporarily exceed these
+	// limits; once they finish, least-recently-used clients are closed.
+	maxCachedConsumers    = 16
+	maxCachedTransactions = 16
+	// One valid record can contain a MaxRecordBytes key and value. Poll-gated
+	// fetches plus this per-client broker-response bound keep idle cursors from
+	// prefetching indefinitely while still accepting every valid record.
+	maxKafkaFetchBytes = 2*MaxRecordBytes + 1<<20
+)
+
+var errKafkaLogClosed = errors.New("kafka log is closed")
+
 // KafkaLog stores execution state in single-partition Kafka topics.
 type KafkaLog struct {
 	producer *kgo.Client // plain paperwork: filings, verdicts, summonses, markers
@@ -24,11 +46,16 @@ type KafkaLog struct {
 
 	brokers []string
 
-	mu        sync.Mutex
-	consumers map[string]*cursor     // one fetch cursor per topic
-	officials map[string]*kgo.Client // one transactional producer per case
-	diagnose  func(error)
-	closeOnce sync.Once
+	mu             sync.Mutex
+	consumers      map[string]*cursor // one physical fetch cursor per topic
+	consumerLRU    *list.List
+	proceedings    map[proceedingAddress]*list.Element
+	proceedingsLRU *list.List
+	transactions   map[string]*transactionProducer
+	transactionLRU *list.List
+	diagnose       func(error)
+	closed         bool
+	closeOnce      sync.Once
 }
 
 // cursor is a direct (group-less) consumer pinned to partition 0 of
@@ -38,9 +65,35 @@ type KafkaLog struct {
 // requested position.
 type cursor struct {
 	mu     sync.Mutex
+	topic  string
 	client *kgo.Client
 	next   int64
 	buf    []*kgo.Record
+
+	// refs and lru are protected by KafkaLog.mu. A positive ref count pins the
+	// client so LRU trimming cannot close an active fetch or wait.
+	refs int
+	lru  *list.Element
+}
+
+type transactionProducer struct {
+	mu     sync.Mutex // serializes complete same-case transactions and mirrors
+	caseID string
+	client *kgo.Client
+
+	// refs and lru are protected by KafkaLog.mu.
+	refs int
+	lru  *list.Element
+}
+
+type proceedingAddress struct {
+	topic string
+	pc    int64
+}
+
+type proceedingCacheEntry struct {
+	address  proceedingAddress
+	physical int64
 }
 
 type kafkaConfig struct {
@@ -97,12 +150,16 @@ func OpenKafkaLog(ctx context.Context, brokers string, options ...KafkaOption) (
 		return nil, fmt.Errorf("connect to Kafka: %w", err)
 	}
 	return &KafkaLog{
-		producer:  producer,
-		adm:       kadm.NewClient(producer),
-		brokers:   seeds,
-		consumers: make(map[string]*cursor),
-		officials: make(map[string]*kgo.Client),
-		diagnose:  config.diagnose,
+		producer:       producer,
+		adm:            kadm.NewClient(producer),
+		brokers:        seeds,
+		consumers:      make(map[string]*cursor),
+		consumerLRU:    list.New(),
+		proceedings:    make(map[proceedingAddress]*list.Element),
+		proceedingsLRU: list.New(),
+		transactions:   make(map[string]*transactionProducer),
+		transactionLRU: list.New(),
+		diagnose:       config.diagnose,
 	}, nil
 }
 
@@ -113,7 +170,7 @@ func (k *KafkaLog) Append(ctx context.Context, topic string, key, value []byte) 
 	rec := &kgo.Record{Topic: topic, Key: cloneBytes(key), Value: cloneBytes(value), Partition: 0}
 	res := k.producer.ProduceSync(ctx, rec)
 	if err := res.FirstErr(); err != nil {
-		return 0, fmt.Errorf("the record was refused at the counter: %w", err)
+		return 0, fmt.Errorf("append record: %w", err)
 	}
 	return rec.Offset, nil
 }
@@ -182,7 +239,7 @@ func (k *KafkaLog) endOffset(ctx context.Context, topic string) (int64, error) {
 		if err != nil {
 			reason = err
 		} else if lo, ok := listed.Lookup(topic, 0); !ok {
-			reason = fmt.Errorf("topic %q has no partition 0; the case file is missing", topic)
+			reason = fmt.Errorf("%w: %q has no partition 0", ErrTopicNotFound, topic)
 		} else if lo.Err != nil {
 			reason = lo.Err
 		} else {
@@ -274,6 +331,119 @@ func (k *KafkaLog) End(ctx context.Context, topic string) (int64, error) {
 	return k.endOffset(ctx, topic)
 }
 
+func (k *KafkaLog) newCursorClient(topic string, offset int64) (*kgo.Client, error) {
+	return kgo.NewClient(
+		kgo.SeedBrokers(k.brokers...),
+		kgo.FetchIsolationLevel(kgo.ReadCommitted()),
+		kgo.FetchMaxWait(100*time.Millisecond),
+		kgo.FetchMaxBytes(maxKafkaFetchBytes),
+		kgo.FetchMaxPartitionBytes(maxKafkaFetchBytes),
+		// A retained cursor should fetch only while its caller is polling. This
+		// prevents idle clients from accumulating broker response buffers.
+		kgo.MaxConcurrentFetches(0),
+		kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{
+			topic: {0: kgo.NewOffset().At(offset)},
+		}),
+	)
+}
+
+// acquireCursor pins one topic cursor until releaseCursor. Client creation is
+// done outside the registry lock; the second lookup prevents duplicate
+// retained clients when callers race to open the same topic.
+func (k *KafkaLog) acquireCursor(topic string, offset int64) (*cursor, error) {
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return nil, errKafkaLogClosed
+	}
+	if cur, ok := k.consumers[topic]; ok {
+		cur.refs++
+		if cur.lru != nil {
+			k.consumerLRU.MoveToFront(cur.lru)
+		}
+		k.mu.Unlock()
+		return cur, nil
+	}
+	k.mu.Unlock()
+
+	client, err := k.newCursorClient(topic, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		client.Close()
+		return nil, errKafkaLogClosed
+	}
+	if cur, ok := k.consumers[topic]; ok {
+		cur.refs++
+		if cur.lru != nil {
+			k.consumerLRU.MoveToFront(cur.lru)
+		}
+		k.mu.Unlock()
+		client.Close()
+		return cur, nil
+	}
+	if k.consumers == nil {
+		k.consumers = make(map[string]*cursor)
+	}
+	if k.consumerLRU == nil {
+		k.consumerLRU = list.New()
+	}
+	cur := &cursor{topic: topic, client: client, next: offset, refs: 1}
+	cur.lru = k.consumerLRU.PushFront(cur)
+	k.consumers[topic] = cur
+	evicted := k.trimConsumersLocked()
+	k.mu.Unlock()
+	closeKafkaClients(evicted)
+	return cur, nil
+}
+
+func (k *KafkaLog) releaseCursor(cur *cursor) {
+	k.mu.Lock()
+	if cur.refs > 0 {
+		cur.refs--
+	}
+	evicted := k.trimConsumersLocked()
+	k.mu.Unlock()
+	closeKafkaClients(evicted)
+}
+
+// trimConsumersLocked evicts only idle clients. When every excess client is
+// pinned by an active fetch or wait, the registry may temporarily exceed its
+// limit and is trimmed by the next release.
+func (k *KafkaLog) trimConsumersLocked() []*kgo.Client {
+	var clients []*kgo.Client
+	for len(k.consumers) > maxCachedConsumers {
+		var victim *list.Element
+		for element := k.consumerLRU.Back(); element != nil; element = element.Prev() {
+			if element.Value.(*cursor).refs == 0 {
+				victim = element
+				break
+			}
+		}
+		if victim == nil {
+			break
+		}
+		cur := victim.Value.(*cursor)
+		delete(k.consumers, cur.topic)
+		k.consumerLRU.Remove(victim)
+		cur.lru = nil
+		clients = append(clients, cur.client)
+	}
+	return clients
+}
+
+func closeKafkaClients(clients []*kgo.Client) {
+	for _, client := range clients {
+		if client != nil {
+			client.Close()
+		}
+	}
+}
+
 func (k *KafkaLog) Fetch(ctx context.Context, topic string, offset int64, wait bool) (*Record, error) {
 	if offset < 0 {
 		return nil, fmt.Errorf("offset must be nonnegative: %d", offset)
@@ -288,25 +458,11 @@ func (k *KafkaLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 		}
 	}
 
-	k.mu.Lock()
-	cur, ok := k.consumers[topic]
-	if !ok {
-		cl, err := kgo.NewClient(
-			kgo.SeedBrokers(k.brokers...),
-			kgo.FetchIsolationLevel(kgo.ReadCommitted()),
-			kgo.FetchMaxWait(100*time.Millisecond),
-			kgo.ConsumePartitions(map[string]map[int32]kgo.Offset{
-				topic: {0: kgo.NewOffset().At(offset)},
-			}),
-		)
-		if err != nil {
-			k.mu.Unlock()
-			return nil, err
-		}
-		cur = &cursor{client: cl, next: offset}
-		k.consumers[topic] = cur
+	cur, err := k.acquireCursor(topic, offset)
+	if err != nil {
+		return nil, err
 	}
-	k.mu.Unlock()
+	defer k.releaseCursor(cur)
 	cur.mu.Lock()
 	defer cur.mu.Unlock()
 
@@ -367,6 +523,203 @@ func (k *KafkaLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 	}
 }
 
+func (k *KafkaLog) cachedProceeding(topic string, pc int64) (int64, bool) {
+	address := proceedingAddress{topic: topic, pc: pc}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	element, ok := k.proceedings[address]
+	if !ok {
+		return 0, false
+	}
+	k.proceedingsLRU.MoveToFront(element)
+	return element.Value.(proceedingCacheEntry).physical, true
+}
+
+func (k *KafkaLog) cacheProceedingLocked(address proceedingAddress, physical int64) error {
+	if element, ok := k.proceedings[address]; ok {
+		cached := element.Value.(proceedingCacheEntry).physical
+		if cached != physical {
+			return fmt.Errorf("topic %q logical proceedings address %d changed physical offset from %d to %d", address.topic, address.pc, cached, physical)
+		}
+		k.proceedingsLRU.MoveToFront(element)
+		return nil
+	}
+	entry := proceedingCacheEntry{address: address, physical: physical}
+	element := k.proceedingsLRU.PushFront(entry)
+	k.proceedings[address] = element
+	for len(k.proceedings) > maxProceedingCacheEntries {
+		oldest := k.proceedingsLRU.Back()
+		oldEntry := oldest.Value.(proceedingCacheEntry)
+		delete(k.proceedings, oldEntry.address)
+		k.proceedingsLRU.Remove(oldest)
+	}
+	return nil
+}
+
+func (k *KafkaLog) cacheProceeding(topic string, pc, physical int64) error {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.proceedings == nil {
+		k.proceedings = make(map[proceedingAddress]*list.Element)
+	}
+	if k.proceedingsLRU == nil {
+		k.proceedingsLRU = list.New()
+	}
+	return k.cacheProceedingLocked(proceedingAddress{topic: topic, pc: pc}, physical)
+}
+
+func (k *KafkaLog) cacheProceedingWindow(topic string, records []Record, start int) error {
+	end := min(len(records), start+maxProceedingCacheWindow)
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.proceedings == nil {
+		k.proceedings = make(map[proceedingAddress]*list.Element)
+	}
+	if k.proceedingsLRU == nil {
+		k.proceedingsLRU = list.New()
+	}
+	for i := start; i < end; i++ {
+		if err := k.cacheProceedingLocked(proceedingAddress{topic: topic, pc: int64(i)}, records[i].Offset); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (k *KafkaLog) dropProceedingCache(topic string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	for address, element := range k.proceedings {
+		if address.topic == topic {
+			delete(k.proceedings, address)
+			k.proceedingsLRU.Remove(element)
+		}
+	}
+}
+
+func proceedingSnapshotGrowth(records, bytes int, record *Record) (int, error) {
+	nextBytes := bytes + len(record.Key) + len(record.Value)
+	if err := checkSnapshotSize(records+1, nextBytes); err != nil {
+		return bytes, err
+	}
+	return nextBytes, nil
+}
+
+// fetchProceeding returns both the logical record and its physical Kafka
+// offset. The latter is used only for the nonauthoritative consumer-group
+// mirror.
+func (k *KafkaLog) fetchProceeding(ctx context.Context, c Case, pc int64, wait bool) (*Record, int64, error) {
+	if pc < 0 {
+		return nil, 0, fmt.Errorf("program counter must be nonnegative: %d", pc)
+	}
+	topic := c.Proceedings()
+	cachedPhysical, cached := k.cachedProceeding(topic, pc)
+	if cached {
+		record, err := k.Fetch(ctx, topic, cachedPhysical, false)
+		if err != nil {
+			return nil, 0, err
+		}
+		if record != nil {
+			if record.Offset != cachedPhysical {
+				return nil, 0, fmt.Errorf("proceedings logical address %d expected physical offset %d, found %d", pc, cachedPhysical, record.Offset)
+			}
+			record.Offset = pc
+			return record, cachedPhysical, nil
+		}
+	}
+
+	records, err := k.ReadAll(ctx, topic)
+	if err != nil {
+		return nil, 0, err
+	}
+	if pc < int64(len(records)) {
+		physical := records[pc].Offset
+		if cached && physical != cachedPhysical {
+			return nil, 0, fmt.Errorf("proceedings logical address %d expected physical offset %d, found %d", pc, cachedPhysical, physical)
+		}
+		if err := k.cacheProceedingWindow(topic, records, int(pc)); err != nil {
+			return nil, 0, err
+		}
+		record := records[pc]
+		record.Offset = pc
+		return &record, physical, nil
+	}
+	if cached {
+		return nil, 0, fmt.Errorf("proceedings logical address %d at physical offset %d is no longer visible", pc, cachedPhysical)
+	}
+	if !wait {
+		return nil, 0, nil
+	}
+
+	visible, bytes := len(records), 0
+	physical := int64(0)
+	for i := range records {
+		bytes += len(records[i].Key) + len(records[i].Value)
+	}
+	if visible > 0 {
+		last := records[visible-1].Offset
+		if last == 1<<63-1 {
+			return nil, 0, fmt.Errorf("proceedings offset %d has no following cursor", last)
+		}
+		physical = last + 1
+	}
+	for int64(visible) <= pc {
+		record, err := k.Fetch(ctx, topic, physical, true)
+		if err != nil || record == nil {
+			return nil, 0, err
+		}
+		nextBytes, err := proceedingSnapshotGrowth(visible, bytes, record)
+		if err != nil {
+			return nil, 0, fmt.Errorf("topic %q: %w", topic, err)
+		}
+		bytes = nextBytes
+		logical := int64(visible)
+		if err := k.cacheProceeding(topic, logical, record.Offset); err != nil {
+			return nil, 0, err
+		}
+		if logical == pc {
+			physical := record.Offset
+			record.Offset = pc
+			return record, physical, nil
+		}
+		if record.Offset == 1<<63-1 {
+			return nil, 0, fmt.Errorf("proceedings offset %d has no following cursor", record.Offset)
+		}
+		physical = record.Offset + 1
+		visible++
+	}
+	panic("unreachable")
+}
+
+// FetchProceeding resolves a logical instruction address through visible
+// committed records without exposing Kafka control-record gaps.
+func (k *KafkaLog) FetchProceeding(ctx context.Context, c Case, pc int64, wait bool) (*Record, error) {
+	record, _, err := k.fetchProceeding(ctx, c, pc, wait)
+	return record, err
+}
+
+// proceedingsPhysicalCursor converts a logical program counter to the raw
+// Kafka cursor used only for the nonauthoritative consumer-group mirror.
+func (k *KafkaLog) proceedingsPhysicalCursor(ctx context.Context, c Case, pc int64) (int64, error) {
+	if pc < 0 {
+		return 0, fmt.Errorf("program counter must be nonnegative: %d", pc)
+	}
+	if pc == 0 {
+		return 0, nil
+	}
+	record, physical, err := k.fetchProceeding(ctx, c, pc-1, false)
+	if err != nil {
+		return 0, err
+	}
+	if record == nil {
+		return 0, fmt.Errorf("program counter %d is past the visible proceedings", pc)
+	}
+	if physical == 1<<63-1 {
+		return 0, fmt.Errorf("proceedings offset %d has no following cursor", physical)
+	}
+	return physical + 1, nil
+}
+
 // attentionNote records the authoritative execution cursors in the same
 // transaction as an instruction's effects.
 type attentionNote struct {
@@ -377,36 +730,121 @@ type attentionNote struct {
 	Heard   []int64 `json:"heard,omitempty"`
 }
 
-// official returns the transactional producer for a case. The per-case
-// transactional ID ensures a second producer fences the first.
-func (k *KafkaLog) official(c Case) (*kgo.Client, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if cl, ok := k.officials[c.ID]; ok {
-		return cl, nil
-	}
-	cl, err := kgo.NewClient(
+func (k *KafkaLog) newTransactionClient(c Case) (*kgo.Client, error) {
+	return kgo.NewClient(
 		kgo.SeedBrokers(k.brokers...),
 		kgo.TransactionalID("the-court."+c.ID),
 		kgo.TransactionTimeout(60*time.Second),
 	)
+}
+
+// acquireTransaction pins one per-case producer until releaseTransaction. Its
+// own mutex serializes the complete authoritative transaction and the
+// nonauthoritative offset mirrors so concurrent commits for one case cannot
+// reorder either view.
+func (k *KafkaLog) acquireTransaction(c Case) (*transactionProducer, error) {
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		return nil, errKafkaLogClosed
+	}
+	if transaction, ok := k.transactions[c.ID]; ok {
+		transaction.refs++
+		if transaction.lru != nil {
+			k.transactionLRU.MoveToFront(transaction.lru)
+		}
+		k.mu.Unlock()
+		return transaction, nil
+	}
+	k.mu.Unlock()
+
+	client, err := k.newTransactionClient(c)
 	if err != nil {
 		return nil, err
 	}
-	k.officials[c.ID] = cl
-	return cl, nil
+
+	k.mu.Lock()
+	if k.closed {
+		k.mu.Unlock()
+		client.Close()
+		return nil, errKafkaLogClosed
+	}
+	if transaction, ok := k.transactions[c.ID]; ok {
+		transaction.refs++
+		if transaction.lru != nil {
+			k.transactionLRU.MoveToFront(transaction.lru)
+		}
+		k.mu.Unlock()
+		client.Close()
+		return transaction, nil
+	}
+	if k.transactions == nil {
+		k.transactions = make(map[string]*transactionProducer)
+	}
+	if k.transactionLRU == nil {
+		k.transactionLRU = list.New()
+	}
+	transaction := &transactionProducer{caseID: c.ID, client: client, refs: 1}
+	transaction.lru = k.transactionLRU.PushFront(transaction)
+	k.transactions[c.ID] = transaction
+	evicted := k.trimTransactionsLocked()
+	k.mu.Unlock()
+	closeKafkaClients(evicted)
+	return transaction, nil
+}
+
+func (k *KafkaLog) releaseTransaction(transaction *transactionProducer) {
+	k.mu.Lock()
+	if transaction.refs > 0 {
+		transaction.refs--
+	}
+	evicted := k.trimTransactionsLocked()
+	k.mu.Unlock()
+	closeKafkaClients(evicted)
+}
+
+func (k *KafkaLog) trimTransactionsLocked() []*kgo.Client {
+	var clients []*kgo.Client
+	for len(k.transactions) > maxCachedTransactions {
+		var victim *list.Element
+		for element := k.transactionLRU.Back(); element != nil; element = element.Prev() {
+			if element.Value.(*transactionProducer).refs == 0 {
+				victim = element
+				break
+			}
+		}
+		if victim == nil {
+			break
+		}
+		transaction := victim.Value.(*transactionProducer)
+		delete(k.transactions, transaction.caseID)
+		k.transactionLRU.Remove(victim)
+		transaction.lru = nil
+		clients = append(clients, transaction.client)
+	}
+	return clients
 }
 
 func (k *KafkaLog) Commit(ctx context.Context, c Case, step Step) error {
 	if err := validateStep(step); err != nil {
 		return err
 	}
-	cl, err := k.official(c)
+	transaction, err := k.acquireTransaction(c)
 	if err != nil {
 		return err
 	}
+	defer k.releaseTransaction(transaction)
+	var diagnostics []error
+	defer func() {
+		for _, diagnostic := range diagnostics {
+			k.diagnose(diagnostic)
+		}
+	}()
+	transaction.mu.Lock()
+	defer transaction.mu.Unlock()
+	cl := transaction.client
 	if err := cl.BeginTransaction(); err != nil {
-		return fmt.Errorf("the session could not be opened: %w", err)
+		return fmt.Errorf("begin execution transaction: %w", err)
 	}
 
 	recs := make([]*kgo.Record, 0, len(step.Appends)+1)
@@ -432,19 +870,23 @@ func (k *KafkaLog) Commit(ctx context.Context, c Case, step Step) error {
 
 	// Mirror the authoritative attention in consumer offsets for standard
 	// Kafka tooling. A mirror failure cannot roll back the committed step.
-	offs := make(kadm.Offsets)
-	offs.AddOffset(c.Proceedings(), 0, step.PC, -1)
-	if responses, err := k.adm.CommitOffsets(ctx, c.Group(), offs); err != nil {
-		k.diagnose(fmt.Errorf("mirror proceedings offset after committed step: %w", err))
-	} else if err := responses.Error(); err != nil {
-		k.diagnose(fmt.Errorf("mirror proceedings offset after committed step: %w", err))
+	if physicalPC, err := k.proceedingsPhysicalCursor(ctx, c, step.PC); err != nil {
+		diagnostics = append(diagnostics, fmt.Errorf("map proceedings offset after committed step: %w", err))
+	} else {
+		offs := make(kadm.Offsets)
+		offs.AddOffset(c.Proceedings(), 0, physicalPC, -1)
+		if responses, err := k.adm.CommitOffsets(ctx, c.Group(), offs); err != nil {
+			diagnostics = append(diagnostics, fmt.Errorf("mirror proceedings offset after committed step: %w", err))
+		} else if err := responses.Error(); err != nil {
+			diagnostics = append(diagnostics, fmt.Errorf("mirror proceedings offset after committed step: %w", err))
+		}
 	}
 	soffs := make(kadm.Offsets)
 	soffs.AddOffset(c.Summons(), 0, step.Summons, -1)
 	if responses, err := k.adm.CommitOffsets(ctx, c.SummonsGroup(), soffs); err != nil {
-		k.diagnose(fmt.Errorf("mirror summons offset after committed step: %w", err))
+		diagnostics = append(diagnostics, fmt.Errorf("mirror summons offset after committed step: %w", err))
 	} else if err := responses.Error(); err != nil {
-		k.diagnose(fmt.Errorf("mirror summons offset after committed step: %w", err))
+		diagnostics = append(diagnostics, fmt.Errorf("mirror summons offset after committed step: %w", err))
 	}
 	return nil
 }
@@ -460,7 +902,7 @@ func (k *KafkaLog) Attention(ctx context.Context, c Case) (Attention, error) {
 	}
 	var note attentionNote
 	if err := json.Unmarshal(recs[len(recs)-1].Value, &note); err != nil {
-		return Attention{}, fmt.Errorf("the Court's attention is recorded in a hand no one can read: %w", err)
+		return Attention{}, fmt.Errorf("decode attention: %w", err)
 	}
 	return Attention{PC: note.PC, Summons: note.Summons, Ledger: note.Ledger, Gazette: note.Gazette, Heard: note.Heard, Started: true}, nil
 }
@@ -491,7 +933,6 @@ func (k *KafkaLog) CreateCaseTopics(ctx context.Context, c Case) error {
 			plain = append(plain, t)
 		}
 	}
-	created := make([]string, 0, len(allTopics))
 	rollback := func(cause error, targets []string) error {
 		if len(targets) == 0 {
 			return cause
@@ -516,16 +957,22 @@ func (k *KafkaLog) CreateCaseTopics(ctx context.Context, c Case) error {
 	}{{retainForever, plain}, {compacted, compact}} {
 		resp, err := k.adm.CreateTopics(ctx, 1, 1, batch.configs, batch.topics...)
 		if err != nil {
-			return rollback(fmt.Errorf("create case topics: %w", err), allTopics)
+			return rollback(fmt.Errorf("create case topics: %w", err), caseCreationRollbackTargets(allTopics))
 		}
 		for _, r := range resp {
 			if r.Err != nil {
-				return rollback(fmt.Errorf("the case file could not be opened (%s): %w", r.Topic, r.Err), created)
+				return rollback(fmt.Errorf("create case topic %s: %w", r.Topic, r.Err), caseCreationRollbackTargets(allTopics))
 			}
-			created = append(created, r.Topic)
 		}
 	}
 	return nil
+}
+
+// caseCreationRollbackTargets returns every preflight-absent case topic. A
+// failed CreateTopics response can be ambiguous about which topics landed, so
+// limiting rollback to definite-success responses can leave a partial case.
+func caseCreationRollbackTargets(allTopics []string) []string {
+	return slices.Clone(allTopics)
 }
 
 func (k *KafkaLog) DeleteCaseTopics(ctx context.Context, c Case) error {
@@ -535,9 +982,10 @@ func (k *KafkaLog) DeleteCaseTopics(ctx context.Context, c Case) error {
 	}
 	for _, r := range resp {
 		if r.Err != nil && !errors.Is(r.Err, kerr.UnknownTopicOrPartition) {
-			return fmt.Errorf("burning %s failed: %w", r.Topic, r.Err)
+			return fmt.Errorf("delete topic %s: %w", r.Topic, r.Err)
 		}
 	}
+	k.dropProceedingCache(c.Proceedings())
 	return nil
 }
 
@@ -548,11 +996,17 @@ func (k *KafkaLog) ListCases(ctx context.Context) ([]Case, error) {
 	}
 	var out []Case
 	for name := range details {
-		if id, ok := strings.CutSuffix(name, ".filing"); ok && strings.HasPrefix(id, "case-") {
-			out = append(out, Case{ID: id})
-			if len(out) > MaxCases {
-				return nil, fmt.Errorf("%w: docket has more than %d cases", ErrResourceLimit, MaxCases)
-			}
+		id, ok := strings.CutSuffix(name, ".filing")
+		if !ok {
+			continue
+		}
+		caseFile, err := ParseCase(id)
+		if err != nil {
+			continue
+		}
+		out = append(out, caseFile)
+		if len(out) > MaxCases {
+			return nil, fmt.Errorf("%w: docket has more than %d cases", ErrResourceLimit, MaxCases)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -568,7 +1022,7 @@ func (k *KafkaLog) EnsureTopic(ctx context.Context, topic string) error {
 	}
 	for _, r := range resp {
 		if r.Err != nil && !errors.Is(r.Err, kerr.TopicAlreadyExists) {
-			return fmt.Errorf("the topic %s could not be opened: %w", r.Topic, r.Err)
+			return fmt.Errorf("create topic %s: %w", r.Topic, r.Err)
 		}
 	}
 	return nil
@@ -582,7 +1036,7 @@ func (k *KafkaLog) ListStatutes(ctx context.Context) ([]string, error) {
 	var out []string
 	for name := range details {
 		if rest, ok := strings.CutPrefix(name, "statute-"); ok {
-			if s, ok := strings.CutSuffix(rest, ".filing"); ok {
+			if s, ok := strings.CutSuffix(rest, ".filing"); ok && validStatuteName(s) {
 				out = append(out, s)
 			}
 		}
@@ -594,14 +1048,27 @@ func (k *KafkaLog) ListStatutes(ctx context.Context) ([]string, error) {
 func (k *KafkaLog) Close() {
 	k.closeOnce.Do(func() {
 		k.mu.Lock()
-		defer k.mu.Unlock()
+		k.closed = true
+		var clients []*kgo.Client
 		for _, cur := range k.consumers {
-			cur.client.Close()
+			clients = append(clients, cur.client)
 		}
-		for _, cl := range k.officials {
-			cl.Close()
+		for _, transaction := range k.transactions {
+			clients = append(clients, transaction.client)
 		}
-		k.producer.Close()
+		k.consumers = nil
+		k.consumerLRU = nil
+		k.transactions = nil
+		k.transactionLRU = nil
+		k.proceedings = nil
+		k.proceedingsLRU = nil
+		producer := k.producer
+		k.mu.Unlock()
+
+		closeKafkaClients(clients)
+		if producer != nil {
+			producer.Close()
+		}
 	})
 }
 

@@ -5,12 +5,28 @@ package docket
 // every clause of it.
 
 import (
+	"container/list"
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+func TestAmbiguousCommitErrorNamesTheGenericRecoveryContract(t *testing.T) {
+	cause := errors.New("acknowledgement lost")
+	err := &AmbiguousCommitError{Err: cause}
+	if !errors.Is(err, cause) {
+		t.Fatal("AmbiguousCommitError does not unwrap its cause")
+	}
+	if got := err.Error(); !strings.Contains(got, "reread authoritative state before retrying") || strings.Contains(got, "attention") {
+		t.Fatalf("AmbiguousCommitError = %q, want operation-independent recovery guidance", got)
+	}
+}
 
 func TestNewCaseHasEnoughEntropy(t *testing.T) {
 	c, err := NewCase()
@@ -49,7 +65,7 @@ func TestMemoryCommitPersistsTheFullAttention(t *testing.T) {
 func TestMemoryListCasesExcludesStatutes(t *testing.T) {
 	ctx := context.Background()
 	m := NewMemoryLog()
-	c := Case{ID: "case-genuine"}
+	c := Case{ID: "case-000000000000000000000001"}
 	if err := m.CreateCaseTopics(ctx, c); err != nil {
 		t.Fatal(err)
 	}
@@ -69,6 +85,36 @@ func TestMemoryListCasesExcludesStatutes(t *testing.T) {
 	}
 	if len(statutes) != 1 || statutes[0] != "arithmetic" {
 		t.Fatalf("the statutes on the books = %v, want [arithmetic]", statutes)
+	}
+}
+
+func TestMemoryListingsIgnoreMalformedTopicNames(t *testing.T) {
+	m := NewMemoryLog()
+	ctx := t.Context()
+	for _, topic := range []string{
+		"case-not-a-canonical-id.filing",
+		"case-00000000000000000000000G.filing",
+		"statute-.filing",
+		"statute-Invalid.filing",
+		"statute-valid-name.filing",
+	} {
+		if err := m.EnsureTopic(ctx, topic); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases, err := m.ListCases(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 0 {
+		t.Fatalf("ListCases returned malformed topic names: %v", cases)
+	}
+	statutes, err := m.ListStatutes(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(statutes, []string{"valid-name"}) {
+		t.Fatalf("ListStatutes = %v, want [valid-name]", statutes)
 	}
 }
 
@@ -303,6 +349,274 @@ func TestResourceLimitBoundaries(t *testing.T) {
 	}
 	if err := validateBatch(make([]StepAppend, MaxBatchAppends+1)); !errors.Is(err, ErrResourceLimit) {
 		t.Fatalf("batch count overflow error = %v", err)
+	}
+}
+
+func TestProceedingsCacheHasAnAggregateLRUBound(t *testing.T) {
+	log := &KafkaLog{}
+	for pc := range int64(maxProceedingCacheEntries + 17) {
+		topic := "case-x.proceedings"
+		if pc%2 != 0 {
+			topic = "case-y.proceedings"
+		}
+		if err := log.cacheProceeding(topic, pc, pc*2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	log.mu.Lock()
+	entries, lruEntries := len(log.proceedings), log.proceedingsLRU.Len()
+	log.mu.Unlock()
+	if entries != maxProceedingCacheEntries || lruEntries != maxProceedingCacheEntries {
+		t.Fatalf("cache sizes = map %d, LRU %d; want %d", entries, lruEntries, maxProceedingCacheEntries)
+	}
+	if _, ok := log.cachedProceeding("case-x.proceedings", 0); ok {
+		t.Fatal("least-recently-used mapping was not evicted")
+	}
+	newest := int64(maxProceedingCacheEntries + 16)
+	if physical, ok := log.cachedProceeding("case-x.proceedings", newest); !ok || physical != newest*2 {
+		t.Fatalf("newest mapping = %d, %v", physical, ok)
+	}
+	if err := log.cacheProceeding("case-x.proceedings", newest, 7); err == nil {
+		t.Fatal("cache accepted a changed physical mapping")
+	}
+}
+
+func TestProceedingsCacheIsSafeForConcurrentCases(t *testing.T) {
+	log := &KafkaLog{}
+	errCh := make(chan error, 8)
+	var wg sync.WaitGroup
+	for worker := range int64(8) {
+		wg.Go(func() {
+			topic := "case-even.proceedings"
+			if worker%2 != 0 {
+				topic = "case-odd.proceedings"
+			}
+			for i := range int64(1_000) {
+				pc := worker*1_000 + i
+				if err := log.cacheProceeding(topic, pc, pc+10); err != nil {
+					errCh <- err
+					return
+				}
+				if physical, ok := log.cachedProceeding(topic, pc); !ok || physical != pc+10 {
+					errCh <- fmt.Errorf("mapping %s/%d = %d, %v", topic, pc, physical, ok)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if len(log.proceedings) > maxProceedingCacheEntries || log.proceedingsLRU.Len() != len(log.proceedings) {
+		t.Fatalf("concurrent cache sizes = map %d, LRU %d", len(log.proceedings), log.proceedingsLRU.Len())
+	}
+}
+
+func TestProceedingsWaitGrowthHonorsSnapshotByteLimit(t *testing.T) {
+	record := &Record{Offset: 42, Value: []byte("x")}
+	if _, err := proceedingSnapshotGrowth(1, MaxReadBytes, record); !errors.Is(err, ErrResourceLimit) {
+		t.Fatalf("growth error = %v, want ErrResourceLimit", err)
+	}
+	if bytes, err := proceedingSnapshotGrowth(1, MaxReadBytes-1, record); err != nil || bytes != MaxReadBytes {
+		t.Fatalf("growth at exact limit = %d, %v", bytes, err)
+	}
+}
+
+func TestKafkaClientRegistriesBoundIdleClientsAndPinActiveOnes(t *testing.T) {
+	log := &KafkaLog{
+		consumers:      make(map[string]*cursor),
+		consumerLRU:    list.New(),
+		transactions:   make(map[string]*transactionProducer),
+		transactionLRU: list.New(),
+	}
+
+	activeCursor := &cursor{topic: "active-topic", refs: 1}
+	activeCursor.lru = log.consumerLRU.PushFront(activeCursor)
+	log.consumers[activeCursor.topic] = activeCursor
+	for i := range maxCachedConsumers + 3 {
+		cur := &cursor{topic: fmt.Sprintf("idle-topic-%02d", i)}
+		cur.lru = log.consumerLRU.PushFront(cur)
+		log.consumers[cur.topic] = cur
+	}
+
+	activeTransaction := &transactionProducer{caseID: "active-case", refs: 1}
+	activeTransaction.lru = log.transactionLRU.PushFront(activeTransaction)
+	log.transactions[activeTransaction.caseID] = activeTransaction
+	for i := range maxCachedTransactions + 3 {
+		transaction := &transactionProducer{caseID: fmt.Sprintf("idle-case-%02d", i)}
+		transaction.lru = log.transactionLRU.PushFront(transaction)
+		log.transactions[transaction.caseID] = transaction
+	}
+
+	log.mu.Lock()
+	consumerEvictions := log.trimConsumersLocked()
+	transactionEvictions := log.trimTransactionsLocked()
+	_, cursorPinned := log.consumers[activeCursor.topic]
+	_, transactionPinned := log.transactions[activeTransaction.caseID]
+	consumerCount := len(log.consumers)
+	transactionCount := len(log.transactions)
+	log.mu.Unlock()
+
+	if !cursorPinned || !transactionPinned {
+		t.Fatal("LRU trimming evicted an active Kafka client")
+	}
+	if consumerCount != maxCachedConsumers || transactionCount != maxCachedTransactions {
+		t.Fatalf("registry sizes = consumers %d, transactions %d; want %d and %d", consumerCount, transactionCount, maxCachedConsumers, maxCachedTransactions)
+	}
+	if len(consumerEvictions) != 4 || len(transactionEvictions) != 4 {
+		t.Fatalf("evictions = consumers %d, transactions %d; want four each", len(consumerEvictions), len(transactionEvictions))
+	}
+}
+
+func TestKafkaClientRegistriesTrimAfterPinnedOperationsFinish(t *testing.T) {
+	log := &KafkaLog{
+		consumers:      make(map[string]*cursor),
+		consumerLRU:    list.New(),
+		transactions:   make(map[string]*transactionProducer),
+		transactionLRU: list.New(),
+	}
+	var cursors []*cursor
+	var transactions []*transactionProducer
+	for i := range maxCachedConsumers + 5 {
+		cur := &cursor{topic: fmt.Sprintf("topic-%02d", i), refs: 1}
+		cur.lru = log.consumerLRU.PushFront(cur)
+		log.consumers[cur.topic] = cur
+		cursors = append(cursors, cur)
+	}
+	for i := range maxCachedTransactions + 5 {
+		transaction := &transactionProducer{caseID: fmt.Sprintf("case-%02d", i), refs: 1}
+		transaction.lru = log.transactionLRU.PushFront(transaction)
+		log.transactions[transaction.caseID] = transaction
+		transactions = append(transactions, transaction)
+	}
+
+	log.mu.Lock()
+	if got := len(log.trimConsumersLocked()); got != 0 {
+		t.Fatalf("trimmed %d pinned consumers", got)
+	}
+	if got := len(log.trimTransactionsLocked()); got != 0 {
+		t.Fatalf("trimmed %d pinned transactions", got)
+	}
+	log.mu.Unlock()
+
+	for _, cur := range cursors {
+		log.releaseCursor(cur)
+	}
+	for _, transaction := range transactions {
+		log.releaseTransaction(transaction)
+	}
+	log.mu.Lock()
+	consumerCount := len(log.consumers)
+	transactionCount := len(log.transactions)
+	log.mu.Unlock()
+	if consumerCount != maxCachedConsumers || transactionCount != maxCachedTransactions {
+		t.Fatalf("post-release registry sizes = consumers %d, transactions %d", consumerCount, transactionCount)
+	}
+}
+
+func TestKafkaClientRegistryPinsAreConcurrentSafe(t *testing.T) {
+	log := &KafkaLog{
+		consumers:      make(map[string]*cursor),
+		consumerLRU:    list.New(),
+		transactions:   make(map[string]*transactionProducer),
+		transactionLRU: list.New(),
+	}
+	cur := &cursor{topic: "shared-topic"}
+	cur.lru = log.consumerLRU.PushFront(cur)
+	log.consumers[cur.topic] = cur
+	transaction := &transactionProducer{caseID: "shared-case"}
+	transaction.lru = log.transactionLRU.PushFront(transaction)
+	log.transactions[transaction.caseID] = transaction
+
+	errCh := make(chan error, 32)
+	var wg sync.WaitGroup
+	for range 32 {
+		wg.Go(func() {
+			for i := range 500 {
+				gotCursor, err := log.acquireCursor(cur.topic, int64(i))
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if gotCursor != cur {
+					errCh <- errors.New("cursor acquisition replaced the retained cursor")
+					return
+				}
+				log.releaseCursor(gotCursor)
+
+				gotTransaction, err := log.acquireTransaction(Case{ID: transaction.caseID})
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if gotTransaction != transaction {
+					errCh <- errors.New("transaction acquisition replaced the retained producer")
+					return
+				}
+				log.releaseTransaction(gotTransaction)
+			}
+		})
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Error(err)
+	}
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if cur.refs != 0 || transaction.refs != 0 {
+		t.Fatalf("leaked pins = cursor %d, transaction %d", cur.refs, transaction.refs)
+	}
+}
+
+func TestKafkaLogCloseClearsRetainedRegistriesAndRejectsNewPins(t *testing.T) {
+	log := &KafkaLog{
+		consumers:      make(map[string]*cursor),
+		consumerLRU:    list.New(),
+		proceedings:    make(map[proceedingAddress]*list.Element),
+		proceedingsLRU: list.New(),
+		transactions:   make(map[string]*transactionProducer),
+		transactionLRU: list.New(),
+	}
+	cur := &cursor{topic: "retained-topic"}
+	cur.lru = log.consumerLRU.PushFront(cur)
+	log.consumers[cur.topic] = cur
+	transaction := &transactionProducer{caseID: "retained-case"}
+	transaction.lru = log.transactionLRU.PushFront(transaction)
+	log.transactions[transaction.caseID] = transaction
+	if err := log.cacheProceeding("retained.proceedings", 0, 4); err != nil {
+		t.Fatal(err)
+	}
+
+	log.Close()
+	log.Close()
+	if _, err := log.acquireCursor("new-topic", 0); !errors.Is(err, errKafkaLogClosed) {
+		t.Fatalf("cursor acquisition after Close = %v, want errKafkaLogClosed", err)
+	}
+	if _, err := log.acquireTransaction(Case{ID: "new-case"}); !errors.Is(err, errKafkaLogClosed) {
+		t.Fatalf("transaction acquisition after Close = %v, want errKafkaLogClosed", err)
+	}
+	log.mu.Lock()
+	defer log.mu.Unlock()
+	if log.consumers != nil || log.transactions != nil || log.proceedings != nil {
+		t.Fatal("Close retained a Kafka registry")
+	}
+}
+
+func TestCaseCreationRollbackTargetsEveryPreflightAbsentTopic(t *testing.T) {
+	c := Case{ID: "case-000000000000000000000001"}
+	all := c.AllTopics()
+	targets := caseCreationRollbackTargets(all)
+	if !slices.Equal(targets, all) {
+		t.Fatalf("rollback targets = %v, want all case topics %v", targets, all)
+	}
+	targets[0] = "changed"
+	if all[0] == "changed" {
+		t.Fatal("rollback target selection aliases its input")
 	}
 }
 

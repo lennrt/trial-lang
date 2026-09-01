@@ -26,8 +26,8 @@ const (
 
 // Deposition is one parsed .deposition file.
 type Deposition struct {
-	Program       string   // the .trial file deposed, as written after DEPOSITION OF:
-	Enacts        []string // statute files (Form S-1) to enact before the witness is filed, in order
+	Program       string   // .trial file named by DEPOSITION OF
+	Enacts        []string // Form S-1 files to enact before filing the program
 	Serves        []string
 	Proclamations []string
 	Records       []RecordExpect
@@ -35,21 +35,19 @@ type Deposition struct {
 	Citing        string // VERDICT/REJECTION CITING: the sealed particulars must contain this
 	AllowDays     int64  // court days the deposition may run; default 15
 
-	// EnactSources carries the text of each Enacts entry, in the same
-	// order. The parser records names; whoever can read files resolves
-	// them (LoadEnactments does it for path-relative depositions).
+	// EnactSources contains the source for each Enacts entry in the same order.
+	// LoadEnactments resolves paths relative to a deposition file.
 	EnactSources []string
 }
 
-// RecordExpect asserts the final reading of one record, compared in
-// its Display form, which is the only form the Court publishes.
+// RecordExpect compares a final record using its display form.
 type RecordExpect struct {
 	Name    string
 	Display string
 }
 
-// Result contains observed output and contradictions. An empty Contradictions
-// slice means the observed record matched the deposition.
+// Result contains observed output and mismatches. An empty Contradictions slice
+// means that the run matched the deposition.
 type Result struct {
 	Contradictions []string
 	Said           []string
@@ -66,6 +64,14 @@ func Parse(src string) (*Deposition, error) {
 	}
 	d := &Deposition{AllowDays: 15}
 	named := false
+	allowSet := false
+	setOutcome := func(outcome string, line int) error {
+		if d.Outcome != "" {
+			return fmt.Errorf("line %d: expected outcome is already %s", line, d.Outcome)
+		}
+		d.Outcome = outcome
+		return nil
+	}
 	for i, raw := range strings.Split(src, "\n") {
 		line := strings.TrimSpace(raw)
 		n := i + 1
@@ -73,16 +79,16 @@ func Parse(src string) (*Deposition, error) {
 			continue
 		}
 		if !strings.HasSuffix(line, ".") {
-			return nil, fmt.Errorf("line %d: a statement must end with a period; depositions are testimony, and testimony is sentences", n)
+			return nil, fmt.Errorf("line %d: statement must end with a period", n)
 		}
 		line = strings.TrimSuffix(line, ".")
 		if !named && !strings.HasPrefix(line, "DEPOSITION OF:") {
-			return nil, fmt.Errorf("line %d: a deposition must begin by naming the deposed: DEPOSITION OF: <file.trial>", n)
+			return nil, fmt.Errorf("line %d: first statement must be DEPOSITION OF: <file.trial>", n)
 		}
 		switch {
 		case strings.HasPrefix(line, "DEPOSITION OF:"):
 			if named {
-				return nil, fmt.Errorf("line %d: a deposition may name the deposed only once", n)
+				return nil, fmt.Errorf("line %d: DEPOSITION OF may appear only once", n)
 			}
 			program := strings.TrimSpace(strings.TrimPrefix(line, "DEPOSITION OF:"))
 			if program == "" {
@@ -94,7 +100,11 @@ func Parse(src string) (*Deposition, error) {
 			if len(d.Enacts) >= maxEnactments {
 				return nil, fmt.Errorf("line %d: a deposition may enact at most %d statutes", n, maxEnactments)
 			}
-			d.Enacts = append(d.Enacts, strings.TrimSpace(strings.TrimPrefix(line, "ENACT:")))
+			name := strings.TrimSpace(strings.TrimPrefix(line, "ENACT:"))
+			if name == "" {
+				return nil, fmt.Errorf("line %d: ENACT must name a file", n)
+			}
+			d.Enacts = append(d.Enacts, name)
 		case strings.HasPrefix(line, "SERVE:"):
 			if len(d.Serves) >= maxDepositionItems {
 				return nil, fmt.Errorf("line %d: a deposition may serve at most %d summonses", n, maxDepositionItems)
@@ -122,34 +132,59 @@ func Parse(src string) (*Deposition, error) {
 			if !ok {
 				return nil, fmt.Errorf("line %d: EXPECT RECORD name: value", n)
 			}
+			name = strings.TrimSpace(name)
+			if name == "" {
+				return nil, fmt.Errorf("line %d: EXPECT RECORD must name a record", n)
+			}
 			v, err := value(val, n)
 			if err != nil {
 				return nil, err
 			}
-			d.Records = append(d.Records, RecordExpect{Name: strings.TrimSpace(name), Display: v})
+			d.Records = append(d.Records, RecordExpect{Name: name, Display: v})
 		case line == "EXPECT ADJOURNMENT":
-			d.Outcome = "adjournment"
+			if err := setOutcome("adjournment", n); err != nil {
+				return nil, err
+			}
 		case line == "EXPECT APPARENT ACQUITTAL":
-			d.Outcome = "acquittal"
+			if err := setOutcome("acquittal", n); err != nil {
+				return nil, err
+			}
 		case line == "EXPECT VERDICT":
-			d.Outcome = "verdict"
-		case strings.HasPrefix(line, "EXPECT VERDICT CITING"):
-			d.Outcome = "verdict"
-			v, err := value(strings.TrimPrefix(line, "EXPECT VERDICT CITING"), n)
+			if err := setOutcome("verdict", n); err != nil {
+				return nil, err
+			}
+		case strings.HasPrefix(line, "EXPECT VERDICT CITING "):
+			if err := setOutcome("verdict", n); err != nil {
+				return nil, err
+			}
+			v, err := value(strings.TrimPrefix(line, "EXPECT VERDICT CITING "), n)
 			if err != nil {
 				return nil, err
+			}
+			if v == "" {
+				return nil, fmt.Errorf("line %d: EXPECT VERDICT CITING must name text", n)
 			}
 			d.Citing = v
 		case line == "EXPECT REJECTION":
-			d.Outcome = "rejection"
-		case strings.HasPrefix(line, "EXPECT REJECTION CITING"):
-			d.Outcome = "rejection"
-			v, err := value(strings.TrimPrefix(line, "EXPECT REJECTION CITING"), n)
+			if err := setOutcome("rejection", n); err != nil {
+				return nil, err
+			}
+		case strings.HasPrefix(line, "EXPECT REJECTION CITING "):
+			if err := setOutcome("rejection", n); err != nil {
+				return nil, err
+			}
+			v, err := value(strings.TrimPrefix(line, "EXPECT REJECTION CITING "), n)
 			if err != nil {
 				return nil, err
 			}
+			if v == "" {
+				return nil, fmt.Errorf("line %d: EXPECT REJECTION CITING must name text", n)
+			}
 			d.Citing = v
 		case strings.HasPrefix(line, "ALLOW "):
+			if allowSet {
+				return nil, fmt.Errorf("line %d: ALLOW may appear only once", n)
+			}
 			fields := strings.Fields(line)
 			if len(fields) != 4 || fields[0] != "ALLOW" || fields[2] != "COURT" || fields[3] != "DAYS" {
 				return nil, fmt.Errorf("line %d: ALLOW must be between 1 and %d COURT DAYS", n, maxAllowDays)
@@ -159,12 +194,13 @@ func Parse(src string) (*Deposition, error) {
 				return nil, fmt.Errorf("line %d: ALLOW must be between 1 and %d COURT DAYS", n, maxAllowDays)
 			}
 			d.AllowDays = days
+			allowSet = true
 		default:
-			return nil, fmt.Errorf("line %d: %q is not testimony this court recognizes", n, line)
+			return nil, fmt.Errorf("line %d: unknown deposition statement %q", n, line)
 		}
 	}
 	if !named {
-		return nil, errors.New("a deposition must begin by naming the deposed: DEPOSITION OF: <file.trial>")
+		return nil, errors.New("first statement must be DEPOSITION OF: <file.trial>")
 	}
 	return d, nil
 }
@@ -182,12 +218,12 @@ func value(s string, line int) (string, error) {
 		switch s[i] {
 		case '"':
 			if i != len(s)-1 {
-				return "", fmt.Errorf("line %d: the quotation closes before the statement does", line)
+				return "", fmt.Errorf("line %d: text follows the closing quotation", line)
 			}
 			return sb.String(), nil
 		case '\\':
 			if i+1 >= len(s) {
-				return "", fmt.Errorf("line %d: the testimony ends mid-escape", line)
+				return "", fmt.Errorf("line %d: quoted value ends after a backslash", line)
 			}
 			switch s[i+1] {
 			case '"':
@@ -199,7 +235,7 @@ func value(s string, line int) (string, error) {
 			case 't':
 				sb.WriteByte('\t')
 			default:
-				return "", fmt.Errorf("line %d: the escape '\\%c' is not recognized by this office", line, s[i+1])
+				return "", fmt.Errorf("line %d: unsupported escape '\\%c'", line, s[i+1])
 			}
 			i += 2
 			continue
@@ -208,12 +244,10 @@ func value(s string, line int) (string, error) {
 		}
 		i++
 	}
-	return "", fmt.Errorf("line %d: a quotation was opened and never closed", line)
+	return "", fmt.Errorf("line %d: unterminated quoted value", line)
 }
 
-// LoadEnactments resolves the ENACT clauses of a deposition read from
-// disk: each named statute file is read relative to dir and its text
-// entered in EnactSources, in order.
+// LoadEnactments reads ENACT files relative to dir into EnactSources.
 func LoadEnactments(d *Deposition, dir string) error {
 	if d == nil {
 		return errors.New("deposition is nil")
@@ -225,7 +259,7 @@ func LoadEnactments(d *Deposition, dir string) error {
 		path := filepath.Join(dir, name)
 		file, err := os.Open(path)
 		if err != nil {
-			return fmt.Errorf("the statute %q named for enactment could not be located: %w", name, err)
+			return fmt.Errorf("open statute %q: %w", name, err)
 		}
 		b, readErr := io.ReadAll(io.LimitReader(file, maxDepositionBytes+1))
 		closeErr := file.Close()
@@ -243,8 +277,8 @@ func LoadEnactments(d *Deposition, dir string) error {
 	return nil
 }
 
-// Run files and executes a deposition on a new in-memory log. It stops when
-// the case ends or the deposition's court-day limit expires.
+// Run files and executes a deposition on a new in-memory log until the case
+// ends or its time limit expires.
 func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	start := time.Now()
 	res := &Result{}
@@ -255,18 +289,18 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 
 	log := docket.NewMemoryLog()
 	if err := validateRunInputs(programSrc, d); err != nil {
-		contradict("the deposition is outside the runner's limits: %v", err)
+		contradict("invalid deposition: %v", err)
 		return res
 	}
 
-	// Enact incorporated statutes before filing the program.
+	// Enact dependencies before filing the program.
 	if len(d.Enacts) != len(d.EnactSources) {
-		contradict("the deposition names %d statute(s) to enact and %d source(s) were provided; the runner must resolve ENACT files (see LoadEnactments)", len(d.Enacts), len(d.EnactSources))
+		contradict("deposition names %d statute(s), but %d source(s) were loaded; call LoadEnactments first", len(d.Enacts), len(d.EnactSources))
 		return res
 	}
 	for i, src := range d.EnactSources {
 		if _, _, err := court.Enact(ctx, log, src); err != nil {
-			contradict("the statute %q could not be enacted: %v", d.Enacts[i], err)
+			contradict("enact statute %q: %v", d.Enacts[i], err)
 			return res
 		}
 	}
@@ -275,13 +309,13 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	if err != nil {
 		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
 			if d.Outcome != "rejection" {
-				contradict("the filing itself was rejected: %s", rej.Error())
+				contradict("filing rejected: %s", rej.Error())
 			} else if d.Citing != "" && !strings.Contains(rej.Particulars, d.Citing) {
 				contradict("the rejection cites %q; the deposition expected it to cite %q", rej.Particulars, d.Citing)
 			}
 			return res
 		}
-		contradict("the filing failed for reasons unrelated to its content: %v", err)
+		contradict("file program: %v", err)
 		return res
 	}
 	if d.Outcome == "rejection" {
@@ -291,7 +325,7 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 
 	for _, s := range d.Serves {
 		if _, err := log.Append(ctx, c.Summons(), nil, []byte(s)); err != nil {
-			contradict("a summons could not be served: %v", err)
+			contradict("serve summons: %v", err)
 			return res
 		}
 	}
@@ -299,8 +333,7 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	dctx, cancel := context.WithTimeout(ctx, time.Duration(d.AllowDays)*court.CourtDay)
 	defer cancel()
 
-	// Serve any cases commenced by the program, or actor-system depositions
-	// would block. The program's own case is proceeded below.
+	// Run cases created by the program while the main case proceeds below.
 	jctx, dismissJunior := context.WithCancel(dctx)
 	juniorGone := make(chan error, 1)
 	go func() {
@@ -312,18 +345,18 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	defer func() {
 		dismissJunior()
 		if err := <-juniorGone; err != nil {
-			contradict("the junior official failed: %v", err)
+			contradict("docket worker failed: %v", err)
 		}
 	}()
 
 	ct := &court.Court{Log: log, Case: c}
 	outcome, err := ct.Proceed(dctx)
 	if err != nil {
-		contradict("the proceedings failed for reasons other than guilt: %v", err)
+		contradict("proceed: %v", err)
 		return res
 	}
 	if dctx.Err() != nil && outcome == court.OutcomeAdjourned {
-		contradict("the deposition ran out of court days (%d allowed); the case had more to say, or nothing to say and no way to end", d.AllowDays)
+		contradict("deposition timed out after %d court days", d.AllowDays)
 		return res
 	}
 
@@ -340,7 +373,7 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 
 	recs, err := log.ReadAll(ctx, c.Proclamations())
 	if err != nil {
-		contradict("the gallery is closed: %v", err)
+		contradict("read proclamations: %v", err)
 		return res
 	}
 	var said []string
@@ -351,23 +384,23 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	for i := 0; i < len(said) || i < len(d.Proclamations); i++ {
 		switch {
 		case i >= len(said):
-			contradict("proclamation %d: the deposition expected %q; the witness had finished speaking", i+1, d.Proclamations[i])
+			contradict("proclamation %d: missing %q", i+1, d.Proclamations[i])
 		case i >= len(d.Proclamations):
-			contradict("proclamation %d: the witness volunteered %q; the deposition expected silence by then", i+1, said[i])
+			contradict("proclamation %d: unexpected %q", i+1, said[i])
 		case said[i] != d.Proclamations[i]:
-			contradict("proclamation %d: the witness said %q; the deposition expected %q", i+1, said[i], d.Proclamations[i])
+			contradict("proclamation %d: got %q; want %q", i+1, said[i], d.Proclamations[i])
 		}
 	}
 
 	st, err := court.Examine(ctx, log, c)
 	if err != nil {
-		contradict("the case file could not be examined: %v", err)
+		contradict("examine case: %v", err)
 		return res
 	}
 	for _, re := range d.Records {
 		v, ok := st.Records[re.Name]
 		if !ok {
-			contradict("there is no record of %q; there is, however, now a record of the deposition asking", re.Name)
+			contradict("record %q is missing", re.Name)
 			continue
 		}
 		if v.Display() != re.Display {

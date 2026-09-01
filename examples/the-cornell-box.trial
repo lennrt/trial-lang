@@ -1,58 +1,17 @@
 FORM K-1.
 IN THE MATTER OF: the-cornell-box.
-FILED BY: the visitor, admitted to the gallery on a day pass and not yet asked to leave.
-
-OFF THE RECORD: In the Gallery, the second entertainment. The-castle
-OFF THE RECORD: asked whether the machine could run DOOM; this asks
-OFF THE RECORD: whether it can hang the one painting every renderer is
-OFF THE RECORD: measured against. The Cornell box: a room with a red
-OFF THE RECORD: wall on the left, a green wall on the right, white
-OFF THE RECORD: everywhere else, two blocks on the floor (a tall one
-OFF THE RECORD: standing at the back-left, a short one squatting at
-OFF THE RECORD: the front-right, each turned a few degrees off square),
-OFF THE RECORD: and a light let into the ceiling. It is the still life
-OFF THE RECORD: of computer graphics, and here it is traced, not faked:
-OFF THE RECORD: one ray per pixel, cast from the eye through the image
-OFF THE RECORD: plane and intersected with the room and the two blocks
-OFF THE RECORD: by arithmetic alone, in a jurisdiction that owns no
-OFF THE RECORD: colour and no float and has learned to shade anyway.
-OFF THE RECORD:
-OFF THE RECORD: Every length is an integer, every angle an entry in the
-OFF THE RECORD: table of sines, every division truncated toward zero.
-OFF THE RECORD: The camera is a pinhole at a fixed point; each pixel
-OFF THE RECORD: fires a ray whose nearest intersection, among the five
-OFF THE RECORD: room walls and the two turned blocks, is found by
-OFF THE RECORD: solving for the ray parameter and keeping the least.
-OFF THE RECORD: A block is intersected in its own frame: the ray is
-OFF THE RECORD: rotated into the block's square, tested against a slab,
-OFF THE RECORD: and its surface normal rotated back out. The shade of
-OFF THE RECORD: the point is its reflectance times the light it can see:
-OFF THE RECORD: the cosine of the angle to the ceiling lamp, dimmed by
-OFF THE RECORD: distance, cut to a fifth where a block stands between
-OFF THE RECORD: the point and the lamp, lifted by a standing ambient
-OFF THE RECORD: that stands in for the light the walls bounce back. The
-OFF THE RECORD: red wall reflects less than the green, the green less
-OFF THE RECORD: than the white, so the three read apart as three greys
-OFF THE RECORD: without a label between them. That grey is then spent
-OFF THE RECORD: on a ramp of twenty-five glyphs, darkest to brightest,
-OFF THE RECORD: and the ramp is the only colour the Court will allow.
-OFF THE RECORD:
-OFF THE RECORD: PROCLAIM is the framebuffer: one proclamation, the
-OFF THE RECORD: whole canvas, `wide` by `tall`. It is set here to a size
-OFF THE RECORD: the chambers can develop in seconds and the deposition
-OFF THE RECORD: can hold; raise both to 256 and the same offices print
-OFF THE RECORD: the gallery's full 256 by 256 plate, in minutes, every
-OFF THE RECORD: pixel of it replayable, bit for bit, forever. There are
-OFF THE RECORD: no controls: a painting is not played, it is hung.
+OFF THE RECORD: Render a small Cornell box with integer ray tracing. The scene
+OFF THE RECORD: has five room surfaces, two rotated blocks, and one ceiling light.
+OFF THE RECORD: Angles come from sine tables and division truncates toward zero.
+OFF THE RECORD: Each pixel keeps the nearest intersection and maps its lighting
+OFF THE RECORD: value to an ASCII shade. PROCLAIM outputs one 16 by 8 framebuffer.
 
 INCORPORATE BY REFERENCE statutes-of-trigonometry.
 
 THE EXHIBIT OF strike, COMPRISING ok AND reach AND stuff AND nx AND ny AND nz.
 
 ARTICLE 1.
-    OFF THE RECORD: the record of the room and the instrument. Lengths
-    OFF THE RECORD: are integers; the room is 556 on a side, after the
-    OFF THE RECORD: measurements the discipline has always used. The ray
+    OFF THE RECORD: Room and camera values use fixed-point integers. The ray
     OFF THE RECORD: parameter is carried in sixty-five-thousandths so
     OFF THE RECORD: that division keeps its figures.
     LET IT BE RECORDED THAT sines IS THE FINDING OF the-table-of-sines.

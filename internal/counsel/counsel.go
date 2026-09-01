@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/lennrt/trial-lang/internal/gregor"
 )
@@ -74,6 +75,14 @@ func (s *Server) write(v rpcResponse) error {
 	return err
 }
 
+func (s *Server) respond(req *rpcRequest, response rpcResponse) error {
+	if len(req.ID) == 0 {
+		return nil
+	}
+	response.ID = req.ID
+	return s.write(response)
+}
+
 // readMessage reads one Content-Length framed message.
 func readMessage(r *bufio.Reader) ([]byte, error) {
 	length := -1
@@ -118,7 +127,7 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 		}
 	}
 	if length < 0 {
-		return nil, fmt.Errorf("a message arrived without a Content-Length; the mail room has standards")
+		return nil, errors.New("message has no Content-Length header")
 	}
 	if length > maxMessageBytes {
 		return nil, fmt.Errorf("Content-Length %d exceeds the %d-byte limit", length, maxMessageBytes)
@@ -169,9 +178,9 @@ func (s *Server) Serve(ctx context.Context) error {
 func (s *Server) handle(req *rpcRequest) error {
 	switch req.Method {
 	case "initialize":
-		return s.write(rpcResponse{ID: req.ID, Result: map[string]any{
+		return s.respond(req, rpcResponse{Result: map[string]any{
 			"capabilities": map[string]any{
-				"textDocumentSync":   1, // full: the Court does not accept partial filings
+				"textDocumentSync":   1, // full synchronization
 				"hoverProvider":      true,
 				"completionProvider": map[string]any{},
 			},
@@ -179,7 +188,7 @@ func (s *Server) handle(req *rpcRequest) error {
 		}})
 
 	case "shutdown":
-		return s.write(rpcResponse{ID: req.ID, Result: nil})
+		return s.respond(req, rpcResponse{Result: json.RawMessage("null")})
 
 	case "textDocument/didOpen":
 		var p struct {
@@ -245,11 +254,11 @@ func (s *Server) handle(req *rpcRequest) error {
 		}
 		word := wordAt(s.docs[p.TextDocument.URI], p.Position)
 		if text, ok := hoverText[word]; ok {
-			return s.write(rpcResponse{ID: req.ID, Result: map[string]any{
+			return s.respond(req, rpcResponse{Result: map[string]any{
 				"contents": map[string]any{"kind": "markdown", "value": text},
 			}})
 		}
-		return s.write(rpcResponse{ID: req.ID, Result: nil})
+		return s.respond(req, rpcResponse{Result: json.RawMessage("null")})
 
 	case "textDocument/completion":
 		var p struct {
@@ -270,7 +279,7 @@ func (s *Server) handle(req *rpcRequest) error {
 				"detail": c.detail,
 			})
 		}
-		return s.write(rpcResponse{ID: req.ID, Result: items})
+		return s.respond(req, rpcResponse{Result: items})
 	}
 
 	// Unknown notifications receive no reply, as JSON-RPC requires.
@@ -308,19 +317,12 @@ func (s *Server) storeDocument(uri, text string, mustExist bool) error {
 	if len(text) > maxDocumentBytes {
 		return fmt.Errorf("document exceeds %d bytes", maxDocumentBytes)
 	}
-	old, exists := s.docs[uri]
+	_, exists := s.docs[uri]
 	if mustExist && !exists {
 		return errors.New("document is not open")
 	}
 	if !exists && len(s.docs) >= maxDocuments {
 		return fmt.Errorf("at most %d documents may be open", maxDocuments)
-	}
-	total := len(text) - len(old)
-	for _, document := range s.docs {
-		total += len(document)
-	}
-	if total > maxDocuments*maxDocumentBytes {
-		return fmt.Errorf("open documents exceed %d bytes", maxDocuments*maxDocumentBytes)
 	}
 	s.docs[uri] = text
 	return nil
@@ -372,15 +374,44 @@ func Diagnose(src string) []map[string]any {
 	if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
 		line, col, msg = rej.Line, rej.Col, rej.Particulars
 	}
+	start, end := diagnosticRange(src, line, col)
 	return []map[string]any{{
 		"range": map[string]any{
-			"start": position{Line: line - 1, Character: col - 1},
-			"end":   position{Line: line - 1, Character: col},
+			"start": start,
+			"end":   end,
 		},
 		"severity": 1,
 		"source":   "gregor",
-		"message":  msg + " (Your filing would be rejected pursuant to Article §4.2.)",
+		"message":  msg + " (Filing would be rejected pursuant to Article §4.2.)",
 	}}
+}
+
+// Gregor reports one-based byte columns; LSP uses zero-based UTF-16 columns.
+func diagnosticRange(src string, line, column int) (position, position) {
+	lines := strings.Split(src, "\n")
+	line--
+	if line < 0 || line >= len(lines) {
+		return position{}, position{}
+	}
+	text := lines[line]
+	byteColumn := min(max(column-1, 0), len(text))
+	units := 0
+	for _, r := range text[:byteColumn] {
+		units++
+		if r > 0xffff {
+			units++
+		}
+	}
+	start := position{Line: line, Character: units}
+	end := start
+	if byteColumn < len(text) {
+		end.Character++
+		r, _ := utf8.DecodeRuneInString(text[byteColumn:])
+		if r > 0xffff {
+			end.Character++
+		}
+	}
+	return start, end
 }
 
 func (s *Server) publishDiagnostics(uri string) error {
@@ -443,51 +474,51 @@ func utf16ColumnToByteOffset(line string, column int) (int, bool) {
 
 // hoverText returns reference text for a keyword.
 var hoverText = map[string]string{
-	"FORM":            "**The form declaration.** `FORM K-1.` opens a case; `FORM K-2.` is a supplemental filing for a live case; `FORM S-1.` is a statute, offered for enactment. Filings on any other form are rejected pursuant to Article §4.2. — spec §13.2",
+	"FORM":            "**Form declaration.** `FORM K-1.` opens a case; `FORM K-2.` is a supplemental filing for a live case; `FORM S-1.` defines a statute. — spec §13.2",
 	"PROCLAIM":        "**Output.** `PROCLAIM expr.` appends the value's transcript to the proclamations topic (stdout). — spec §11.3",
-	"AWAIT":           "**Input.** `AWAIT SUMMONS, FILED UNDER x.` blocks on the summons topic; input is served upon you. `AWAIT SUMMONS FOR AT MOST n DAYS, …. FAILING WHICH, ….` is the receive with a deadline. `AWAIT SUMMONS FROM c, ….` is the selective receive: the first notice bearing case c's seal, out of turn; the records passed over keep their turn (also combines with FOR AT MOST). `AWAIT THE GAZETTE, FILED UNDER x.` reads the court-wide gazette at this case's cursor. — spec §11.4, §11.4a, §11.4b, §11.14",
+	"AWAIT":           "**Input.** `AWAIT SUMMONS, FILED UNDER x.` blocks on the summons topic. `AWAIT SUMMONS FOR AT MOST n DAYS, …. FAILING WHICH, ….` adds a deadline. `AWAIT SUMMONS FROM c, ….` selectively receives the first input from case c; skipped records keep their order. `AWAIT THE GAZETTE, FILED UNDER x.` reads the court-wide gazette at this case's cursor. — spec §11.4, §11.4a, §11.4b, §11.14",
 	"SUMMONS":         "**Input.** The summons topic stores case input. `AWAIT SUMMONS` consumes according to the case attention. — spec §11.4",
 	"GAZETTE":         "**Court-wide broadcast.** `PUBLISH v IN THE GAZETTE.` writes within the execution-step transaction. `AWAIT THE GAZETTE, FILED UNDER x.` uses a per-case cursor. — spec §11.14",
 	"PUBLISH":         "**Broadcast.** `PUBLISH v IN THE GAZETTE.` appends the transcript to the one court-wide gazette topic, inside this step's transaction. — spec §11.14",
 	"SHOULD":          "**The conditional.** `SHOULD cond, stmt.` and optionally `FAILING WHICH, stmt.` Connectives: `AND ALSO`, `OR IN THE ALTERNATIVE`; every clause is heard (no short-circuit). — spec §11.5",
 	"FAILING":         "**Else branch.** `FAILING WHICH, stmt.` follows the consequence's period and attaches to the nearest SHOULD or timed AWAIT. — spec §11.5, §11.4a",
-	"REFER":           "**The jump.** `REFER TO ARTICLE n.` (case in chief) or `REFER TO SECTION n.` (within an office) compiles to a seek() on the proceedings topic. — spec §11.6",
-	"ARTICLE":         "**Case label.** Execution begins at the first article and falls through. Compilation resolves article labels to offsets. — spec §13.3",
+	"REFER":           "**The jump.** `REFER TO ARTICLE n.` (case in chief) or `REFER TO SECTION n.` (within an office) sets the logical program counter to the target instruction. — spec §11.6",
+	"ARTICLE":         "**Case label.** Execution begins at the first article and falls through. Compilation resolves article labels to logical instruction addresses. — spec §13.3",
 	"SECTION":         "**Office label.** `REFER TO SECTION` can reach a section only from the same office. — spec §12",
 	"PETITION":        "**The call.** `PETITION THE OFFICE OF name WITH args.` opens a frame on the appeals topic. As an expression: `THE FINDING OF name REGARDING args`. Dynamic, through a power of attorney: `PETITION UNDER p WITH args.` / `THE FINDING UNDER p REGARDING args`. — spec §11.7, §12, §12.5",
 	"ATTORNEY":        "**The office as a value.** `A POWER OF ATTORNEY OVER THE OFFICE OF f`: the right to petition f, wherever the instrument travels within the case. Exercised with PETITION UNDER / THE FINDING UNDER; enforceable only in the case that executed it. — spec §12.5",
-	"REMAND":          "**The return.** `REMAND.` or `REMAND WITH expr.` Outside an office it is a verdict: there is no higher court. — spec §11.7",
+	"REMAND":          "**Return.** `REMAND.` or `REMAND WITH expr.` Outside an office, REMAND produces a verdict. — spec §11.7",
 	"ADJOURN":         "**Stop or delay execution.** `ADJOURN INDEFINITELY.` stops until amendment. `ADJOURN FOR n DAYS.` records a deadline. One court day is one second. — spec §11.8",
-	"HOLD":            "**The deliberate verdict.** `HOLD expr IN CONTEMPT.` — a verdict, on purpose, with the value as the sealed particulars. — spec §11.9",
+	"HOLD":            "**Explicit verdict.** `HOLD expr IN CONTEMPT.` records a verdict with the value as its sealed details. — spec §11.9",
 	"CONTEMPT":        "**See HOLD.** The expression is evaluated, displayed, and stored as verdict details. — spec §11.9",
 	"STRIKE":          "**Delete a record value.** `STRIKE x FROM THE RECORD.` writes a Kafka tombstone. — spec §11.10",
 	"SERVE":           "**Cross-case output.** `SERVE NOTICE OF v UPON w.` appends to case w's summons topic within the execution-step transaction. Self-service is allowed. — spec §11.11",
 	"COMMENCE":        "**Spawn.** `COMMENCE PROCEEDINGS UPON src, FILED UNDER c.` files a new case from a Form K-1 string; the number is ledgered, so replay opens nothing twice. — spec §11.12",
 	"JUDGMENT":        "**External verdict.** `ENTER JUDGMENT AGAINST c, ON THE GROUNDS OF g.` writes a verdict within the current step. The current case must have created c. Case c stops before its next step. — spec §11.12a",
-	"MOTION":          "**Verdict interception, once.** `FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE GROUNDS FILED UNDER g].` The fee is everything in evidence. — spec §11.13",
+	"MOTION":          "**One-time verdict interception.** `FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE GROUNDS FILED UNDER g].` Filing clears the operand stack. — spec §11.13",
 	"RECONSIDER":      "**See MOTION.** A case can intercept its first eligible verdict. The operation clears the dossier. — spec §11.13",
 	"INCORPORATE":     "**Import.** `INCORPORATE BY REFERENCE statute.` compiles the latest statute version into the filing. Imports are transitive. — spec §13.2a",
-	"HEREINAFTER":     "**A defined term.** `HEREINAFTER, k SHALL MEAN literal.` Compile-time substitution; the meaning, once assigned, is not revisited. — spec §5",
+	"HEREINAFTER":     "**Defined term.** `HEREINAFTER, k SHALL MEAN literal.` The compiler substitutes the literal at each use. — spec §5",
 	"EXHIBIT":         "**A struct.** Declare `THE EXHIBIT OF name, COMPRISING a AND b.`; offer `AN EXHIBIT OF name WHEREIN a IS 1 AND b IS 2`; inspect `THE a ENTERED IN x`. Value semantics, deep equality. — spec §8",
-	"SCHEDULE":        "**A list.** `A SCHEDULE COMPRISING …` / `AN EMPTY SCHEDULE`; `THE ITEM AT i IN s`, `ANNEX e TO s.`, `SUBSTITUTE e FOR ITEM i OF s.` 1-indexed; lawyers count from one. — spec §8.1",
+	"SCHEDULE":        "**List.** `A SCHEDULE COMPRISING …` / `AN EMPTY SCHEDULE`; `THE ITEM AT i IN s`, `ANNEX e TO s.`, `SUBSTITUTE e FOR ITEM i OF s.` Indices start at one. — spec §8.1",
 	"ANNEX":           "**Append to a schedule.** `ANNEX expr TO s.` retrieves a copy, extends it, files it back. — spec §8.1",
 	"SUBSTITUTE":      "**Replace in a schedule.** `SUBSTITUTE expr FOR ITEM i OF s.` — spec §8.1",
 	"REGISTER":        "**A map.** `A REGISTER COMPRISING v UNDER k AND …` / `AN EMPTY REGISTER`; `THE ENTRY UNDER k IN r`, `INSCRIBE v UNDER k IN r.`, `EXPUNGE THE ENTRY UNDER k IN r.`, `THE ROSTER OF r` (the keys, alphabetically). Keys are strings; an absent entry is a verdict. — spec §8.2",
 	"INSCRIBE":        "**Enter in a register.** `INSCRIBE v UNDER k IN r.` retrieves a copy, amends it, files it back. — spec §8.2",
-	"EXPUNGE":         "**Remove from a register.** `EXPUNGE THE ENTRY UNDER k IN r.`; expunging what is not there succeeds vacuously. — spec §8.2",
+	"EXPUNGE":         "**Remove from a register.** `EXPUNGE THE ENTRY UNDER k IN r.` Missing keys are ignored. — spec §8.2",
 	"ROSTER":          "**Register keys.** Returns a schedule of keys in alphabetical order. — spec §8.2",
 	"ENTRY":           "**One entry of a register.** `THE ENTRY UNDER k IN r`; an absent entry is a verdict — consult THE ROSTER OF r first. — spec §8.2",
-	"DISCRETION":      "**Randomness.** `THE DISCRETION OF THE COURT BETWEEN a AND b`: an integer, inclusive; the draw is ledgered, so replay repeats it. Arbitrary, not capricious. — spec §10.8",
+	"DISCRETION":      "**Randomness.** `THE DISCRETION OF THE COURT BETWEEN a AND b` returns an integer in the inclusive range. The draw is recorded so replay repeats it. — spec §10.8",
 	"PRESENTS":        "**The clock.** `THE DATE OF THESE PRESENTS`: now, in court days since the epoch; the reading is ledgered. — spec §10.8",
 	"STANDING":        "**Supervision.** `THE STANDING OF c`: `GUILTY`, `IN GOOD STANDING`, or `NO MATTER ON FILE`, read through the ledger so replay holds. — spec §10.11",
 	"RECORD":          "**Discovery (in expressions).** `THE RECORD name IN THE MATTER OF c` reads another case's record, read-only, through the ledger. Absence is a verdict; ask THE STANDING OF first. — spec §10.12",
 	"ARCHIVE":         "**Files.** `COMMIT v TO THE ARCHIVE AS \"name\".` and `THE DOCUMENT \"name\" FROM THE ARCHIVE`: immutable versions, catalog points at the current one. — spec §10.9",
 	"DOCUMENT":        "**Retrieval from the archive.** `THE DOCUMENT expr FROM THE ARCHIVE`: the cataloged version. — spec §10.9",
-	"LETTERS":         "**Intellectual property.** `LET LETTERS PATENT ISSUE FOR name, DISCLOSING v, FOR A TERM OF n DAYS.` First to file is an offset comparison. — spec §10.10",
+	"LETTERS":         "**Patent grant.** `LET LETTERS PATENT ISSUE FOR name, DISCLOSING v, FOR A TERM OF n DAYS.` Filing order is determined by topic offsets. — spec §10.10",
 	"PATENT":          "**See LETTERS.** An existing in-force filing causes a verdict. Expired filings allow a new grant. — spec §10.10",
-	"GRANT":           "**A shared borrow.** `GRANT A LICENSE UNDER x TO c, FOR A TERM OF n DAYS.` — holder-only; read-only practice for the licensee; a license may not outlive the letters it derives from. — spec §10.10a",
+	"GRANT":           "**License.** `GRANT A LICENSE UNDER x TO c, FOR A TERM OF n DAYS.` Only the holder can grant it; the licensee gets read-only practice, and the license cannot outlive the patent. — spec §10.10a",
 	"LICENSE":         "**See GRANT.** Licenses allow read-only practice until their recorded expiry. — spec §10.10a",
-	"ASSIGN":          "**A move.** `ASSIGN THE LETTERS FOR x TO c.` — the old holder's practice becomes use-after-assignment infringement; refused while licenses are outstanding (nothing moves while it is borrowed); visible misuse is rejected at filing by the examiner. — spec §10.10a",
+	"ASSIGN":          "**Transfer.** `ASSIGN THE LETTERS FOR x TO c.` transfers a patent and is refused while licenses are outstanding. The previous holder can no longer practice it. — spec §10.10a",
 	"PRACTICE":        "**Use of an invention.** `THE PRACTICE OF name`: the disclosure to the holder, infringement to everyone else while the term runs. — spec §10.10",
 	"TRANSCRIPT":      "**To string.** `THE TRANSCRIPT OF v`: any value, rendered as PROCLAIM would publish it. — spec §10.5",
 	"LENGTH":          "**Measure.** `THE LENGTH OF v`: characters of a string, entries of an exhibit, items of a schedule. — spec §10.5",
@@ -496,9 +527,9 @@ var hoverText = map[string]string{
 	"SUSTAINED":       "**The affirmative finding** (true). Findings come from comparisons and return from offices. — spec §7",
 	"OVERRULED":       "**The negative finding** (false). — spec §7",
 	"OFF":             "**Comment.** `OFF THE RECORD: …` continues to the end of the line. The filing topic still stores the source text. — spec §4.2",
-	"CASE":            "**Self-reference.** `THE CASE AT BAR`: this case's own number, a string; the one thing it was told. — spec §10.8",
-	"NOTWITHSTANDING": "**Remainder.** `a NOTWITHSTANDING b`: what remains of a, b notwithstanding. Zero notwithstanding: GUILTY. — spec §10.2",
-	"APPORTIONED":     "**Division.** `a APPORTIONED AMONG b`: integer division toward zero; among zero parties: GUILTY. — spec §10.2",
+	"CASE":            "**Self-reference.** `THE CASE AT BAR` returns this case's number as a string. — spec §10.8",
+	"NOTWITHSTANDING": "**Remainder.** `a NOTWITHSTANDING b` computes the integer remainder. A zero divisor produces a verdict. — spec §10.2",
+	"APPORTIONED":     "**Division.** `a APPORTIONED AMONG b` performs integer division toward zero. A zero divisor produces a verdict. — spec §10.2",
 }
 
 type completion struct{ label, detail string }

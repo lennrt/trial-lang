@@ -1,5 +1,5 @@
 # vhs docs/the-castle.tape (from the repository root)
-# Records the deposition playback used in the README demo.
+# Records the deposition playback.
 Output docs/the-castle.gif
 
 Set Shell bash

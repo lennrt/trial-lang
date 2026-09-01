@@ -1,6 +1,5 @@
 # vhs docs/the-procession.tape (from the repository root)
-# A deliberately legible realtime demonstration: one durable state transition
-# per frame, redrawn in place instead of scrolling a raycaster past the viewer.
+# One state transition per frame, redrawn in place.
 Output docs/the-procession.gif
 
 Set Shell bash

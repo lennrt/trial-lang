@@ -34,8 +34,18 @@ These behaviors affect storage, security, configuration, and wire boundaries.
 
 The change does not alter triallang bytecode tags or stored JSON tags.
 
-The internal `docket.Log` interface gains `AppendBatch`. The package is under
-`internal`, so external Go modules cannot implement it.
+It does change the meaning of stored program-counter and bytecode-address
+numbers from physical Kafka offsets to visible instruction positions. Released
+cases written with nontransactional proceedings remain compatible because
+their physical and logical numbers are equal. Cases amended by an interim
+Unreleased build that combined transactional paperwork with physical-offset
+program counters must be refiled; the stored numbers do not contain enough
+information for a reliable automatic migration.
+
+The internal `docket.Log` interface gains `AppendBatch` and
+`FetchProceeding`. The latter resolves a logical instruction number separately
+from generic physical topic offsets. The package is under `internal`, so
+external Go modules cannot implement it.
 
 `docket.NewCase` now returns an error. The function is also internal.
 
@@ -53,6 +63,18 @@ state or use a narrower operation.
 
 Kafka paperwork batches create a short-lived transactional producer. This adds
 broker setup cost to a batch and removes prefix writes.
+
+An unconfirmed paperwork transaction is not rolled back speculatively. In
+particular, an ambiguous initial filing returns its minted case identifier and
+leaves the topics intact so the caller can inspect them before retrying.
+Topic-creation and failed-cleanup paths also return the minted identifier when
+an incomplete case may remain. A definite population failure followed by
+successful cleanup returns no case.
+
+Filing and amendment remain atomic even though their Kafka transactions add
+invisible control records to proceedings. Program counters and bytecode targets
+are positions among visible committed instructions; only the nonauthoritative
+consumer-group mirror is translated back to a physical Kafka cursor.
 
 Concurrent amendments to one case remain unsupported. A future storage ADR
 must define an expected-end compare before that guarantee can change.

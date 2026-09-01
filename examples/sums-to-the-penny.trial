@@ -1,9 +1,7 @@
 FORM K-1.
 IN THE MATTER OF: the-invoice.
-OFF THE RECORD: sums are fixed-point decimals with exactly two figures
-OFF THE RECORD: after the point. No IEEE float is ever consulted; the
-OFF THE RECORD: Court computes to the penny, truncates toward zero,
-OFF THE RECORD: and rounds in no one's favor.
+OFF THE RECORD: Sums are fixed-point decimals with two fractional digits.
+OFF THE RECORD: Arithmetic uses integer hundredths and truncates toward zero.
 HEREINAFTER, the-hourly-rate SHALL MEAN 19.99.
 
 ARTICLE 1.

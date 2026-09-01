@@ -2,11 +2,38 @@ package court
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
 	"github.com/lennrt/trial-lang/internal/docket"
 )
+
+type hearingFailureLog struct {
+	*docket.MemoryLog
+	commitErr     error
+	readErr       error
+	failReadTopic string
+	committed     bool
+}
+
+func (l *hearingFailureLog) Commit(ctx context.Context, c docket.Case, step docket.Step) error {
+	if l.commitErr != nil {
+		return l.commitErr
+	}
+	if err := l.MemoryLog.Commit(ctx, c, step); err != nil {
+		return err
+	}
+	l.committed = true
+	return nil
+}
+
+func (l *hearingFailureLog) ReadAll(ctx context.Context, topic string) ([]docket.Record, error) {
+	if l.committed && topic == l.failReadTopic {
+		return nil, l.readErr
+	}
+	return l.MemoryLog.ReadAll(ctx, topic)
+}
 
 func TestAmendRevivesApparentAcquittal(t *testing.T) {
 	// No ADJOURN: the case runs out of proceedings and blocks, then
@@ -146,6 +173,85 @@ func TestHearing(t *testing.T) {
 	}
 	if verdict == nil || verdict.Verdict != "GUILTY" {
 		t.Fatalf("expected a verdict, got %v", verdict)
+	}
+}
+
+func TestHearingDoesNotMistakeArticleTextForAHeading(t *testing.T) {
+	log := docket.NewMemoryLog()
+	h, err := OpenHearing(t.Context(), log)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	out, verdict, err := h.Submit(t.Context(), `OFF THE RECORD: ARTICLE is just text.
+PROCLAIM "ARTICLE".`)
+	if err != nil || verdict != nil {
+		t.Fatalf("submission: out=%q verdict=%v err=%v", out, verdict, err)
+	}
+	if len(out) != 1 || out[0] != "ARTICLE" {
+		t.Fatalf("proclaimed %q, want [ARTICLE]", out)
+	}
+}
+
+func TestHearingDoesNotInviteResubmissionAfterExecutionFailure(t *testing.T) {
+	memory := docket.NewMemoryLog()
+	h, err := OpenHearing(t.Context(), memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := memory.ReadAll(t.Context(), h.Case.Proceedings())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	executionErr := errors.New("execution unavailable")
+	h.Log = &hearingFailureLog{MemoryLog: memory, commitErr: executionErr}
+	_, _, err = h.Submit(t.Context(), `PROCLAIM "already filed".`)
+	if !errors.Is(err, executionErr) {
+		t.Fatalf("Submit error = %v, want %v", err, executionErr)
+	}
+	for _, text := range []string{h.Case.ID, "already filed", "resume", "do not resubmit"} {
+		if !strings.Contains(err.Error(), text) {
+			t.Fatalf("Submit error = %q, want %q", err, text)
+		}
+	}
+	after, readErr := memory.ReadAll(t.Context(), h.Case.Proceedings())
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if len(after) <= len(before) {
+		t.Fatal("submission was not filed before the injected execution failure")
+	}
+}
+
+func TestHearingDoesNotInviteResubmissionAfterOutputReadFailure(t *testing.T) {
+	memory := docket.NewMemoryLog()
+	h, err := OpenHearing(t.Context(), memory)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	readErr := errors.New("output unavailable")
+	h.Log = &hearingFailureLog{
+		MemoryLog:     memory,
+		readErr:       readErr,
+		failReadTopic: h.Case.Proclamations(),
+	}
+	_, _, err = h.Submit(t.Context(), `PROCLAIM "committed output".`)
+	if !errors.Is(err, readErr) {
+		t.Fatalf("Submit error = %v, want %v", err, readErr)
+	}
+	for _, text := range []string{h.Case.ID, "already filed", "resume", "do not resubmit"} {
+		if !strings.Contains(err.Error(), text) {
+			t.Fatalf("Submit error = %q, want %q", err, text)
+		}
+	}
+	records, outputErr := memory.ReadAll(t.Context(), h.Case.Proclamations())
+	if outputErr != nil {
+		t.Fatal(outputErr)
+	}
+	if len(records) != 1 || string(records[0].Value) != "committed output" {
+		t.Fatalf("committed output = %+v", records)
 	}
 }
 

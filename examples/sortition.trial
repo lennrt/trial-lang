@@ -1,9 +1,7 @@
 FORM K-1.
 IN THE MATTER OF: sortition.
-OFF THE RECORD: counsel is assigned by lot. The lot is not appealable.
-OFF THE RECORD: The draw is pushed to the dossier like any value, so it
-OFF THE RECORD: survives crashes; a reenactment draws afresh, which the
-OFF THE RECORD: spec admits out loud (see spec.md, the discretion note).
+OFF THE RECORD: Assign counsel with a random value. The ledger records the
+OFF THE RECORD: draw and clock reading so a reenactment uses the same values.
 
 ARTICLE 1.
     LET IT BE RECORDED THAT counsel IS THE DISCRETION OF THE COURT BETWEEN 1 AND 6.

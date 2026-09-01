@@ -69,7 +69,7 @@ type TimedSummons struct { // AWAIT SUMMONS [FROM expr] FOR AT MOST expr DAYS, F
 	From Expr // nil: the next record, whoever served it; else the case whose voice is awaited
 	Days Expr
 	Name string
-	Else Stmt // mandatory: a deadline without a contingency is not a deadline
+	Else Stmt // required timeout branch
 	Line int
 }
 type Referral struct { // REFER TO ARTICLE n. / REFER TO SECTION n.
@@ -80,7 +80,7 @@ type Referral struct { // REFER TO ARTICLE n. / REFER TO SECTION n.
 type Conditional struct { // SHOULD cond, stmt [FAILING WHICH, stmt]
 	Cond Cond
 	Then Stmt
-	Else Stmt // nil when nothing follows from failure, which is rare
+	Else Stmt // nil when there is no failure branch
 	Line int
 }
 type Entering struct { // LET IT BE ENTERED IN name THAT field IS expr.
@@ -95,7 +95,7 @@ type Petition struct { // PETITION THE OFFICE OF name WITH args.
 	Line   int
 }
 type Remand struct { // REMAND. / REMAND WITH expr.
-	Value Expr // nil when the office simply stops corresponding
+	Value Expr // nil for a bare REMAND
 	Line  int
 }
 type Adjourn struct { // ADJOURN INDEFINITELY.
@@ -168,7 +168,7 @@ type Commence struct { // COMMENCE PROCEEDINGS UPON expr, FILED UNDER name.
 }
 type Motion struct { // FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE GROUNDS FILED UNDER name].
 	Article int64
-	Grounds string // "" when the movant does not care why
+	Grounds string // empty when no record receives the grounds
 	Line    int
 }
 type Publish struct { // PUBLISH expr IN THE GAZETTE.
@@ -254,7 +254,7 @@ func (CondBinary) cond() {}
 type Expr interface{ expr() }
 
 type IntLit struct{ Val int64 }
-type SumLit struct{ Mantissa int64 } // 12.50, held in pennies; no float was consulted
+type SumLit struct{ Mantissa int64 } // fixed-point hundredths
 type StrLit struct{ Val string }
 type FindingLit struct{ Val bool } // SUSTAINED / OVERRULED
 type Var struct {
@@ -302,10 +302,10 @@ type SumCertain struct { // THE SUM CERTAIN OF factor
 	Of   Expr
 	Line int
 }
-type CaseAtBar struct { // THE CASE AT BAR: this case's own number
+type CaseAtBar struct { // THE CASE AT BAR: current case number
 	Line int
 }
-type Presents struct { // THE DATE OF THESE PRESENTS: now, in court days since the epoch
+type Presents struct { // THE DATE OF THESE PRESENTS: court days since the Unix epoch
 	Line int
 }
 type ScheduleLit struct { // A SCHEDULE COMPRISING e AND e / AN EMPTY SCHEDULE
@@ -351,7 +351,7 @@ type DocumentFrom struct { // THE DOCUMENT expr FROM THE ARCHIVE
 	Name Expr
 	Line int
 }
-type Practice struct { // THE PRACTICE OF name: the disclosure, if you may
+type Practice struct { // THE PRACTICE OF name: accessible disclosure
 	Name string
 	Line int
 }

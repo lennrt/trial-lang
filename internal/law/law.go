@@ -41,39 +41,39 @@ const (
 	OpExcerpt         = "EXCERPT"          // pop j, i, s; push s[i..j], 1-indexed, inclusive (AN EXCERPT OF)
 	OpTranscribe      = "TRANSCRIBE"       // pop any value; push its display string (THE TRANSCRIPT OF)
 	OpSumCertain      = "SUM-CERTAIN"      // pop a string or int; push the integer it denotes (THE SUM CERTAIN OF)
-	OpContempt        = "CONTEMPT"         // pop a value; a verdict, deliberately, with the value as particulars
+	OpContempt        = "CONTEMPT"         // pop a value and produce a verdict with it as the particulars
 	OpStrike          = "STRIKE"           // strike the record Name: a tombstone in the records topic
 	OpServe           = "SERVE"            // pop respondent case number, pop notice; append the notice to the respondent's summons topic
 	OpCaseAtBar       = "CASE-AT-BAR"      // push this case's own case number, as a string
 	OpContinuance     = "CONTINUANCE"      // pop a number of days; the matter is continued (a durable timer)
 	OpDiscretion      = "DISCRETION"       // pop upper, lower; push an integer selected at the Court's discretion, inclusive
-	OpPresents        = "DATE-OF-PRESENTS" // push the current date, in court days since the epoch
+	OpPresents        = "DATE-OF-PRESENTS" // push the current court day since the epoch
 	OpSchedule        = "SCHEDULE"         // pop Count values; push a schedule of them, in filing order
 	OpItem            = "ITEM"             // pop index, pop schedule; push the item at that 1-based position
 	OpAnnex           = "ANNEX"            // pop value, pop schedule; push the schedule with the value annexed at the end
 	OpSubstitute      = "SUBSTITUTE"       // pop value, pop index, pop schedule; push the schedule with the item at index replaced
 	OpArchive         = "ARCHIVE"          // pop name, pop value; enter the value in the archive and repoint the catalog
 	OpDocument        = "DOCUMENT"         // pop name; push the current version of the document so cataloged
-	OpPatent          = "PATENT"           // pop term (days), pop disclosure; let letters patent issue for Name, or a verdict
-	OpPractice        = "PRACTICE"         // push the disclosure of the invention Name, if you may; a verdict if you may not
+	OpPatent          = "PATENT"           // pop term and disclosure; issue the patent named by Name or produce a verdict
+	OpPractice        = "PRACTICE"         // push the disclosure named by Name when the case may practice it
 	OpCommence        = "COMMENCE"         // pop a Form K-1 source string; open a new case upon it; push the new case number
 	OpStanding        = "STANDING"         // pop a case number; push its standing: GUILTY, IN GOOD STANDING, or NO MATTER ON FILE
-	OpMotion          = "MOTION"           // place a motion to reconsider on file: Target is where reconsideration resumes; Name, if set, is the record the grounds are filed under
+	OpMotion          = "MOTION"           // file a motion; Target resumes execution and Name optionally receives the grounds
 	OpAwaitFor        = "AWAIT-FOR"        // pop a term in days; await a summons for at most that long. Served: push it and fall through. Expired: refer to Target. The outcome is entered in the ledger
-	OpDiscovery       = "DISCOVERY"        // pop a case number; push that case's record Name. The reading is entered in the ledger
+	OpDiscovery       = "DISCOVERY"        // pop a case number; push its record Name and record the read in the ledger
 	OpPublish         = "PUBLISH"          // pop a value; publish its transcript in the court-wide gazette, within the step's transaction
 	OpAwaitGazette    = "AWAIT-GAZETTE"    // block at this case's gazette cursor; push the next edition; the cursor advances with the step
-	OpLicense         = "LICENSE"          // pop term (days), pop licensee; grant a license under the letters Name: shared, read-only practice, capped by the letters' own term
-	OpAssign          = "ASSIGN"           // pop assignee; assign the letters Name: the holder changes, the old holder's practice becomes infringement. Refused while licenses are outstanding
+	OpLicense         = "LICENSE"          // pop term and licensee; grant read-only practice, capped by the patent term
+	OpAssign          = "ASSIGN"           // pop assignee; transfer Name when no licenses remain outstanding
 	OpAwaitFrom       = "AWAIT-FROM"       // pop a case number; await the next summons bearing that case's seal, out of turn; push what is served. The records passed over await their own turn
 	OpAwaitFromFor    = "AWAIT-FROM-FOR"   // pop a term in days, pop a case number; the selective receive with a deadline. Served: push it and fall through. Expired: refer to Target. The outcome is entered in the ledger
 	OpInscribe        = "INSCRIBE"         // pop value, pop key, pop register; push the register with the value inscribed under the key
-	OpEntry           = "ENTRY"            // pop key, pop register; push the entry under that key. An absent entry is a verdict
-	OpExpunge         = "EXPUNGE"          // pop key, pop register; push the register without the entry under that key. Expunging what is not there succeeds vacuously
+	OpEntry           = "ENTRY"            // pop key and register; push the entry or produce a verdict when absent
+	OpExpunge         = "EXPUNGE"          // pop key and register; push a copy without that key
 	OpRoster          = "ROSTER"           // pop a register; push a schedule of its keys, in alphabetical order
 	OpPower           = "POWER"            // push a power of attorney over the office at Target: Name, Params, and the executing case travel with it
 	OpPetitionUnder   = "PETITION-UNDER"   // pop Count args, pop a power of attorney; open a frame and jump to the office it confers. Wants says whether a finding is expected back
-	OpJudgment        = "JUDGMENT"         // pop the condemned case number, pop the grounds; enter a verdict in the condemned's file. Parental jurisdiction only: the sentencing case must have commenced the condemned. The entry rides the ledger
+	OpJudgment        = "JUDGMENT"         // pop case number and grounds; record a verdict when this case commenced the target
 )
 
 // Value kinds.
@@ -118,9 +118,9 @@ func Schedule(items []Value) Value { return Value{T: KindSchedule, L: cloneValue
 // reuse the X field.
 func Register(entries map[string]Value) Value { return Value{T: KindRegister, X: cloneValues(entries)} }
 
-// Power stores an office name, proceedings offset, concerns, and executing
+// Power stores an office name, instruction address, concerns, and executing
 // case. It is enforceable only in the case whose proceedings contain that
-// offset.
+// address.
 func Power(name string, target int64, caseID string, params []string) Value {
 	l := make([]Value, len(params))
 	for i, p := range params {
@@ -245,11 +245,8 @@ func (v Value) Display() string {
 	return "(a value of no recognized standing)"
 }
 
-// Equal reports deep equality, the only equality the Court recognizes.
-// Exhibits are equal when they are exhibits of the same matter and
-// every entry agrees; the Court checks every page. An integer and a
-// sum are compared by amount: 5 and 5.00 are the same money, however
-// differently they dress.
+// Equal reports deep equality. Exhibits include their subject and entries;
+// integers and sums compare by monetary amount.
 func (v Value) Equal(o Value) bool {
 	if v.T != o.T {
 		if lm, rm, ok := Amounts(v, o); ok {
@@ -269,8 +266,7 @@ func (v Value) Equal(o Value) bool {
 	case KindSchedule:
 		return slices.EqualFunc(v.L, o.L, Value.Equal)
 	case KindPower:
-		// Two powers are the same instrument when they confer the same
-		// office of the same case; the concerns follow from that.
+		// The office address and executing case determine the concerns.
 		return v.S == o.S && v.I == o.I && v.Of == o.Of
 	}
 	return false
@@ -297,8 +293,9 @@ func Amounts(l, r Value) (lm, rm int64, ok bool) {
 	return lm, rm, true
 }
 
-// Instr is one record in the proceedings topic. Its offset in that
-// topic is its address; Target fields refer to such offsets.
+// Instr is one record in the proceedings topic. Its zero-based position among
+// visible instruction records is its address; Target fields refer to those
+// logical positions rather than physical Kafka offsets.
 type Instr struct {
 	Op     string   `json:"op"`
 	Value  *Value   `json:"value,omitempty"`  // SUBMIT

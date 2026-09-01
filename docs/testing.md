@@ -32,9 +32,3 @@ run is exploratory and is not deterministic.
 
 Tests must use a finite timeout. Readiness checks must poll a protocol canary
 until a deadline. Tests must close every resource that they create.
-
-## Antithesis
-
-The repository contains a property catalog under
-`antithesis/scratchbook`. It does not contain an Antithesis environment or a
-recorded Antithesis run. Do not claim an Antithesis result.

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sort"
 
 	"github.com/lennrt/trial-lang/internal/docket"
 	"github.com/lennrt/trial-lang/internal/law"
@@ -103,9 +104,38 @@ func (l *auditLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 	return nil, errAuditRest
 }
 
+func (l *auditLog) FetchProceeding(ctx context.Context, c docket.Case, pc int64, wait bool) (*docket.Record, error) {
+	if l.resting {
+		return nil, errAuditRest
+	}
+	if !wait {
+		rec, err := l.Log.FetchProceeding(ctx, c, pc, false)
+		l.meterProceeding(rec)
+		return rec, err
+	}
+	// The chambers copy already holds every instruction visible to the source
+	// replay. Refuse a wait that would block instead of waiting for new history.
+	rec, err := l.Log.FetchProceeding(ctx, c, pc, false)
+	if err != nil || rec != nil {
+		l.meterProceeding(rec)
+		return rec, err
+	}
+	if l.starved != nil {
+		l.starved(c.Proceedings(), pc)
+	}
+	l.resting = true
+	return nil, errAuditRest
+}
+
 // metered reports each fetched proceedings record to the execution meter.
 func (l *auditLog) metered(topic string, rec *docket.Record) {
 	if l.meter != nil && rec != nil && topic == l.c.Proceedings() {
+		l.meter(rec.Offset)
+	}
+}
+
+func (l *auditLog) meterProceeding(rec *docket.Record) {
+	if l.meter != nil && rec != nil {
 		l.meter(rec.Offset)
 	}
 }
@@ -217,6 +247,88 @@ func attentionArrived(step docket.Step, att docket.Attention) bool {
 	return slices.Equal(step.Heard, att.Heard)
 }
 
+// denseCursor converts a source-topic cursor to its position in a dense copy.
+// A valid cursor is zero or exactly one past a visible source record. Kafka
+// control records may occupy the physical offsets between valid cursors.
+func denseCursor(records []docket.Record, cursor int64) (int64, error) {
+	if cursor == 0 {
+		return 0, nil
+	}
+	if cursor < 0 {
+		return 0, fmt.Errorf("attention cursor must be nonnegative: %d", cursor)
+	}
+	previous := cursor - 1
+	at := sort.Search(len(records), func(i int) bool {
+		return records[i].Offset >= previous
+	})
+	if at == len(records) || records[at].Offset != previous {
+		return 0, fmt.Errorf("attention cursor %d does not follow a visible record", cursor)
+	}
+	return int64(at + 1), nil
+}
+
+// denseOffsets converts exact source offsets to offsets in a dense copy.
+func denseOffsets(records []docket.Record, offsets []int64) ([]int64, error) {
+	if len(offsets) == 0 {
+		return nil, nil
+	}
+	dense := make([]int64, len(offsets))
+	for i, offset := range offsets {
+		at := sort.Search(len(records), func(j int) bool {
+			return records[j].Offset >= offset
+		})
+		if at == len(records) || records[at].Offset != offset {
+			return nil, fmt.Errorf("attention refers to missing summons offset %d", offset)
+		}
+		dense[i] = int64(at)
+	}
+	return dense, nil
+}
+
+func normalizeSummonsAttention(att docket.Attention, summons []docket.Record) (docket.Attention, error) {
+	var err error
+	att.Summons, err = denseCursor(summons, att.Summons)
+	if err != nil {
+		return docket.Attention{}, fmt.Errorf("invalid summons cursor: %w", err)
+	}
+	heard, err := denseOffsets(summons, att.Heard)
+	if err != nil {
+		return docket.Attention{}, err
+	}
+	// A physical control-record gap can place the next visible summons after
+	// the raw cursor. If that summons was selectively consumed, both normalize
+	// to the same dense position. Advance over it (and any consecutive heard
+	// records) so the dense copy retains the usual strictly-past invariant.
+	for len(heard) > 0 {
+		if heard[0] < att.Summons {
+			return docket.Attention{}, fmt.Errorf("heard summons position %d is behind cursor %d", heard[0], att.Summons)
+		}
+		if heard[0] != att.Summons {
+			break
+		}
+		att.Summons++
+		heard = heard[1:]
+	}
+	att.Heard = heard
+	return att, nil
+}
+
+// sourceCursor converts a cursor in a dense replay back to the equivalent
+// cursor in its source topic.
+func sourceCursor(records []docket.Record, cursor int64) (int64, error) {
+	if cursor < 0 || cursor > int64(len(records)) {
+		return 0, fmt.Errorf("replay cursor %d is outside a topic with %d visible records", cursor, len(records))
+	}
+	if cursor == 0 {
+		return 0, nil
+	}
+	offset, ok := addNonnegative(records[cursor-1].Offset, 1)
+	if !ok {
+		return 0, fmt.Errorf("source offset %d has no following cursor", records[cursor-1].Offset)
+	}
+	return offset, nil
+}
+
 // Audit replays a case in chambers, against an in-memory copy of its
 // inputs, and compares what the copy produced with what the record
 // holds: the proclamations (which on a case reenacted k times must be
@@ -241,6 +353,22 @@ func auditMetered(ctx context.Context, log docket.Log, c docket.Case, meter func
 	att, err := log.Attention(ctx, c)
 	if err != nil {
 		return nil, err
+	}
+	summons, err := log.ReadAll(ctx, c.Summons())
+	if err != nil {
+		return nil, err
+	}
+	att, err = normalizeSummonsAttention(att, summons)
+	if err != nil {
+		return nil, err
+	}
+	gazette, err := log.ReadAll(ctx, GazetteTopic)
+	if err != nil && !errors.Is(err, docket.ErrTopicNotFound) {
+		return nil, err
+	}
+	att.Gazette, err = denseCursor(gazette, att.Gazette)
+	if err != nil {
+		return nil, fmt.Errorf("invalid gazette cursor: %w", err)
 	}
 	dossier, err := log.ReadAll(ctx, c.Dossier())
 	if err != nil {

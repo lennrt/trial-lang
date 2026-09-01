@@ -116,6 +116,15 @@ func (m *MemoryLog) Fetch(ctx context.Context, topic string, offset int64, wait 
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	var stopCancel func() bool
+	if wait {
+		stopCancel = context.AfterFunc(ctx, func() {
+			m.mu.Lock()
+			m.cond.Broadcast()
+			m.mu.Unlock()
+		})
+		defer stopCancel()
+	}
 	for {
 		recs, ok := m.topics[topic]
 		if !ok {
@@ -131,23 +140,12 @@ func (m *MemoryLog) Fetch(ctx context.Context, topic string, offset int64, wait 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		// Wake on append; ctx cancellation is checked each round. A
-		// watcher goroutine broadcasts when ctx dies so waiters notice.
-		done := make(chan struct{})
-		go func() {
-			select {
-			case <-ctx.Done():
-				// Taking the mutex ensures Broadcast cannot race ahead of
-				// Wait and disappear before this goroutine is registered.
-				m.mu.Lock()
-				m.cond.Broadcast()
-				m.mu.Unlock()
-			case <-done:
-			}
-		}()
 		m.cond.Wait()
-		close(done)
 	}
+}
+
+func (m *MemoryLog) FetchProceeding(ctx context.Context, c Case, pc int64, wait bool) (*Record, error) {
+	return m.Fetch(ctx, c.Proceedings(), pc, wait)
 }
 
 // Commit validates the complete step before changing state.
@@ -200,12 +198,17 @@ func (m *MemoryLog) ListCases(ctx context.Context) ([]Case, error) {
 	defer m.mu.Unlock()
 	var out []Case
 	for t := range m.topics {
-		// Statute filing topics do not represent cases.
-		if id, ok := strings.CutSuffix(t, ".filing"); ok && strings.HasPrefix(id, "case-") {
-			out = append(out, Case{ID: id})
-			if len(out) > MaxCases {
-				return nil, fmt.Errorf("%w: docket has more than %d cases", ErrResourceLimit, MaxCases)
-			}
+		id, ok := strings.CutSuffix(t, ".filing")
+		if !ok {
+			continue
+		}
+		caseFile, err := ParseCase(id)
+		if err != nil {
+			continue
+		}
+		out = append(out, caseFile)
+		if len(out) > MaxCases {
+			return nil, fmt.Errorf("%w: docket has more than %d cases", ErrResourceLimit, MaxCases)
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
@@ -233,7 +236,7 @@ func (m *MemoryLog) ListStatutes(ctx context.Context) ([]string, error) {
 	var out []string
 	for t := range m.topics {
 		if rest, ok := strings.CutPrefix(t, "statute-"); ok {
-			if s, ok := strings.CutSuffix(rest, ".filing"); ok {
+			if s, ok := strings.CutSuffix(rest, ".filing"); ok && validStatuteName(s) {
 				out = append(out, s)
 			}
 		}

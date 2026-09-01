@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Plays examples/the-castle.deposition at a watchable pace for
-# docs/the-castle.tape. `trial test --transcript` produces the frames; this
-# script only adds timing. The in-memory run finishes in under a second, while
-# the live-broker run takes about an hour.
+# docs/the-castle.tape. `trial test --transcript` produces the output; this
+# script only adds timing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 trial=(./trial)

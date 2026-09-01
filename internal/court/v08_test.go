@@ -234,8 +234,8 @@ ARTICLE 1.
     ADJOURN INDEFINITELY.
 `)
 		var rej *gregor.RejectedFiling
-		if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "penny") {
-			t.Fatalf("expected a penny rejection for %q, got %v", bad, err)
+		if !errors.As(err, &rej) || !strings.Contains(rej.Particulars, "two digits") {
+			t.Fatalf("expected a two-decimal-place rejection for %q, got %v", bad, err)
 		}
 	}
 }

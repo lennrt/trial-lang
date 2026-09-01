@@ -16,7 +16,7 @@ type DocketOptions struct {
 	// Nil borrows the listing Log, which the caller continues to own.
 	Dial func(context.Context) (docket.Log, error)
 
-	// Poll is how often the docket is swept for new matters.
+	// Poll is how often the docket is checked for new cases.
 	Poll time.Duration
 
 	// MaxConcurrent bounds active case workers. Zero uses 64.

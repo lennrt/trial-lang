@@ -41,7 +41,7 @@ func resolveVersion() string {
 	}
 	bi, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "(of no recorded edition)"
+		return "unknown"
 	}
 	if bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 		return bi.Main.Version
@@ -53,7 +53,7 @@ func resolveVersion() string {
 			rev = s.Value
 		case "vcs.modified":
 			if s.Value == "true" {
-				dirty = ", amended without leave"
+				dirty = ", modified"
 			}
 		}
 	}
@@ -61,15 +61,13 @@ func resolveVersion() string {
 		if len(rev) > 12 {
 			rev = rev[:12]
 		}
-		return fmt.Sprintf("(devel, at revision %s%s)", rev, dirty)
+		return fmt.Sprintf("devel, revision %s%s", rev, dirty)
 	}
 	return "(devel)"
 }
 
 func versionCmd() int {
 	fmt.Printf("trial %s\n", resolveVersion())
-	fmt.Println("triallang: the language is the log. This binary is merely an official,")
-	fmt.Println("and officials are replaceable; the edition above is his commission.")
 	return 0
 }
 
@@ -88,6 +86,10 @@ func run(args []string) int {
 	cmd, rest := args[0], args[1:]
 
 	if cmd == "help" || cmd == "--help" || cmd == "-h" {
+		if len(rest) > 1 {
+			unexpectedArgs("help", rest[1:])
+			return 2
+		}
 		if len(rest) > 0 {
 			return helpCmd(rest[0])
 		}
@@ -104,8 +106,14 @@ func run(args []string) int {
 
 	switch cmd {
 	case "summon":
+		if unexpectedArgs(cmd, rest) {
+			return 2
+		}
 		return summon(ctx)
 	case "dismiss":
+		if unexpectedArgs(cmd, rest) {
+			return 2
+		}
 		return dismiss(ctx)
 	case "file":
 		return fileCase(ctx, rest)
@@ -150,9 +158,12 @@ func run(args []string) int {
 	case "watch":
 		return watch(ctx, rest)
 	case "version", "--version", "-v":
+		if unexpectedArgs("version", rest) {
+			return 2
+		}
 		return versionCmd()
 	}
-	fmt.Fprintf(os.Stderr, "trial: %q is not a motion this court entertains.", cmd)
+	fmt.Fprintf(os.Stderr, "trial: unknown command %q.", cmd)
 	if s := nearest(cmd); s != "" {
 		fmt.Fprintf(os.Stderr, " Perhaps 'trial %s' was intended.", s)
 	}
@@ -167,7 +178,7 @@ func helpCmd(name string) int {
 		fmt.Println(text)
 		return 0
 	}
-	fmt.Fprintf(os.Stderr, "trial help: %q is not a motion this court entertains. See 'trial help'.\n", name)
+	fmt.Fprintf(os.Stderr, "trial help: unknown command %q. See 'trial help'.\n", name)
 	return 2
 }
 
@@ -177,7 +188,7 @@ func compose(ctx context.Context, verb string, extra ...string) int {
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	if err := c.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "The courthouse could not be reached: %v\n(Is Docker installed and running?)\n", err)
+		fmt.Fprintf(os.Stderr, "Docker Compose failed: %v\n(Is Docker installed and running?)\n", err)
 		return 1
 	}
 	return 0
@@ -188,8 +199,8 @@ func summon(ctx context.Context) int {
 		return code
 	}
 	fmt.Println()
-	fmt.Println("The court is in session at localhost:9092.")
-	fmt.Println("File something: trial file examples/hello.trial")
+	fmt.Println("Kafka is running at localhost:9092.")
+	fmt.Println("Try: trial file examples/hello.trial")
 	return 0
 }
 
@@ -198,8 +209,7 @@ func dismiss(ctx context.Context) int {
 		return code
 	}
 	fmt.Println()
-	fmt.Println("The court stands in recess. The archive is retained;")
-	fmt.Println("your cases will be waiting when the court reconvenes.")
+	fmt.Println("Kafka is stopped. Stored case data was retained.")
 	return 0
 }
 
@@ -254,6 +264,62 @@ func commandFlags(name string) *flag.FlagSet {
 	return fs
 }
 
+// parseFirstArg parses flags on either side of the first positional argument.
+// Any remaining positional arguments are left in fs.Args.
+func parseFirstArg(fs *flag.FlagSet, args []string) (string, bool) {
+	terminated := terminatesOptionsBeforeFirstArg(fs, args)
+	if err := fs.Parse(args); err != nil {
+		return "", false
+	}
+	if fs.NArg() == 0 {
+		return "", true
+	}
+	first := fs.Arg(0)
+	suffix := fs.Args()[1:]
+	if terminated {
+		// The first parse consumed --. Restore it so the second parse leaves
+		// every later token positional too.
+		suffix = append([]string{"--"}, suffix...)
+	}
+	if err := fs.Parse(suffix); err != nil {
+		return "", false
+	}
+	return first, true
+}
+
+// terminatesOptionsBeforeFirstArg distinguishes a real -- terminator from a
+// token equal to "--" that is consumed as a non-boolean flag's value.
+func terminatesOptionsBeforeFirstArg(fs *flag.FlagSet, args []string) bool {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			return true
+		}
+		if arg == "-" || !strings.HasPrefix(arg, "-") {
+			return false
+		}
+		name := strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-")
+		name, _, hasValue := strings.Cut(name, "=")
+		option := fs.Lookup(name)
+		if option == nil || hasValue {
+			continue
+		}
+		if boolean, ok := option.Value.(interface{ IsBoolFlag() bool }); ok && boolean.IsBoolFlag() {
+			continue
+		}
+		i++ // the next token is this option's value, even when it is "--"
+	}
+	return false
+}
+
+func unexpectedArgs(name string, args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	fmt.Fprintf(os.Stderr, "trial %s: unexpected argument %q. See 'trial help %s'.\n", name, args[0], name)
+	return true
+}
+
 // printJSON writes one indented JSON document to standard output.
 func printJSON(v any) int {
 	b, err := json.MarshalIndent(v, "", "  ")
@@ -268,24 +334,16 @@ func printJSON(v any) int {
 // parseCase parses options on either side of one case identifier.
 func caseFlags(name string, rest []string, extra func(*flag.FlagSet)) (*flag.FlagSet, string, docket.Case, bool) {
 	fs := commandFlags(name)
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	if extra != nil {
 		extra(fs)
 	}
-	var caseID string
-	if err := fs.Parse(rest); err != nil {
+	caseID, ok := parseFirstArg(fs, rest)
+	if !ok {
 		return nil, "", docket.Case{}, false
 	}
-	if fs.NArg() >= 1 {
-		caseID = fs.Arg(0)
-		// flag stops at the first positional argument. Parse the suffix so
-		// callers may put options on either side of the case identifier.
-		if err := fs.Parse(fs.Args()[1:]); err != nil {
-			return nil, "", docket.Case{}, false
-		}
-	}
 	if caseID == "" {
-		fmt.Fprintf(os.Stderr, "trial %s: a case number is required. You were given one. It is your only receipt. See 'trial help %s'.\n", name, name)
+		fmt.Fprintf(os.Stderr, "trial %s: a case number is required. See 'trial help %s'.\n", name, name)
 		return nil, "", docket.Case{}, false
 	}
 	c, err := docket.ParseCase(caseID)
@@ -298,21 +356,22 @@ func caseFlags(name string, rest []string, extra func(*flag.FlagSet)) (*flag.Fla
 
 func fileCase(ctx context.Context, rest []string) int {
 	fs := commandFlags("file")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	counsel := fs.Bool("counsel", false, "reveal the particulars of a rejection")
 	var quiet bool
 	fs.BoolVar(&quiet, "quiet", false, "print only the case number")
 	fs.BoolVar(&quiet, "q", false, "print only the case number")
-	if err := fs.Parse(rest); err != nil {
+	path, ok := parseFirstArg(fs, rest)
+	if !ok {
 		return 2
 	}
-	if fs.NArg() != 1 {
+	if path == "" || fs.NArg() != 0 {
 		fmt.Fprintln(os.Stderr, "trial file: exactly one .trial filing is accepted per visit. See 'trial help file'.")
 		return 2
 	}
-	src, err := readSource(fs.Arg(0))
+	src, err := readSource(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The filing could not be read: %v\n", err)
+		fmt.Fprintf(os.Stderr, "trial file: read source: %v\n", err)
 		return 1
 	}
 	log, code := openLog(ctx, *broker)
@@ -323,63 +382,83 @@ func fileCase(ctx context.Context, rest []string) int {
 
 	c, err := court.File(ctx, log, string(src))
 	if err != nil {
-		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-			fmt.Fprintln(os.Stderr, "Your filing has been rejected pursuant to Article §4.2.")
-			fmt.Fprintln(os.Stderr, "The text of Article §4.2 is not available at this time.")
-			if *counsel {
-				fmt.Fprintf(os.Stderr, "\n[counsel] %s\n", rej.Error())
-			} else {
-				fmt.Fprintln(os.Stderr, "\n(Retain counsel: rerun with --counsel for the particulars.)")
-			}
-			return 1
-		}
-		fmt.Fprintf(os.Stderr, "The filing failed for reasons unrelated to its content: %v\n", err)
-		return 1
+		return reportFileError(os.Stderr, c, err, *counsel)
 	}
 	if quiet {
 		// Quiet output is safe to use in command substitution.
 		fmt.Println(c.ID)
 		return 0
 	}
-	fmt.Println("The matter has been accepted for filing.")
-	fmt.Println()
-	fmt.Printf("    Case number: %s\n", c.ID)
-	fmt.Println()
-	fmt.Println("This number is your only receipt. The proceedings begin when")
-	fmt.Printf("the Court convenes:  trial proceed %s\n", c.ID)
-	fmt.Printf("Attend them with:    trial observe %s\n", c.ID)
+	fmt.Printf("Case filed: %s\n\n", c.ID)
+	fmt.Printf("Run:     trial proceed %s\n", c.ID)
+	fmt.Printf("Observe: trial observe %s\n", c.ID)
 	return 0
+}
+
+func reportFileError(w io.Writer, c docket.Case, err error, revealRejection bool) int {
+	if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
+		_, _ = fmt.Fprintln(w, "The filing was rejected pursuant to Article §4.2.")
+		if revealRejection {
+			_, _ = fmt.Fprintf(w, "\n[counsel] %s\n", rej.Error())
+		} else {
+			_, _ = fmt.Fprintln(w, "\n(Rerun with --counsel for details.)")
+		}
+		return 1
+	}
+	if reportRecoverableCaseError(w, "filing", c, err) {
+		return 1
+	}
+	_, _ = fmt.Fprintf(w, "The filing failed: %v\n", err)
+	return 1
+}
+
+func reportRecoverableCaseError(w io.Writer, operation string, c docket.Case, err error) bool {
+	if c.ID == "" {
+		return false
+	}
+	if reportAmbiguousCommit(w, operation, "case "+c.ID, err) {
+		return true
+	}
+	_, _ = fmt.Fprintf(w, "The %s failed for case %s: %v\nThe case may be partial; inspect case %s before retrying.\n", operation, c.ID, err, c.ID)
+	return true
+}
+
+func reportAmbiguousCommit(w io.Writer, operation, target string, err error) bool {
+	if _, ambiguous := errors.AsType[*docket.AmbiguousCommitError](err); !ambiguous {
+		return false
+	}
+	_, _ = fmt.Fprintf(w, "The %s result is uncertain for %s: %v\nIt may already be committed; inspect %s before taking further action.\n", operation, target, err, target)
+	return true
 }
 
 func proceedCase(ctx context.Context, rest []string) int {
 	fs := commandFlags("proceed")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
-	docketMode := fs.Bool("docket", false, "serve every matter on the docket, present and future")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
+	docketMode := fs.Bool("docket", false, "process every current and future case")
 	expedited := fs.Int("expedited", 1, "instructions per committed step; above 1, the attention is recorded at the pace of the batch")
 	var quiet bool
-	fs.BoolVar(&quiet, "quiet", false, "the outcome is the exit code; the ceremony is dispensed with")
-	fs.BoolVar(&quiet, "q", false, "the outcome is the exit code; the ceremony is dispensed with")
-	if err := fs.Parse(rest); err != nil {
+	fs.BoolVar(&quiet, "quiet", false, "suppress progress output; use the exit status")
+	fs.BoolVar(&quiet, "q", false, "suppress progress output; use the exit status")
+	caseID, ok := parseFirstArg(fs, rest)
+	if !ok {
 		return 2
 	}
-	var caseID string
-	if fs.NArg() >= 1 {
-		caseID = fs.Arg(0)
-		if fs.NArg() > 1 {
-			if err := fs.Parse(fs.Args()[1:]); err != nil {
-				return 2
-			}
-		}
-	}
 	if *docketMode {
+		if caseID != "" || unexpectedArgs("proceed", fs.Args()) {
+			fmt.Fprintln(os.Stderr, "trial proceed: --docket does not take a case number.")
+			return 2
+		}
 		return proceedDocket(ctx, *broker)
+	}
+	if unexpectedArgs("proceed", fs.Args()) {
+		return 2
 	}
 	if *expedited < 1 || *expedited > 10_000 {
 		fmt.Fprintln(os.Stderr, "trial proceed: --expedited must be between 1 and 10000 instructions per step.")
 		return 2
 	}
 	if caseID == "" {
-		fmt.Fprintln(os.Stderr, "trial proceed: a case number is required (or --docket, for all of them). You were given one. It is your only receipt.")
+		fmt.Fprintln(os.Stderr, "trial proceed: a case number is required (or use --docket).")
 		return 2
 	}
 	c, err := docket.ParseCase(caseID)
@@ -398,11 +477,10 @@ func proceedCase(ctx context.Context, rest []string) int {
 			fmt.Printf(format, args...)
 		}
 	}
-	say("The Court convenes in the matter of %s.\n", c.ID)
-	say("(Interrupting the official is permitted; the case survives him.)\n\n")
+	say("Proceeding with %s. Press Ctrl+C to stop safely.\n\n", c.ID)
 
 	if *expedited > 1 {
-		say("The docket is expedited: %d instructions to the step. Between steps, the Court's position is its own secret.\n\n", *expedited)
+		say("Batch size: up to %d instructions per committed step.\n\n", *expedited)
 	}
 	ct := &court.Court{
 		Log:                log,
@@ -421,14 +499,12 @@ func proceedCase(ctx context.Context, rest []string) int {
 	say("\n")
 	switch outcome {
 	case court.OutcomeAdjourned:
-		say("The case stands adjourned indefinitely. It may be reopened\n")
-		say("at any time (trial proceed %s). It is never over.\n", c.ID)
+		say("The case is adjourned. Resume with: trial proceed %s\n", c.ID)
 	case court.OutcomeGuilty:
 		say("A verdict has been reached:  trial verdict %s\n", c.ID)
 		return 1
 	case court.OutcomeApparentAcquittal:
-		say("The proceedings have run out. This is apparent acquittal,\n")
-		say("which is not the same as innocence.\n")
+		say("Execution reached the current end of the proceedings.\n")
 	}
 	return 0
 }
@@ -441,11 +517,7 @@ func proceedDocket(ctx context.Context, broker string) int {
 	}
 	defer log.Close()
 
-	fmt.Println("The Court convenes for the general docket. Every matter, present")
-	fmt.Println("and future, will be served: new filings and commenced cases are")
-	fmt.Println("taken up as they appear, and adjourned cases are watched for")
-	fmt.Println("amendment. Interrupting the official is permitted; the docket")
-	fmt.Println("survives him.")
+	fmt.Println("Processing current and future cases. Press Ctrl+C to stop safely.")
 	fmt.Println()
 
 	err := court.ServeDocket(ctx, log, court.DocketOptions{
@@ -462,20 +534,23 @@ func proceedDocket(ctx context.Context, broker string) int {
 		},
 	})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The docket could not be served: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Docket processing failed: %v\n", err)
 		return 1
 	}
 	fmt.Println()
-	fmt.Println("The court stands in recess. The docket is retained.")
+	fmt.Println("Docket processing stopped.")
 	return 0
 }
 
 func observe(ctx context.Context, rest []string) int {
 	var fromBeginning *bool
-	_, broker, c, ok := caseFlags("observe", rest, func(fs *flag.FlagSet) {
+	fs, broker, c, ok := caseFlags("observe", rest, func(fs *flag.FlagSet) {
 		fromBeginning = fs.Bool("from-the-beginning", false, "read the full record")
 	})
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("observe", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -486,7 +561,7 @@ func observe(ctx context.Context, rest []string) int {
 
 	recs, err := log.ReadAll(ctx, c.Proclamations())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The gallery is closed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Case output could not be read: %v\n", err)
 		return 1
 	}
 	var next int64
@@ -498,12 +573,12 @@ func observe(ctx context.Context, rest []string) int {
 			fmt.Println(string(r.Value))
 		}
 	}
-	fmt.Fprintf(os.Stderr, "(Attending the proceedings of %s. Ctrl+C to slip out.)\n", c.ID)
+	fmt.Fprintf(os.Stderr, "Following output for %s. Press Ctrl+C to stop.\n", c.ID)
 	for {
 		rec, err := log.Fetch(ctx, c.Proclamations(), next, true)
 		if err != nil {
 			if ctx.Err() != nil {
-				fmt.Fprintln(os.Stderr, "\n(You slip out of the gallery. The proceedings continue without you.)")
+				fmt.Fprintln(os.Stderr, "\nStopped following output.")
 				return 0
 			}
 			fmt.Fprintln(os.Stderr, err)
@@ -525,7 +600,7 @@ func serve(ctx context.Context, rest []string) int {
 	}
 	values := fs.Args()
 	if len(values) == 0 {
-		fmt.Fprintln(os.Stderr, "trial serve: nothing to serve. The Court does not deliver empty envelopes. See 'trial help serve'.")
+		fmt.Fprintln(os.Stderr, "trial serve: at least one value is required. See 'trial help serve'.")
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -534,21 +609,31 @@ func serve(ctx context.Context, rest []string) int {
 	}
 	defer log.Close()
 
-	for _, v := range values {
-		if _, err := log.Append(ctx, c.Summons(), nil, []byte(v)); err != nil {
-			fmt.Fprintf(os.Stderr, "The summons could not be served: %v\n", err)
+	if err := appendSummons(ctx, log, c, values); err != nil {
+		if reportAmbiguousCommit(os.Stderr, "input batch", "case "+c.ID, err) {
 			return 1
 		}
+		fmt.Fprintf(os.Stderr, "The summonses could not be served atomically: %v\n", err)
+		return 1
 	}
 	if *quiet {
 		return 0
 	}
 	if len(values) == 1 {
-		fmt.Println("The summons has been served. Compliance is assumed.")
+		fmt.Println("1 input appended.")
 	} else {
-		fmt.Printf("%d summonses have been served. Compliance is assumed.\n", len(values))
+		fmt.Printf("%d inputs appended.\n", len(values))
 	}
 	return 0
+}
+
+func appendSummons(ctx context.Context, log docket.Log, c docket.Case, values []string) error {
+	appends := make([]docket.StepAppend, len(values))
+	for i, value := range values {
+		appends[i] = docket.StepAppend{Topic: c.Summons(), Value: []byte(value)}
+	}
+	_, err := log.AppendBatch(ctx, appends)
+	return err
 }
 
 func amend(ctx context.Context, rest []string) int {
@@ -559,13 +644,13 @@ func amend(ctx context.Context, rest []string) int {
 	if !ok {
 		return 2
 	}
-	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "trial amend: a supplemental filing (Form K-2) is required. See 'trial help amend'.")
+	if fs.NArg() != 1 {
+		fmt.Fprintln(os.Stderr, "trial amend: exactly one supplemental filing (Form K-2) is required. See 'trial help amend'.")
 		return 2
 	}
 	src, err := readSource(fs.Arg(0))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The supplement could not be read: %v\n", err)
+		fmt.Fprintf(os.Stderr, "trial amend: read source: %v\n", err)
 		return 1
 	}
 	log, code := openLog(ctx, broker)
@@ -577,34 +662,37 @@ func amend(ctx context.Context, rest []string) int {
 	n, err := court.Amend(ctx, log, c, string(src))
 	if err != nil {
 		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-			fmt.Fprintln(os.Stderr, "Your supplemental filing has been rejected pursuant to Article §4.2.")
+			fmt.Fprintln(os.Stderr, "The supplemental filing was rejected pursuant to Article §4.2.")
 			if *counsel {
 				fmt.Fprintf(os.Stderr, "\n[counsel] %s\n", rej.Error())
 			} else {
-				fmt.Fprintln(os.Stderr, "(Retain counsel: rerun with --counsel for the particulars.)")
+				fmt.Fprintln(os.Stderr, "(Rerun with --counsel for details.)")
 			}
 			return 1
 		}
-		fmt.Fprintf(os.Stderr, "The supplement was refused: %v\n", err)
+		if reportAmbiguousCommit(os.Stderr, "supplemental filing", "case "+c.ID, err) {
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "The supplemental filing failed: %v\n", err)
 		return 1
 	}
-	fmt.Printf("New evidence has come to light: %d further instruction(s)\n", n)
-	fmt.Printf("have been entered against %s. The proceedings resume when\n", c.ID)
-	fmt.Printf("the Court next convenes:  trial proceed %s\n", c.ID)
+	fmt.Printf("Appended %d instruction(s) to %s.\n", n, c.ID)
+	fmt.Printf("Resume with: trial proceed %s\n", c.ID)
 	return 0
 }
 
 func enact(ctx context.Context, rest []string) int {
 	fs := commandFlags("enact")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	counsel := fs.Bool("counsel", false, "reveal the particulars of a rejection")
 	enactCanon := fs.Bool("canon", false, "enact the standard statutes shipped with the binary, in dependency order")
-	if err := fs.Parse(rest); err != nil {
+	path, ok := parseFirstArg(fs, rest)
+	if !ok {
 		return 2
 	}
 	if *enactCanon {
-		if fs.NArg() != 0 {
-			fmt.Fprintln(os.Stderr, "trial enact --canon: the canon is enacted whole; name no other statutes.")
+		if path != "" || fs.NArg() != 0 {
+			fmt.Fprintln(os.Stderr, "trial enact --canon: no statute path may be supplied.")
 			return 2
 		}
 		log, code := openLog(ctx, *broker)
@@ -612,34 +700,37 @@ func enact(ctx context.Context, rest []string) int {
 			return code
 		}
 		defer log.Close()
-		fmt.Println("THE CANON IS NOW ENACTED, piecemeal, like the wall.")
+		fmt.Println("Enacting the bundled canon:")
 		fmt.Println()
 		for _, file := range canon.Files() {
 			src, err := canon.FS.ReadFile(file)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "The canon is missing %s; the binary was built carelessly: %v\n", file, err)
+				fmt.Fprintf(os.Stderr, "The bundled canon is missing %s: %v\n", file, err)
 				return 1
 			}
 			name, n, err := court.Enact(ctx, log, string(src))
 			if err != nil {
+				if name != "" && reportAmbiguousCommit(os.Stderr, "enactment", fmt.Sprintf("statute %s (enactment %d)", name, n), err) {
+					return 1
+				}
 				fmt.Fprintf(os.Stderr, "The statute %s was not enacted: %v\n", file, err)
 				return 1
 			}
 			fmt.Printf("    %s (enactment %d)\n", name, n)
 		}
 		fmt.Println()
-		fmt.Println("Any case may now claim their offices at filing time:")
+		fmt.Println("Cases can now incorporate these offices:")
 		fmt.Println("    INCORPORATE BY REFERENCE statutes-of-schedules.")
-		fmt.Println("(Incorporating a statute incorporates, transitively, whatever it stands on.)")
+		fmt.Println("Dependencies are incorporated transitively.")
 		return 0
 	}
-	if fs.NArg() != 1 {
-		fmt.Fprintln(os.Stderr, "trial enact: exactly one statute (Form S-1) is enacted per session (or the whole canon, with --canon). See 'trial help enact'.")
+	if path == "" || fs.NArg() != 0 {
+		fmt.Fprintln(os.Stderr, "trial enact: provide one Form S-1 statute, or use --canon. See 'trial help enact'.")
 		return 2
 	}
-	src, err := readSource(fs.Arg(0))
+	src, err := readSource(path)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The statute could not be read: %v\n", err)
+		fmt.Fprintf(os.Stderr, "trial enact: read source: %v\n", err)
 		return 1
 	}
 	log, code := openLog(ctx, *broker)
@@ -651,32 +742,37 @@ func enact(ctx context.Context, rest []string) int {
 	name, n, err := court.Enact(ctx, log, string(src))
 	if err != nil {
 		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-			fmt.Fprintln(os.Stderr, "The proposed statute has been rejected pursuant to Article §4.2.")
+			fmt.Fprintln(os.Stderr, "The statute was rejected pursuant to Article §4.2.")
 			if *counsel {
 				fmt.Fprintf(os.Stderr, "\n[counsel] %s\n", rej.Error())
 			} else {
-				fmt.Fprintln(os.Stderr, "(Retain counsel: rerun with --counsel for the particulars.)")
+				fmt.Fprintln(os.Stderr, "(Rerun with --counsel for details.)")
 			}
+			return 1
+		}
+		if name != "" && reportAmbiguousCommit(os.Stderr, "enactment", fmt.Sprintf("statute %s (enactment %d)", name, n), err) {
 			return 1
 		}
 		fmt.Fprintf(os.Stderr, "The statute was not enacted: %v\n", err)
 		return 1
 	}
-	fmt.Println("The statute has been enacted and is binding immediately.")
+	fmt.Println("Statute enacted.")
 	fmt.Println()
 	fmt.Printf("    Statute:   %s (enactment %d)\n", name, n)
 	fmt.Println()
-	fmt.Println("Any case may now claim its offices at filing time:")
+	fmt.Println("Cases can incorporate its offices with:")
 	fmt.Printf("    INCORPORATE BY REFERENCE %s.\n", name)
-	fmt.Println("Cases already filed keep the enactment they incorporated;")
-	fmt.Println("the law changes, the past does not. Not here, anyway.")
+	fmt.Println("Existing cases keep the version they incorporated.")
 	return 0
 }
 
 func statutes(ctx context.Context, rest []string) int {
 	fs := commandFlags("statutes")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	if err := fs.Parse(rest); err != nil {
+		return 2
+	}
+	if unexpectedArgs("statutes", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, *broker)
@@ -687,15 +783,14 @@ func statutes(ctx context.Context, rest []string) int {
 
 	names, err := log.ListStatutes(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The statute books could not be consulted: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Statutes could not be listed: %v\n", err)
 		return 1
 	}
 	if len(names) == 0 {
-		fmt.Println("No statutes have been enacted. The court is governing by improvisation.")
+		fmt.Println("No statutes have been enacted.")
 		return 0
 	}
-	sort.Strings(names)
-	fmt.Printf("THE STATUTE BOOKS — %d statute(s) in force\n\n", len(names))
+	fmt.Printf("STATUTES (%d)\n\n", len(names))
 	for _, n := range names {
 		fmt.Printf("  %s\n", n)
 	}
@@ -706,9 +801,13 @@ func statutes(ctx context.Context, rest []string) int {
 
 func hearing(ctx context.Context, rest []string) int {
 	fs := commandFlags("hearing")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	counsel := fs.Bool("counsel", false, "unseal any verdict's particulars")
-	if err := fs.Parse(rest); err != nil {
+	caseID, ok := parseFirstArg(fs, rest)
+	if !ok {
+		return 2
+	}
+	if unexpectedArgs("hearing", fs.Args()) {
 		return 2
 	}
 
@@ -720,8 +819,8 @@ func hearing(ctx context.Context, rest []string) int {
 
 	var h *court.Hearing
 	var err error
-	if fs.NArg() >= 1 {
-		c, parseErr := docket.ParseCase(fs.Arg(0))
+	if caseID != "" {
+		c, parseErr := docket.ParseCase(caseID)
 		if parseErr != nil {
 			fmt.Fprintf(os.Stderr, "trial hearing: %v\n", parseErr)
 			return 2
@@ -731,16 +830,19 @@ func hearing(ctx context.Context, rest []string) int {
 		h, err = court.OpenHearing(ctx, log)
 	}
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The hearing could not be convened: %v\n", err)
+		if h != nil && reportRecoverableCaseError(os.Stderr, "hearing filing", h.Case, err) {
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "The hearing could not be opened: %v\n", err)
 		return 1
 	}
 
 	// Pipes receive statements and proclamations without prompts.
 	interactive := isTTY(os.Stdin)
 	if interactive {
-		fmt.Printf("You are before the Court in the matter of %s.\n", h.Case.ID)
-		fmt.Println("Speak. End each statement with a period. An empty line is")
-		fmt.Println("noted. Leave with Ctrl+C or Ctrl+Z; the case remains.")
+		fmt.Printf("Hearing for %s.\n", h.Case.ID)
+		fmt.Println("Enter one statement per line, ending with a period.")
+		fmt.Println("Press Ctrl+C or Ctrl+D to leave; the case is retained.")
 		fmt.Println()
 	}
 
@@ -751,30 +853,36 @@ func hearing(ctx context.Context, rest []string) int {
 			fmt.Print("K.> ")
 		}
 		if !scanner.Scan() {
+			if err := scanner.Err(); err != nil {
+				fmt.Fprintf(os.Stderr, "The hearing input could not be read: %v\n", err)
+				return 1
+			}
 			if interactive {
 				fmt.Println()
-				fmt.Println("You have left the hearing. The case remains open;")
-				fmt.Printf("return to it at any time:  trial hearing %s\n", h.Case.ID)
+				fmt.Printf("Hearing closed. Resume with: trial hearing %s\n", h.Case.ID)
 			}
 			return 0
 		}
 		line := scanner.Text()
 		if len(line) == 0 || len(strings.TrimSpace(line)) == 0 {
 			if interactive {
-				fmt.Println("(Your silence has been noted.)")
+				fmt.Println("(empty input ignored)")
 			}
 			continue
 		}
 		proclaimed, verdict, err := h.Submit(ctx, line)
 		if err != nil {
 			if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-				fmt.Println("The submission has been rejected pursuant to Article §4.2.")
+				fmt.Println("The statement was rejected pursuant to Article §4.2.")
 				if *counsel {
 					fmt.Printf("[counsel] %s\n", rej.Error())
 				}
 				continue
 			}
-			fmt.Fprintf(os.Stderr, "The hearing is disturbed: %v\n", err)
+			if reportAmbiguousCommit(os.Stderr, "hearing submission", "case "+h.Case.ID, err) {
+				return 1
+			}
+			fmt.Fprintf(os.Stderr, "The hearing failed: %v\n", err)
 			return 1
 		}
 		for _, p := range proclaimed {
@@ -786,8 +894,7 @@ func hearing(ctx context.Context, rest []string) int {
 			if *counsel {
 				fmt.Printf("[counsel] %s\n", verdict.Sealed)
 			} else {
-				fmt.Println("The particulars are sealed. The hearing is concluded,")
-				fmt.Println("as is the case, as, in a sense, are you.")
+				fmt.Println("The details are sealed. Use --counsel to display them.")
 			}
 			return 1
 		}
@@ -835,12 +942,11 @@ func testCmd(ctx context.Context, rest []string) int {
 		}
 	}
 	if len(files) == 0 {
-		fmt.Println("No depositions were found. The witnesses remain unexamined,")
-		fmt.Println("which they should not mistake for being uncharged.")
+		fmt.Println("No deposition files were found.")
 		return 0
 	}
 
-	fmt.Println("THE COURT WILL NOW HEAR THE DEPOSITIONS.")
+	fmt.Println("RUNNING DEPOSITIONS")
 	fmt.Println()
 	contradicted := 0
 	for _, f := range files {
@@ -879,7 +985,7 @@ func testCmd(ctx context.Context, rest []string) int {
 		}
 		if *transcript && len(res.Said) > 0 {
 			fmt.Println()
-			fmt.Printf("          THE WITNESS PROCLAIMED, in %d entr(ies):\n", len(res.Said))
+			fmt.Printf("          OUTPUT (%d entries):\n", len(res.Said))
 			for _, said := range res.Said {
 				fmt.Println()
 				for line := range strings.SplitSeq(said, "\n") {
@@ -891,20 +997,21 @@ func testCmd(ctx context.Context, rest []string) int {
 	}
 	fmt.Println()
 	if contradicted == 0 {
-		fmt.Printf("%d witness(es) were deposed. The testimony is consistent with the record.\n", len(files))
+		fmt.Printf("%d deposition(s) passed.\n", len(files))
 		return 0
 	}
-	fmt.Printf("%d witness(es) were deposed; %d stand(s) in contradiction.\n", len(files), contradicted)
-	fmt.Println("Perjury proceedings are being considered. Correct the filings, or the depositions,")
-	fmt.Println("whichever was lying.")
+	fmt.Printf("%d deposition(s) ran; %d failed.\n", len(files), contradicted)
 	return 1
 }
 
 func docketCmd(ctx context.Context, rest []string) int {
 	fs := commandFlags("docket")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	asJSON := fs.Bool("json", false, "the docket, as JSON")
 	if err := fs.Parse(rest); err != nil {
+		return 2
+	}
+	if unexpectedArgs("docket", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, *broker)
@@ -915,7 +1022,7 @@ func docketCmd(ctx context.Context, rest []string) int {
 
 	cases, err := log.ListCases(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The docket could not be consulted: %v\n", err)
+		fmt.Fprintf(os.Stderr, "The docket could not be read: %v\n", err)
 		return 1
 	}
 	if *asJSON {
@@ -942,29 +1049,32 @@ func docketCmd(ctx context.Context, rest []string) int {
 		return printJSON(entries)
 	}
 	if len(cases) == 0 {
-		fmt.Println("The docket is empty. This will be corrected.")
+		fmt.Println("The docket is empty.")
 		return 0
 	}
-	fmt.Printf("THE DOCKET — %d matter(s) before this court\n\n", len(cases))
+	fmt.Printf("DOCKET (%d cases)\n\n", len(cases))
 	for _, c := range cases {
 		st, err := court.Examine(ctx, log, c)
 		switch {
 		case err != nil:
-			fmt.Printf("  %-16s (the file could not be examined)\n", c.ID)
+			fmt.Printf("  %-16s status unavailable\n", c.ID)
 		case st.Verdict != nil:
-			fmt.Printf("  %-16s GUILTY — the verdict is final\n", c.ID)
+			fmt.Printf("  %-16s guilty\n", c.ID)
 		case st.Started:
 			fmt.Printf("  %-16s in proceedings; attention at instruction %d\n", c.ID, st.PC)
 		default:
-			fmt.Printf("  %-16s filed; the proceedings may begin at any moment\n", c.ID)
+			fmt.Printf("  %-16s filed\n", c.ID)
 		}
 	}
 	return 0
 }
 
 func transcript(ctx context.Context, rest []string) int {
-	_, broker, c, ok := caseFlags("transcript", rest, nil)
+	fs, broker, c, ok := caseFlags("transcript", rest, nil)
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("transcript", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -975,7 +1085,7 @@ func transcript(ctx context.Context, rest []string) int {
 
 	recs, err := log.ReadAll(ctx, c.Filing())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The filing could not be read back: %v\n", err)
+		fmt.Fprintf(os.Stderr, "The filing could not be read: %v\n", err)
 		return 1
 	}
 	for _, r := range recs {
@@ -986,11 +1096,14 @@ func transcript(ctx context.Context, rest []string) int {
 
 func verdict(ctx context.Context, rest []string) int {
 	var counsel, asJSON *bool
-	_, broker, c, ok := caseFlags("verdict", rest, func(fs *flag.FlagSet) {
+	fs, broker, c, ok := caseFlags("verdict", rest, func(fs *flag.FlagSet) {
 		counsel = fs.Bool("counsel", false, "unseal the particulars")
 		asJSON = fs.Bool("json", false, "the verdict, as JSON")
 	})
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("verdict", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -1031,7 +1144,6 @@ func verdict(ctx context.Context, rest []string) int {
 	}
 	if st.Verdict == nil {
 		fmt.Printf("No verdict has been reached in %s.\n", c.ID)
-		fmt.Println("This is not the same as innocence.")
 		return 0
 	}
 	fmt.Println("GUILTY.")
@@ -1043,7 +1155,7 @@ func verdict(ctx context.Context, rest []string) int {
 			fmt.Printf("[counsel] the offense occurred at instruction %d\n", st.Verdict.PC)
 		}
 	} else {
-		fmt.Println("The particulars are sealed. (Retain counsel: --counsel.)")
+		fmt.Println("The details are sealed. Use --counsel to display them.")
 	}
 	return 1
 }
@@ -1089,10 +1201,13 @@ func buildStatusView(c docket.Case, st *court.Status) statusView {
 
 func status(ctx context.Context, rest []string) int {
 	var asJSON *bool
-	_, broker, c, ok := caseFlags("status", rest, func(fs *flag.FlagSet) {
+	fs, broker, c, ok := caseFlags("status", rest, func(fs *flag.FlagSet) {
 		asJSON = fs.Bool("json", false, "the case file, as JSON")
 	})
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("status", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -1109,41 +1224,41 @@ func status(ctx context.Context, rest []string) int {
 	if *asJSON {
 		return printJSON(buildStatusView(c, st))
 	}
-	fmt.Printf("IN THE MATTER OF %s — a status report, unsolicited\n\n", c.ID)
+	fmt.Printf("STATUS %s\n\n", c.ID)
 	if st.Started {
-		fmt.Printf("  The Court's attention rests at instruction %d.\n", st.PC)
+		fmt.Printf("  Next instruction: %d\n", st.PC)
 	} else {
-		fmt.Println("  The proceedings have not yet begun. They may begin at any moment.")
+		fmt.Println("  The case has not started.")
 	}
-	fmt.Printf("  The dossier holds %d item(s) in evidence.\n", st.StackDepth)
-	fmt.Printf("  %d appeal(s) are pending.\n", st.AppealsDepth)
+	fmt.Printf("  Operand stack depth: %d\n", st.StackDepth)
+	fmt.Printf("  Call stack depth: %d\n", st.AppealsDepth)
 	if st.ContinuedUntil != nil {
-		fmt.Printf("  A continuance is in effect until %s. The Court is aware of the time.\n",
+		fmt.Printf("  Continued until %s.\n",
 			st.ContinuedUntil.Format("2006-01-02 15:04:05.000"))
 	}
 	if st.AwaitingUntil != nil {
 		if st.AwaitingVoice != "" {
-			fmt.Printf("  The voice of %s is awaited until %s. After that, the contingency.\n",
+			fmt.Printf("  Waiting for input from %s until %s.\n",
 				st.AwaitingVoice, st.AwaitingUntil.Format("2006-01-02 15:04:05.000"))
 		} else {
-			fmt.Printf("  A summons is awaited until %s. After that, the contingency.\n",
+			fmt.Printf("  Waiting for input until %s.\n",
 				st.AwaitingUntil.Format("2006-01-02 15:04:05.000"))
 		}
 	}
 	if st.HeardOutOfTurn > 0 {
-		fmt.Printf("  %d summons(es) were heard out of turn; the records passed over await their own.\n",
+		fmt.Printf("  Inputs consumed out of turn: %d\n",
 			st.HeardOutOfTurn)
 	}
 	if st.MotionFiled && !st.MotionSpent {
-		fmt.Println("  A motion to reconsider is on file. It will be granted once, if ever.")
+		fmt.Println("  A motion to reconsider is pending.")
 	}
 	if st.MotionSpent {
-		fmt.Println("  A motion to reconsider was granted. The Court will not do that again.")
+		fmt.Println("  The motion to reconsider has been spent.")
 	}
 	if len(st.Records) == 0 {
-		fmt.Println("  No records are on file.")
+		fmt.Println("  Records: none")
 	} else {
-		fmt.Println("  The records read as follows:")
+		fmt.Println("  Records:")
 		names := make([]string, 0, len(st.Records))
 		for n := range st.Records {
 			names = append(names, n)
@@ -1154,14 +1269,17 @@ func status(ctx context.Context, rest []string) int {
 		}
 	}
 	if st.Verdict != nil {
-		fmt.Println("\n  A VERDICT HAS BEEN REACHED. The verdict is final.")
+		fmt.Println("\n  Verdict: GUILTY")
 	}
 	return 0
 }
 
 func reenact(ctx context.Context, rest []string) int {
-	_, broker, c, ok := caseFlags("reenact", rest, nil)
+	fs, broker, c, ok := caseFlags("reenact", rest, nil)
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("reenact", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -1171,13 +1289,14 @@ func reenact(ctx context.Context, rest []string) int {
 	defer log.Close()
 
 	if err := court.Reenact(ctx, log, c); err != nil {
+		if reportAmbiguousCommit(os.Stderr, "replay reset", "case "+c.ID, err) {
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "The reenactment could not be arranged: %v\n", err)
 		return 1
 	}
-	fmt.Println("The case will be reenacted in full. Every summons will be")
-	fmt.Println("re-served; every proclamation will be re-proclaimed. Nothing")
-	fmt.Println("has been deleted — nothing is ever deleted — the case simply")
-	fmt.Println("begins again, with its entire history watching.")
+	fmt.Println("Replay markers appended. Recorded inputs, clock readings, and")
+	fmt.Println("random draws will be reused; existing history is retained.")
 	fmt.Println()
 	fmt.Printf("Convene:  trial proceed %s\n", c.ID)
 	return 0
@@ -1185,31 +1304,30 @@ func reenact(ctx context.Context, rest []string) int {
 
 func audit(ctx context.Context, rest []string) int {
 	fs := commandFlags("audit")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
-	docketAll := fs.Bool("docket", false, "audit every matter on the docket, and survey the walls")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
+	docketAll := fs.Bool("docket", false, "audit every case and court-wide record")
 	asJSON := fs.Bool("json", false, "the report, as JSON")
-	if err := fs.Parse(rest); err != nil {
+	caseID, ok := parseFirstArg(fs, rest)
+	if !ok {
 		return 2
 	}
-	var caseID string
-	if fs.NArg() >= 1 {
-		caseID = fs.Arg(0)
-		if fs.NArg() > 1 {
-			if err := fs.Parse(fs.Args()[1:]); err != nil {
-				return 2
-			}
-		}
-	}
 	if *docketAll {
+		if caseID != "" || fs.NArg() != 0 {
+			fmt.Fprintln(os.Stderr, "trial audit: --docket does not take a case number.")
+			return 2
+		}
 		log, code := openLog(ctx, *broker)
 		if log == nil {
 			return code
 		}
 		defer log.Close()
-		return burrow(ctx, log)
+		return auditDocket(ctx, log)
+	}
+	if unexpectedArgs("audit", fs.Args()) {
+		return 2
 	}
 	if caseID == "" {
-		fmt.Fprintln(os.Stderr, "trial audit: a case number is required (or --docket, to listen at every wall).")
+		fmt.Fprintln(os.Stderr, "trial audit: a case number is required (or use --docket).")
 		return 2
 	}
 	c, err := docket.ParseCase(caseID)
@@ -1251,32 +1369,31 @@ func audit(ctx context.Context, rest []string) int {
 		}
 		return 1
 	}
-	fmt.Printf("IN THE MATTER OF %s — the warden's report\n\n", c.ID)
-	fmt.Printf("  The case was reenacted in chambers, against a copy: %d timeline(s),\n", report.Timelines)
-	fmt.Printf("  %d committed step(s). Nothing was disturbed.\n", report.Steps)
+	fmt.Printf("AUDIT %s\n\n", c.ID)
+	fmt.Printf("  Replayed %d timeline(s) and %d committed step(s).\n", report.Timelines, report.Steps)
 	for _, n := range report.Notes {
-		fmt.Printf("\n  NOTED: %s.\n", n)
+		fmt.Printf("\n  Note: %s.\n", n)
 	}
 	if report.Consistent() {
-		fmt.Println("\n  The record is consistent with itself. The verdict, the records,")
-		fmt.Println("  and the proclamations agree with their reenactments. The tomb")
-		fmt.Println("  is undisturbed, and its occupant is exactly who the stone says.")
+		fmt.Println("\n  The recorded state and output match the replay.")
 		return 0
 	}
-	fmt.Printf("\n  THE RECORD DOES NOT AGREE WITH ITSELF. %d finding(s):\n", len(report.Findings))
+	fmt.Printf("\n  The replay found %d inconsistency(ies):\n", len(report.Findings))
 	for i, f := range report.Findings {
 		fmt.Printf("\n  %d. %s.\n", i+1, f)
 	}
-	fmt.Println("\n  Someone has been in the files.")
 	return 1
 }
 
 func appeal(ctx context.Context, rest []string) int {
 	var atStep *int64
-	_, broker, c, ok := caseFlags("appeal", rest, func(fs *flag.FlagSet) {
+	fs, broker, c, ok := caseFlags("appeal", rest, func(fs *flag.FlagSet) {
 		atStep = fs.Int64("at-step", court.AppealAsItStands, "take the case as it stood after n committed steps")
 	})
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("appeal", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -1287,11 +1404,13 @@ func appeal(ctx context.Context, rest []string) int {
 
 	n, err := court.Appeal(ctx, log, c, *atStep)
 	if err != nil {
+		if reportRecoverableCaseError(os.Stderr, "appeal", n, err) {
+			return 1
+		}
 		fmt.Fprintf(os.Stderr, "The appeal could not be taken: %v\n", err)
 		return 1
 	}
-	fmt.Println("The appeal is taken. The legend now comes down in a further")
-	fmt.Println("version; the original is not touched, and each ends as it ends.")
+	fmt.Println("Appeal created. The original case was not changed.")
 	fmt.Println()
 	if *atStep == court.AppealAsItStands {
 		fmt.Printf("On appeal from:  %s, as it stands\n", c.ID)
@@ -1308,11 +1427,14 @@ func appeal(ctx context.Context, rest []string) int {
 func profileCmd(ctx context.Context, rest []string) int {
 	var top *int
 	var asJSON *bool
-	_, broker, c, ok := caseFlags("profile", rest, func(fs *flag.FlagSet) {
+	fs, broker, c, ok := caseFlags("profile", rest, func(fs *flag.FlagSet) {
 		top = fs.Int("top", 20, "lines to print")
 		asJSON = fs.Bool("json", false, "the meter, as JSON")
 	})
 	if !ok {
+		return 2
+	}
+	if unexpectedArgs("profile", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, broker)
@@ -1350,13 +1472,11 @@ func profileCmd(ctx context.Context, rest []string) int {
 			Lines      []line `json:"lines"`
 		}{c.ID, report.Timelines, report.Steps, report.Executed, report.Consistent, lines})
 	}
-	fmt.Printf("IN THE MATTER OF %s — where the time went\n\n", c.ID)
+	fmt.Printf("PROFILE %s\n\n", c.ID)
 	fmt.Printf("  %d timeline(s), %d committed step(s), %d instruction execution(s),\n", report.Timelines, report.Steps, report.Executed)
-	fmt.Println("  metered in chambers. The philosopher had to catch the top to study")
-	fmt.Println("  it; the record was never spinning to begin with.")
+	fmt.Println("  measured during replay.")
 	if !report.Consistent {
-		fmt.Println("\n  CAUTION: the record did not agree with its own reenactment; this")
-		fmt.Println("  is a profile of the reenactment. Audit before believing anything.")
+		fmt.Println("\n  Warning: the replay did not match the record. Run trial audit before using this profile.")
 	}
 	fmt.Println()
 	fmt.Printf("  %10s  %8s  %-16s %s\n", "EXECUTIONS", "ADDRESS", "SEAL", "POSITION")
@@ -1368,22 +1488,22 @@ func profileCmd(ctx context.Context, rest []string) int {
 		fmt.Printf("  %10d  %8d  %-16s %s\n", l.Count, l.PC, l.Op, l.Pos)
 	}
 	if n < len(report.Lines) {
-		fmt.Printf("\n  ... and %d cooler instruction(s), which also served.\n", len(report.Lines)-n)
+		fmt.Printf("\n  ... %d additional instruction(s) omitted.\n", len(report.Lines)-n)
 	}
 	return 0
 }
 
-// burrow audits every case and court-wide record.
-func burrow(ctx context.Context, log *docket.KafkaLog) int {
+// auditDocket audits every case and court-wide record.
+func auditDocket(ctx context.Context, log *docket.KafkaLog) int {
 	b, err := court.SurveyBurrow(ctx, log)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "The burrow could not be surveyed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Docket audit failed: %v\n", err)
 		return 1
 	}
-	fmt.Printf("THE BURROW — the courthouse, listened at from inside\n\n")
+	fmt.Println("DOCKET AUDIT")
+	fmt.Println()
 	if len(b.Audits) == 0 {
-		fmt.Println("  The docket is empty. The stillness is complete, and a little")
-		fmt.Println("  suspicious.")
+		fmt.Println("  The docket is empty.")
 		return 0
 	}
 	consistent := 0
@@ -1392,12 +1512,12 @@ func burrow(ctx context.Context, log *docket.KafkaLog) int {
 			consistent++
 		}
 	}
-	fmt.Printf("  %d matter(s) on the docket; %d audited consistent.\n\n", len(b.Audits), consistent)
+	fmt.Printf("  %d case(s); %d replayed consistently.\n\n", len(b.Audits), consistent)
 	for _, a := range b.Audits {
 		if a.Consistent() {
 			fmt.Printf("  %-16s consistent; %d timeline(s), %d step(s) replayed\n", a.Case, a.Timelines, a.Steps)
 		} else {
-			fmt.Printf("  %-16s THE RECORD DOES NOT AGREE WITH ITSELF; %d finding(s):\n", a.Case, len(a.Findings))
+			fmt.Printf("  %-16s inconsistent; %d finding(s):\n", a.Case, len(a.Findings))
 			for i, f := range a.Findings {
 				fmt.Printf("      %d. %s.\n", i+1, f)
 			}
@@ -1415,34 +1535,33 @@ func burrow(ctx context.Context, log *docket.KafkaLog) int {
 		sort.Strings(drafted)
 		for _, c := range drafted {
 			offs := b.Drafts[c]
-			fmt.Printf("  The archive of %s holds %d draft(s), entered at the counter\n", c, len(offs))
-			fmt.Printf("  and never cataloged (offset(s) %v). The archive accumulates\n", offs)
-			fmt.Println("  drafts; that is its nature; here is where they are.")
+			fmt.Printf("  %s has %d uncataloged archive record(s) at offset(s) %v.\n", c, len(offs), offs)
 		}
 	}
 	if len(b.Unconvened) > 0 {
-		fmt.Printf("\n  %d matter(s) stand unconvened, and no ledger records commencing\n", len(b.Unconvened))
-		fmt.Println("  them: filed and waiting, or the remainder of an official who")
-		fmt.Println("  perished between counter and commitment. From inside the burrow")
-		fmt.Printf("  the two are indistinguishable: %s.\n", strings.Join(b.Unconvened, ", "))
+		fmt.Printf("\n  %d case(s) have not started and have no commencement record: %s.\n",
+			len(b.Unconvened), strings.Join(b.Unconvened, ", "))
 	}
 	if len(b.SpentMotions) > 0 {
-		fmt.Printf("\n  %d motion(s) to reconsider stand spent: %s. The Court will not\n", len(b.SpentMotions), strings.Join(b.SpentMotions, ", "))
-		fmt.Println("  do that again, and here is everyone it will not do it again for.")
+		fmt.Printf("\n  %d spent motion(s) to reconsider: %s.\n",
+			len(b.SpentMotions), strings.Join(b.SpentMotions, ", "))
 	}
 	if b.Consistent() {
-		fmt.Println("\n  But the most beautiful thing about my burrow is the stillness.")
+		fmt.Println("\n  The docket and court-wide records are consistent.")
 		return 0
 	}
-	fmt.Println("\n  There is a faint hissing in the walls. Someone has been in the files.")
+	fmt.Println("\n  The audit found inconsistencies.")
 	return 1
 }
 
 // mcpCmd runs the Advocate MCP server on standard input and output.
 func mcpCmd(ctx context.Context, rest []string) int {
 	fs := commandFlags("mcp")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
 	if err := fs.Parse(rest); err != nil {
+		return 2
+	}
+	if unexpectedArgs("mcp", fs.Args()) {
 		return 2
 	}
 	log, code := openLog(ctx, *broker)
@@ -1451,10 +1570,10 @@ func mcpCmd(ctx context.Context, rest []string) int {
 	}
 	defer log.Close()
 
-	fmt.Fprintln(os.Stderr, "(The Advocate is retained and listening on stdio. He is very good; he is also the only one.)")
+	fmt.Fprintln(os.Stderr, "trial MCP server listening on stdio")
 	srv := &advocate.Server{Log: log, In: os.Stdin, Out: os.Stdout}
 	if err := srv.Serve(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "The Advocate has withdrawn from the matter: %v\n", err)
+		fmt.Fprintf(os.Stderr, "MCP server stopped: %v\n", err)
 		return 1
 	}
 	return 0
@@ -1465,10 +1584,13 @@ func counselCmd(ctx context.Context, rest []string) int {
 	if err := fs.Parse(rest); err != nil {
 		return 2
 	}
-	fmt.Fprintln(os.Stderr, "(Counsel is retained and listening on stdio, LSP 3.x. Diagnostics are Gregor's own; the editor and the Court will never disagree.)")
+	if unexpectedArgs("counsel", fs.Args()) {
+		return 2
+	}
+	fmt.Fprintln(os.Stderr, "trial LSP server listening on stdio")
 	srv := &counsel.Server{In: os.Stdin, Out: os.Stdout, Version: resolveVersion()}
 	if err := srv.Serve(ctx); err != nil {
-		fmt.Fprintf(os.Stderr, "Counsel has withdrawn from the matter: %v\n", err)
+		fmt.Fprintf(os.Stderr, "LSP server stopped: %v\n", err)
 		return 1
 	}
 	return 0
@@ -1476,10 +1598,13 @@ func counselCmd(ctx context.Context, rest []string) int {
 
 func watch(ctx context.Context, rest []string) int {
 	fs := commandFlags("watch")
-	broker := fs.String("broker", brokerDefault(), "the courthouse")
-	interval := fs.Duration("interval", 2*time.Second, "how often the docket is swept")
-	once := fs.Bool("once", false, "print the docket once and leave the gallery")
+	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
+	interval := fs.Duration("interval", 2*time.Second, "refresh interval")
+	once := fs.Bool("once", false, "print one snapshot and exit")
 	if err := fs.Parse(rest); err != nil {
+		return 2
+	}
+	if unexpectedArgs("watch", fs.Args()) {
 		return 2
 	}
 	if *interval <= 0 {
@@ -1505,19 +1630,19 @@ func watch(ctx context.Context, rest []string) int {
 			// Clear only an interactive terminal. Pipes receive plain tables.
 			fmt.Print("\033[2J\033[H")
 		}
-		fmt.Printf("THE DOCKET, observed %s. %d matter(s) before the court.\n\n",
+		fmt.Printf("DOCKET %s (%d cases)\n\n",
 			time.Now().Format("15:04:05"), len(reports))
 		fmt.Printf("  %-14s %8s %8s %8s %8s %8s  %s\n", "CASE", "PC", "END", "BEHIND", "DOSSIER", "APPEALS", "STATUS")
 		for _, r := range reports {
-			fmt.Printf("  %-14s %8d %8d %8d %8d %8d  %s\n",
-				r.Case.ID, r.PC, r.End, r.Lag, r.StackDepth, r.AppealsDepth, r.Status)
+			end, lag := docketPositionFields(r)
+			fmt.Printf("  %-14s %8d %8s %8s %8d %8d  %s\n",
+				r.Case.ID, r.PC, end, lag, r.StackDepth, r.AppealsDepth, r.Status)
 		}
 		if len(reports) == 0 {
-			fmt.Println("  (No matters. This will not last.)")
+			fmt.Println("  (empty)")
 		}
 		fmt.Println()
-		fmt.Println("BEHIND is how far the Court's attention has fallen behind the")
-		fmt.Println("proceedings: consumer lag, rendered as what it is here.")
+		fmt.Println("BEHIND is the distance between the current instruction and the end.")
 		if *once {
 			return 0
 		}
@@ -1529,19 +1654,27 @@ func watch(ctx context.Context, rest []string) int {
 	}
 }
 
+func docketPositionFields(report court.MatterReport) (end, lag string) {
+	if !report.EndKnown {
+		return "?", "?"
+	}
+	return fmt.Sprintf("%d", report.End), fmt.Sprintf("%d", report.Lag)
+}
+
 func burn(ctx context.Context, rest []string) int {
 	var insist *bool
-	_, broker, c, ok := caseFlags("burn", rest, func(fs *flag.FlagSet) {
-		insist = fs.Bool("with-prejudice", false, "insist upon the burning; the dismissal is final")
+	fs, broker, c, ok := caseFlags("burn", rest, func(fs *flag.FlagSet) {
+		insist = fs.Bool("with-prejudice", false, "confirm permanent deletion")
 	})
 	if !ok {
 		return 2
 	}
+	if unexpectedArgs("burn", fs.Args()) {
+		return 2
+	}
 	if !*insist {
-		fmt.Printf("The request to burn %s has been received and considered.\n\n", c.ID)
-		fmt.Println("Refused. The Court does not destroy its own records.")
-		fmt.Println()
-		fmt.Printf("(If you insist:  trial burn %s --with-prejudice)\n", c.ID)
+		fmt.Fprintf(os.Stderr, "Refusing to delete %s without --with-prejudice.\n", c.ID)
+		fmt.Fprintf(os.Stderr, "To confirm: trial burn %s --with-prejudice\n", c.ID)
 		return 1
 	}
 	log, code := openLog(ctx, broker)
@@ -1551,11 +1684,9 @@ func burn(ctx context.Context, rest []string) int {
 	defer log.Close()
 
 	if err := log.DeleteCaseTopics(ctx, c); err != nil {
-		fmt.Fprintf(os.Stderr, "The fire went out: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Case deletion failed: %v\n", err)
 		return 1
 	}
-	fmt.Printf("The file of %s has been burned, with prejudice.\n", c.ID)
-	fmt.Println("The Court notes for the record that the record no longer")
-	fmt.Println("exists; it notes this in the record.")
+	fmt.Printf("Deleted case %s. This cannot be undone.\n", c.ID)
 	return 0
 }

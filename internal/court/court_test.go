@@ -189,7 +189,7 @@ ARTICLE 1.
 		t.Fatalf("first session: %v", out)
 	}
 	// A different official, with no memory of the first session,
-	// resumes from the committed offset and the folded state.
+	// resumes from the committed program position and folded state.
 	if out := proceed(t, log, c); out != OutcomeAdjourned {
 		t.Fatalf("second session: %v", out)
 	}

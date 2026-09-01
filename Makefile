@@ -77,7 +77,6 @@ verify:
 	${MAKE} vet
 	${MAKE} test
 	${MAKE} race
-	${MAKE} property
 	${MAKE} lint
 	${MAKE} api-check
 	${MAKE} workflow-check

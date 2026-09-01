@@ -74,15 +74,46 @@ type toolContent struct {
 }
 
 func textResult(v any) toolResult {
-	b, _ := json.MarshalIndent(v, "", "  ")
-	return toolResult{Content: []toolContent{{Type: "text", Text: string(b)}}}
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return errorResult("tool result could not be encoded: %v", err)
+	}
+	return boundedToolResult(string(b), false)
 }
 
 func errorResult(format string, args ...any) toolResult {
+	return boundedToolResult(fmt.Sprintf(format, args...), true)
+}
+
+func boundedToolResult(message string, isError bool) toolResult {
+	result := toolResult{
+		Content: []toolContent{{Type: "text", Text: message}},
+		IsError: isError,
+	}
+	if encoded, err := json.Marshal(result); err == nil && len(encoded) <= maxToolOutputBytes {
+		return result
+	}
 	return toolResult{
-		Content: []toolContent{{Type: "text", Text: fmt.Sprintf(format, args...)}},
+		Content: []toolContent{{Type: "text", Text: fmt.Sprintf("tool result exceeds the %d-byte output limit", maxToolOutputBytes)}},
 		IsError: true,
 	}
+}
+
+func ambiguousCommitResult(operation, target string, err error) (toolResult, bool) {
+	if _, ambiguous := errors.AsType[*docket.AmbiguousCommitError](err); !ambiguous {
+		return toolResult{}, false
+	}
+	return errorResult("%s result is uncertain for %s: %v. It may already be committed; inspect %s before taking further action", operation, target, err, target), true
+}
+
+func recoverableCaseResult(operation string, c docket.Case, err error) (toolResult, bool) {
+	if c.ID == "" {
+		return toolResult{}, false
+	}
+	if result, ambiguous := ambiguousCommitResult(operation, "case "+c.ID, err); ambiguous {
+		return result, true
+	}
+	return errorResult("%s failed for case %s: %v. The case may be partial; inspect case %s before retrying", operation, c.ID, err, c.ID), true
 }
 
 type boundedNarration struct {
@@ -121,7 +152,7 @@ func (s *Server) Serve(ctx context.Context) error {
 		var req rpcRequest
 		if err := decodeStrict(line, &req, false); err != nil {
 			if encodeErr := enc.Encode(rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"),
-				Error: &rpcError{Code: -32700, Message: "the motion could not be read: " + err.Error()}}); encodeErr != nil {
+				Error: &rpcError{Code: -32700, Message: "request could not be read: " + err.Error()}}); encodeErr != nil {
 				return encodeErr
 			}
 			continue
@@ -164,7 +195,7 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo": map[string]any{
 				"name":    "trial",
-				"title":   "The Advocate (triallang, a language that lives in Apache Kafka)",
+				"title":   "triallang MCP server",
 				"version": s.Version,
 			},
 			"instructions": advocateInstructions,
@@ -186,7 +217,7 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 			Meta      json.RawMessage `json:"_meta"`
 		}
 		if err := decodeStrict(req.Params, &params, false); err != nil {
-			resp.Error = &rpcError{Code: -32602, Message: "the motion names no tool"}
+			resp.Error = &rpcError{Code: -32602, Message: "tools/call parameters could not be read"}
 			return resp, !notification
 		}
 		resp.Result = s.call(ctx, params.Name, params.Arguments)
@@ -194,9 +225,9 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 	}
 
 	if notification {
-		return resp, false // initialized, cancelled, and other murmurs
+		return resp, false // initialized, cancelled, and other notifications
 	}
-	resp.Error = &rpcError{Code: -32601, Message: fmt.Sprintf("%q is not a motion this court entertains", req.Method)}
+	resp.Error = &rpcError{Code: -32601, Message: fmt.Sprintf("method %q is not supported", req.Method)}
 	return resp, true
 }
 
@@ -238,7 +269,7 @@ func obj(props map[string]any, required ...string) map[string]any {
 }
 
 func toolDefs() []map[string]any {
-	caseProp := map[string]any{"type": "string", "description": "The case number (your only receipt), e.g. case-1a2b3c4d5e6f708192a3b4c5."}
+	caseProp := map[string]any{"type": "string", "description": "A case number, for example case-1a2b3c4d5e6f708192a3b4c5."}
 	sourceProp := map[string]any{"type": "string", "description": "Complete triallang source text."}
 	return []map[string]any{
 		{
@@ -372,13 +403,16 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		filed, err := court.File(ctx, s.Log, args.Source)
 		if err != nil {
 			if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-				return errorResult("Your filing has been rejected pursuant to Article §4.2.\n[counsel] %s", rej.Error())
+				return errorResult("filing rejected pursuant to Article §4.2: %s", rej.Error())
 			}
-			return errorResult("The filing failed for reasons unrelated to its content: %v", err)
+			if result, recoverable := recoverableCaseResult("filing", filed, err); recoverable {
+				return result
+			}
+			return errorResult("filing failed: %v", err)
 		}
 		return textResult(map[string]any{
 			"case": filed.ID,
-			"note": "The matter has been accepted for filing. This number is your only receipt. The proceedings begin when the Court convenes: call trial_proceed.",
+			"note": "The case is filed. Call trial_proceed to execute it.",
 		})
 
 	case "trial_proceed":
@@ -399,8 +433,11 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		defer cancel()
 		outcome, err := ct.Proceed(dctx)
 		expired := dctx.Err() != nil
-		if err != nil && !expired {
-			return errorResult("The session could not be held: %v", err)
+		if err != nil {
+			if result, ambiguous := ambiguousCommitResult("execution step", "case "+c.ID, err); ambiguous {
+				return result
+			}
+			return errorResult("session failed: %v", err)
 		}
 		result := map[string]any{
 			"case":                c.ID,
@@ -411,19 +448,19 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		}
 		switch {
 		case expired:
-			result["note"] = "The session's court days ran out mid-matter. Every completed step is committed; nothing is lost. If the case awaits a summons, serve one (trial_serve) and proceed again."
+			result["note"] = "The session time limit expired. Completed steps are committed. If the case is waiting for input, call trial_serve and then trial_proceed again."
 		case outcome == court.OutcomeGuilty:
-			result["note"] = "A verdict has been reached. Consult trial_verdict; the particulars will be furnished."
+			result["note"] = "The case produced a verdict. Call trial_verdict for details."
 		case outcome == court.OutcomeApparentAcquittal:
-			result["note"] = "The proceedings have run out. This is apparent acquittal, which is not the same as innocence; the case may be amended (trial_amend) at any time."
+			result["note"] = "Execution reached the current end of the proceedings. The case can still be amended with trial_amend."
 		default:
-			result["note"] = "The case stands adjourned. It may be reopened at any time. It is never over."
+			result["note"] = "The case is adjourned and can be resumed."
 		}
 		return textResult(result)
 
 	case "trial_serve":
 		if len(args.Values) == 0 {
-			return errorResult("Nothing to serve. The Court does not deliver empty envelopes.")
+			return errorResult("values must contain at least one input")
 		}
 		if len(args.Values) > maxToolValues {
 			return errorResult("at most %d summonses may be served in one call", maxToolValues)
@@ -442,12 +479,15 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 			appends[i] = docket.StepAppend{Topic: c.Summons(), Value: []byte(text)}
 		}
 		if _, err := s.Log.AppendBatch(ctx, appends); err != nil {
-			return errorResult("The summonses could not be served atomically: %v", err)
+			if result, ambiguous := ambiguousCommitResult("input batch", "case "+c.ID, err); ambiguous {
+				return result
+			}
+			return errorResult("inputs could not be appended atomically: %v", err)
 		}
 		return textResult(map[string]any{
 			"case":   c.ID,
 			"served": len(args.Values),
-			"note":   "The summonses have been served. Compliance is assumed.",
+			"note":   "The input batch was appended.",
 		})
 
 	case "trial_observe":
@@ -461,7 +501,7 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		for len(out) < args.Limit {
 			record, err := s.Log.Fetch(ctx, c.Proclamations(), next, false)
 			if err != nil {
-				return errorResult("The gallery is closed: %v", err)
+				return errorResult("case output could not be read: %v", err)
 			}
 			if record == nil {
 				break
@@ -485,7 +525,7 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 	case "trial_status":
 		st, err := court.Examine(ctx, s.Log, c)
 		if err != nil {
-			return errorResult("The case file could not be examined: %v", err)
+			return errorResult("case status could not be read: %v", err)
 		}
 		names := make([]string, 0, len(st.Records))
 		for name := range st.Records {
@@ -511,24 +551,24 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		}
 		if st.ContinuedUntil != nil {
 			result["continued_until"] = st.ContinuedUntil.Format(time.RFC3339)
-			result["note"] = "A continuance is in effect: the case sleeps, durably, and any trial_proceed will honor the original date."
+			result["note"] = "A continuance is active. trial_proceed will honor the recorded deadline."
 		}
 		if st.AwaitingUntil != nil {
 			result["awaiting_until"] = st.AwaitingUntil.Format(time.RFC3339)
-			result["note"] = "A timed await is in effect: the case listens for a summons until the stated moment, then takes its contingency."
+			result["note"] = "A timed input wait is active until the recorded deadline."
 		}
 		return textResult(result)
 
 	case "trial_verdict":
 		st, err := court.Examine(ctx, s.Log, c)
 		if err != nil {
-			return errorResult("The case file could not be examined: %v", err)
+			return errorResult("case verdict could not be read: %v", err)
 		}
 		if st.Verdict == nil {
 			return textResult(map[string]any{
 				"case":    c.ID,
 				"verdict": nil,
-				"note":    "No verdict has been reached. This is not the same as innocence.",
+				"note":    "No verdict has been recorded.",
 			})
 		}
 		return textResult(map[string]any{
@@ -539,29 +579,31 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 				"pc":     st.Verdict.PC,
 				"pos":    st.Verdict.Pos,
 			},
-			"note": "The verdict is final. Reenactment remains available, as it always does.",
+			"note": "The verdict is final. The case can still be reenacted.",
 		})
 
 	case "trial_amend":
 		n, err := court.Amend(ctx, s.Log, c, args.Source)
 		if err != nil {
 			if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-				return errorResult("Your supplemental filing has been rejected pursuant to Article §4.2.\n[counsel] %s", rej.Error())
+				return errorResult("supplemental filing rejected pursuant to Article §4.2: %s", rej.Error())
 			}
-			return errorResult("The supplement was refused: %v", err)
+			if result, ambiguous := ambiguousCommitResult("supplemental filing", "case "+c.ID, err); ambiguous {
+				return result
+			}
+			return errorResult("supplemental filing failed: %v", err)
 		}
 		return textResult(map[string]any{
 			"case":                 c.ID,
 			"instructions_entered": n,
-			"note":                 "New evidence has come to light. The proceedings resume when the Court next convenes: call trial_proceed.",
+			"note":                 "The supplemental instructions were appended. Call trial_proceed to resume.",
 		})
 
 	case "trial_docket":
 		cases, err := s.Log.ListCases(ctx)
 		if err != nil {
-			return errorResult("The docket could not be consulted: %v", err)
+			return errorResult("docket could not be read: %v", err)
 		}
-		sort.Slice(cases, func(i, j int) bool { return cases[i].ID < cases[j].ID })
 		type entry struct {
 			Case        string `json:"case"`
 			Disposition string `json:"disposition"`
@@ -573,13 +615,13 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 			st, err := court.Examine(ctx, s.Log, dc)
 			switch {
 			case err != nil:
-				out = append(out, entry{dc.ID, "the file could not be examined"})
+				out = append(out, entry{dc.ID, "status unavailable"})
 			case st.Verdict != nil:
-				out = append(out, entry{dc.ID, "GUILTY; the verdict is final"})
+				out = append(out, entry{dc.ID, "guilty"})
 			case st.Started:
 				out = append(out, entry{dc.ID, fmt.Sprintf("in proceedings; attention at instruction %d", st.PC)})
 			default:
-				out = append(out, entry{dc.ID, "filed; the proceedings may begin at any moment"})
+				out = append(out, entry{dc.ID, "filed"})
 			}
 		}
 		return textResult(map[string]any{
@@ -590,39 +632,47 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 
 	case "trial_reenact":
 		if err := court.Reenact(ctx, s.Log, c); err != nil {
-			return errorResult("The reenactment could not be arranged: %v", err)
+			if result, ambiguous := ambiguousCommitResult("replay reset", "case "+c.ID, err); ambiguous {
+				return result
+			}
+			return errorResult("reenactment failed: %v", err)
 		}
 		return textResult(map[string]any{
 			"case": c.ID,
-			"note": "The case will be reenacted in full: every summons re-served, every recorded draw and clock reading honored. Nothing has been deleted; nothing is ever deleted. Convene with trial_proceed and observe the case unfold again, identically.",
+			"note": "The replay markers were appended. Call trial_proceed to replay the case from its recorded inputs, clock readings, and random draws.",
 		})
 
 	case "trial_enact":
 		statute, n, err := court.Enact(ctx, s.Log, args.Source)
 		if err != nil {
 			if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-				return errorResult("The proposed statute has been rejected pursuant to Article §4.2.\n[counsel] %s", rej.Error())
+				return errorResult("statute rejected pursuant to Article §4.2: %s", rej.Error())
 			}
-			return errorResult("The statute was not enacted: %v", err)
+			if statute != "" {
+				target := fmt.Sprintf("statute %s (enactment %d)", statute, n)
+				if result, ambiguous := ambiguousCommitResult("enactment", target, err); ambiguous {
+					return result
+				}
+			}
+			return errorResult("statute enactment failed: %v", err)
 		}
 		return textResult(map[string]any{
 			"statute":   statute,
 			"enactment": n,
-			"note":      fmt.Sprintf("The statute is binding immediately. New cases may claim its offices: INCORPORATE BY REFERENCE %s.", statute),
+			"note":      fmt.Sprintf("New cases can incorporate it with: INCORPORATE BY REFERENCE %s.", statute),
 		})
 
 	case "trial_statutes":
 		names, err := s.Log.ListStatutes(ctx)
 		if err != nil {
-			return errorResult("The statute books could not be consulted: %v", err)
+			return errorResult("statutes could not be listed: %v", err)
 		}
-		sort.Strings(names)
 		return textResult(map[string]any{"statutes": names})
 
 	case "trial_test":
 		dep, err := deposition.Parse(args.DepositionSource)
 		if err != nil {
-			return errorResult("The deposition would not parse: %v", err)
+			return errorResult("deposition could not be parsed: %v", err)
 		}
 		res := deposition.Run(ctx, args.ProgramSource, dep)
 		result := map[string]any{
@@ -631,12 +681,12 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 			"elapsed_seconds": res.Elapsed.Seconds(),
 		}
 		if res.OK() {
-			result["note"] = "The testimony is consistent with the record. The program may be filed with some confidence, which the Court will enjoy correcting."
+			result["note"] = "The program matched the deposition."
 		}
 		return textResult(result)
 	}
 
-	return errorResult("%q is not a tool of this court. Consult tools/list; everything the court can do is listed, which should worry you.", name)
+	return errorResult("unknown tool %q; consult tools/list", name)
 }
 
 func validateToolFields(name string, raw json.RawMessage) error {

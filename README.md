@@ -1,13 +1,11 @@
-![triallang logo over ASCII court records](docs/hero.png)
-
 # triallang
 
 *A toy programming language backed by Apache Kafka.*
 
 > [!NOTE]
 > triallang is an independent project. It is not affiliated with, endorsed by,
-> or sponsored by Apache Kafka or the Apache Software Foundation. Its literary
-> style is inspired by the works of Franz Kafka.
+> or sponsored by Apache Kafka or the Apache Software Foundation. Its
+> terminology borrows from Franz Kafka's fiction.
 
 triallang is a toy programming language that writes program state to Apache
 Kafka. Programs are cases, statements use legal English and end with a period,
@@ -48,14 +46,13 @@ go build -o trial ./cmd/trial
 ./trial version
 ```
 
-## Visual demo
+## Demo
 
-The Orrery is a terminal animation of a rotating, depth-shaded sphere beneath a
-`TRIAL-LANG` wordmark. Each framebuffer is part of the filing. The Court
-commits the frame number before it proclaims the frame, so another Court can
-resume the animation from the recorded offset.
+The Orrery prints a rotating ASCII sphere. It records the frame number before
+printing each frame, so a restarted process continues from the recorded
+position.
 
-![The triallang transactional Orrery](docs/the-orrery.gif)
+![The triallang Orrery](docs/the-orrery.gif)
 
 Run the brokerless terminal animation:
 
@@ -64,17 +61,14 @@ go build -o trial ./cmd/trial
 ./docs/the-orrery-demo.sh
 ```
 
-The viewer adds color and pacing. The frames come from the tested triallang
-program in `examples/the-orrery.trial`.
-
-For a live Kafka run, start the broker and file the case:
+For a Kafka-backed run, start the broker and file the case:
 
 ```console
 ./trial summon
 ./trial file examples/the-orrery.trial
 ```
 
-Copy the printed case number. Then run these commands in separate terminals:
+Use the printed case number in two terminals:
 
 ```console
 ./docs/the-orrery-demo.sh case-...
@@ -84,22 +78,17 @@ Copy the printed case number. Then run these commands in separate terminals:
 ./trial proceed case-...
 ```
 
-Stop `proceed` between two frames and start it again with the same case number.
-The next Court reads the committed frame and timer. Serve `q` to stop early:
+Restart `proceed` with the same case number to resume. Serve `q` to stop:
 
 ```console
 ./trial serve case-... q
 ```
 
-The paired deposition tests every byte of all 24 frames without wall-clock
-delays:
+Check all generated frames without wall-clock delays:
 
 ```console
 go run ./cmd/trial test examples/the-orrery.deposition
 ```
-
-The Procession is the smaller state-resumption example. The Castle and Cornell
-Box remain compact renderer stress cases.
 
 ## Live broker workflow
 
@@ -160,10 +149,16 @@ output, ledger, and execution position in topics. The Court uses Kafka
 transactions to commit an instruction's effects with its next position. Reads
 use committed data.
 
-A commit timeout has an ambiguous result. The Court returns a typed
-`AmbiguousCommitError`; a caller must read the recorded position before it
-retries. Concurrent amendments to one case from separate processes are not
-supported.
+A transaction timeout has an ambiguous result. The runtime returns a typed
+`AmbiguousCommitError`; before retrying, an execution caller must reread
+attention and a paperwork caller must inspect the affected topics. If initial
+case creation or population may have left topics behind, `File` returns the
+minted case identifier with the error; `Appeal` does the same for a new appeal,
+and `OpenHearing` retains it in the returned hearing. The CLI and MCP filing
+tool print any such recovery identifier. A definite filing failure returns no
+case after successful cleanup. Retrying service, amendment, enactment, or
+reenactment blindly can duplicate committed records. Concurrent amendments to
+one case from separate processes are not supported.
 
 The in-memory adapter implements atomic batches for deterministic tests. It does
 not prove the behavior of a live broker.
@@ -181,8 +176,7 @@ decisions.
 - One case executes in one ordered stream. Use separate cases for concurrency.
 - A Kafka-backed instruction requires broker transactions and is not intended
   for low-latency loops.
-- The repository has unit, property, race, fuzz targets, and Kafka integration
-  tests. It has no recorded Antithesis run.
+- The repository has unit, property, race, fuzz, and Kafka integration tests.
 - Crash and replay tests cover repository-defined fault points. They do not
   establish universal crash safety or operational durability.
 - Benchmark results apply only to their recorded revision, hardware, broker,

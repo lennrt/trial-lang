@@ -48,68 +48,89 @@ func checkStmt(s Stmt, assignedAt map[string]int) error {
 		if !gone {
 			return nil
 		}
-		return reject(line, 1, "the letters for %q were assigned away at line %d; %s at line %d is use after assignment, and the examiner sees it without convening anyone", name, at, what, line)
+		return reject(line, 1, "the letters for %q were assigned at line %d; %s at line %d is use after assignment", name, at, what, line)
 	}
-	var checkExpr func(e Expr, line int) error
-	checkExpr = func(e Expr, line int) error {
+	var checkExpr func(Expr) error
+	checkExprs := func(exprs []Expr) error {
+		for _, expr := range exprs {
+			if err := checkExpr(expr); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	checkExpr = func(e Expr) error {
 		switch ex := e.(type) {
 		case Practice:
 			return use(ex.Name, ex.Line, "the practice")
 		case Binary:
-			if err := checkExpr(ex.L, line); err != nil {
+			if err := checkExpr(ex.L); err != nil {
 				return err
 			}
-			return checkExpr(ex.R, line)
+			return checkExpr(ex.R)
 		case Call:
-			for _, a := range ex.Args {
-				if err := checkExpr(a, line); err != nil {
+			return checkExprs(ex.Args)
+		case CallUnder:
+			if err := checkExpr(ex.Power); err != nil {
+				return err
+			}
+			return checkExprs(ex.Args)
+		case ExhibitLit:
+			for _, field := range ex.Fields {
+				if err := checkExpr(field.Expr); err != nil {
 					return err
 				}
 			}
-		case ExhibitLit:
-			for _, f := range ex.Fields {
-				if err := checkExpr(f.Expr, line); err != nil {
+		case RegisterLit:
+			for _, entry := range ex.Entries {
+				if err := checkExpr(entry.Value); err != nil {
+					return err
+				}
+				if err := checkExpr(entry.Key); err != nil {
 					return err
 				}
 			}
 		case Inspect:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		case Measure:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		case Excerpt:
-			if err := checkExpr(ex.Of, line); err != nil {
+			if err := checkExpr(ex.Of); err != nil {
 				return err
 			}
-			if err := checkExpr(ex.From, line); err != nil {
+			if err := checkExpr(ex.From); err != nil {
 				return err
 			}
-			return checkExpr(ex.To, line)
+			return checkExpr(ex.To)
 		case Transcript:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		case SumCertain:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		case ScheduleLit:
-			for _, item := range ex.Items {
-				if err := checkExpr(item, line); err != nil {
-					return err
-				}
-			}
+			return checkExprs(ex.Items)
 		case ItemAt:
-			if err := checkExpr(ex.Index, line); err != nil {
+			if err := checkExpr(ex.Index); err != nil {
 				return err
 			}
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
+		case EntryAt:
+			if err := checkExpr(ex.Key); err != nil {
+				return err
+			}
+			return checkExpr(ex.Of)
+		case RosterOf:
+			return checkExpr(ex.Of)
 		case Discretion:
-			if err := checkExpr(ex.Lo, line); err != nil {
+			if err := checkExpr(ex.Lo); err != nil {
 				return err
 			}
-			return checkExpr(ex.Hi, line)
+			return checkExpr(ex.Hi)
 		case DocumentFrom:
-			return checkExpr(ex.Name, line)
+			return checkExpr(ex.Name)
 		case Standing:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		case Discovery:
-			return checkExpr(ex.Of, line)
+			return checkExpr(ex.Of)
 		}
 		return nil
 	}
@@ -117,10 +138,10 @@ func checkStmt(s Stmt, assignedAt map[string]int) error {
 	checkCond = func(c Cond) error {
 		switch cn := c.(type) {
 		case Clause:
-			if err := checkExpr(cn.Left, 0); err != nil {
+			if err := checkExpr(cn.Left); err != nil {
 				return err
 			}
-			return checkExpr(cn.Right, 0)
+			return checkExpr(cn.Right)
 		case CondBinary:
 			if err := checkCond(cn.L); err != nil {
 				return err
@@ -132,11 +153,15 @@ func checkStmt(s Stmt, assignedAt map[string]int) error {
 
 	switch st := s.(type) {
 	case Recording:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
 	case Entering:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
 	case Proclaim:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
+	case Summons:
+		if st.From != nil {
+			return checkExpr(st.From)
+		}
 	case Conditional:
 		if err := checkCond(st.Cond); err != nil {
 			return err
@@ -148,71 +173,84 @@ func checkStmt(s Stmt, assignedAt map[string]int) error {
 			return checkStmt(st.Else, assignedAt)
 		}
 	case TimedSummons:
-		if err := checkExpr(st.Days, st.Line); err != nil {
+		if st.From != nil {
+			if err := checkExpr(st.From); err != nil {
+				return err
+			}
+		}
+		if err := checkExpr(st.Days); err != nil {
 			return err
 		}
 		return checkStmt(st.Else, assignedAt)
 	case Petition:
-		for _, a := range st.Args {
-			if err := checkExpr(a, st.Line); err != nil {
-				return err
-			}
+		return checkExprs(st.Args)
+	case PetitionUnder:
+		if err := checkExpr(st.Power); err != nil {
+			return err
 		}
+		return checkExprs(st.Args)
 	case Remand:
 		if st.Value != nil {
-			return checkExpr(st.Value, st.Line)
+			return checkExpr(st.Value)
 		}
 	case Contempt:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
 	case Serve:
-		if err := checkExpr(st.Value, st.Line); err != nil {
+		if err := checkExpr(st.Value); err != nil {
 			return err
 		}
-		return checkExpr(st.Target, st.Line)
+		return checkExpr(st.Target)
 	case Judgment:
-		if err := checkExpr(st.Grounds, st.Line); err != nil {
+		if err := checkExpr(st.Grounds); err != nil {
 			return err
 		}
-		return checkExpr(st.Target, st.Line)
+		return checkExpr(st.Target)
 	case Annex:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
 	case Substitute:
-		if err := checkExpr(st.Expr, st.Line); err != nil {
+		if err := checkExpr(st.Expr); err != nil {
 			return err
 		}
-		return checkExpr(st.Index, st.Line)
+		return checkExpr(st.Index)
+	case Inscribe:
+		if err := checkExpr(st.Value); err != nil {
+			return err
+		}
+		return checkExpr(st.Key)
+	case Expunge:
+		return checkExpr(st.Key)
 	case AdjournFor:
-		return checkExpr(st.Days, st.Line)
+		return checkExpr(st.Days)
 	case ArchiveCommit:
-		if err := checkExpr(st.Value, st.Line); err != nil {
+		if err := checkExpr(st.Value); err != nil {
 			return err
 		}
-		return checkExpr(st.Name, st.Line)
+		return checkExpr(st.Name)
 	case PatentGrant:
 		if err := use(st.Name, st.Line, "the re-issuance"); err != nil {
 			return err
 		}
-		if err := checkExpr(st.Disclosure, st.Line); err != nil {
+		if err := checkExpr(st.Disclosure); err != nil {
 			return err
 		}
-		return checkExpr(st.Term, st.Line)
+		return checkExpr(st.Term)
 	case LicenseGrant:
 		if err := use(st.Name, st.Line, "the license"); err != nil {
 			return err
 		}
-		if err := checkExpr(st.To, st.Line); err != nil {
+		if err := checkExpr(st.To); err != nil {
 			return err
 		}
-		return checkExpr(st.Term, st.Line)
+		return checkExpr(st.Term)
 	case AssignLetters:
 		if err := use(st.Name, st.Line, "the second assignment"); err != nil {
 			return err
 		}
-		return checkExpr(st.To, st.Line)
+		return checkExpr(st.To)
 	case Commence:
-		return checkExpr(st.Source, st.Line)
+		return checkExpr(st.Source)
 	case Publish:
-		return checkExpr(st.Expr, st.Line)
+		return checkExpr(st.Expr)
 	}
 	return nil
 }

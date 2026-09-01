@@ -21,11 +21,14 @@ func TestSphereFrames(t *testing.T) {
 				t.Fatalf("frame %d line %d has width %d; want %d", frame+1, line+1, len(text), panelWidth+2)
 			}
 		}
-		if !strings.Contains(got, "TRANSACTIONAL SPHERE") {
-			t.Fatalf("frame %d has no sphere title", frame+1)
+		if !strings.Contains(got, "TRIAL-LANG // ORRERY") {
+			t.Fatalf("frame %d has no Orrery title", frame+1)
 		}
 		if !strings.Contains(got, fmt.Sprintf("FRAME %02d/%d", frame+1, frameCount)) {
 			t.Fatalf("frame %d has the wrong frame counter", frame+1)
+		}
+		if strings.Contains(got, "OFFSET") {
+			t.Fatalf("frame %d mislabels its frame counter as an offset", frame+1)
 		}
 		if _, ok := seen[got]; ok {
 			t.Fatalf("frame %d duplicates an earlier frame", frame+1)

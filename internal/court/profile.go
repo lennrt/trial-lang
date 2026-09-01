@@ -52,12 +52,13 @@ func Profile(ctx context.Context, log docket.Log, c docket.Case) (*ProfileReport
 	if err != nil {
 		return nil, err
 	}
-	for _, r := range instrs {
-		n := counts[r.Offset]
+	for pc, r := range instrs {
+		address := int64(pc)
+		n := counts[address]
 		if n == 0 {
 			continue // never executed; the proceedings hold much that never happens
 		}
-		line := ProfileLine{PC: r.Offset, Count: n}
+		line := ProfileLine{PC: address, Count: n}
 		if in, err := law.Unmarshal(r.Value); err == nil {
 			line.Op = in.Op
 			line.Pos = in.Pos

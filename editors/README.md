@@ -38,8 +38,9 @@ anywhere TextMate grammars do:
   beside it (comments and bracket behavior).
 
 - **GitHub rendering**: Linguist ships grammars for registered languages only.
-  Until triallang is registered, add `*.trial linguist-language=Text` to
-  `.gitattributes` to keep `.trial` files from affecting language statistics.
+  In a repository that embeds triallang files, add
+  `*.trial linguist-language=Text` to that repository's `.gitattributes` if
+  they should be excluded from language statistics.
 
 A tree-sitter grammar remains on the roadmap. The TextMate grammar provides
 highlighting, and the LSP provides diagnostics, hover text, and completion.
@@ -68,7 +69,7 @@ cites the reference manual and completion for required phrases.
 Filings that `INCORPORATE BY REFERENCE` receive parse-level diagnostics only,
 because the language server does not fetch enactments.
 
-## The gallery: `trial watch`
+## Docket view: `trial watch`
 
 `trial watch` is a live dashboard of cases, their current attention, and
 consumer lag. Use `--once` for one snapshot or `--interval` to set the refresh

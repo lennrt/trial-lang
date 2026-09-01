@@ -20,9 +20,7 @@ const enactmentKey = "enactment"
 
 var errNoEnactment = errors.New("no enactment on file")
 
-// enactment is one published version of a statute: its text and where
-// in the statute topic it rests. The offsets pin the version exactly;
-// a version is an offset range, and an offset range is forever.
+// enactment is one published statute version and its exact topic range.
 type enactment struct {
 	Name     string
 	Number   int
@@ -30,23 +28,21 @@ type enactment struct {
 	Source   string
 }
 
-// latestEnactment reads the current text of a statute from its filing
-// topic. A statute that has never been enacted is indistinguishable
-// from a statute that does not exist, which is the usual arrangement.
+// latestEnactment reads the most recent complete version of a statute.
 func latestEnactment(ctx context.Context, log docket.Log, name string) (*enactment, error) {
 	statutes, err := log.ListStatutes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("the statute books could not be consulted: %w", err)
 	}
 	if !slices.Contains(statutes, name) {
-		return nil, fmt.Errorf("%w: no statute by the name %q has been enacted with this court; the law you require does not exist, which has never yet prevented its application", errNoEnactment, name)
+		return nil, fmt.Errorf("%w: no statute named %q has been enacted", errNoEnactment, name)
 	}
 	recs, err := log.ReadAll(ctx, docket.StatuteTopic(name))
 	if err != nil {
 		return nil, fmt.Errorf("the statute %q could not be read: %w", name, err)
 	}
 	if len(recs) == 0 {
-		return nil, fmt.Errorf("%w: no statute by the name %q has been enacted with this court; the law you require does not exist, which has never yet prevented its application", errNoEnactment, name)
+		return nil, fmt.Errorf("%w: no statute named %q has been enacted", errNoEnactment, name)
 	}
 	e := &enactment{}
 	var lines []string
@@ -61,17 +57,15 @@ func latestEnactment(ctx context.Context, log docket.Log, name string) (*enactme
 		e.To = r.Offset
 	}
 	if e.Number == 0 || len(lines) == 0 {
-		return nil, fmt.Errorf("the statute %q is on file but contains no enactment; it is all preamble", name)
+		return nil, fmt.Errorf("the statute %q is on file but contains no complete enactment", name)
 	}
 	e.Source = strings.Join(lines, "\n")
 	return e, nil
 }
 
-// Enact publishes a statute (Form S-1): its offices become available
-// to every case that INCORPORATEs it BY REFERENCE. Re-enacting a
-// statute appends a new version; cases already filed keep the version
-// they incorporated, spliced into their own proceedings, pinned by
-// construction. Returns the statute's name and enactment number.
+// Enact publishes a Form S-1 statute. Re-enactment appends a new version;
+// existing cases keep the version they incorporated. If the transaction is
+// ambiguous, Enact returns the intended name and version with the error.
 func Enact(ctx context.Context, log docket.Log, src string) (string, int, error) {
 	prog, err := gregor.Parse(src)
 	if err != nil {
@@ -108,22 +102,17 @@ func Enact(ctx context.Context, log docket.Log, src string) (string, int, error)
 		appends = append(appends, docket.StepAppend{Topic: topic, Value: []byte(line)})
 	}
 	if _, err := log.AppendBatch(ctx, appends); err != nil {
+		if _, ambiguous := errors.AsType[*docket.AmbiguousCommitError](err); ambiguous {
+			return prog.Name, n, err
+		}
 		return "", 0, err
 	}
 	return prog.Name, n, nil
 }
 
-// incorporate resolves every INCORPORATE BY REFERENCE clause,
-// transitively: the statute's current enactment is fetched, parsed,
-// and whatever *it* incorporates is spliced first (the law a statute
-// stands on arrives before the statute), then its offices, exhibits,
-// and defined terms, exactly as though the accused had typed them,
-// which, legally, they did. Each statute is spliced at most once,
-// however many roads lead to it; a diamond is not a duplicate, and a
-// circle, should re-enactment ever manufacture one, terminates for the
-// same reason. Name collisions between *different* statutes are
-// detected downstream by Gregor, whose rejections on the subject of
-// duplicates are already adequate.
+// incorporate resolves referenced statutes transitively, dependencies first.
+// Each statute is spliced once, so shared and cyclic references terminate.
+// Gregor reports name collisions between different statutes.
 func incorporate(ctx context.Context, log docket.Log, prog *gregor.Program) ([]*enactment, error) {
 	var pinned []*enactment
 	seen := make(map[string]bool)
@@ -131,7 +120,7 @@ func incorporate(ctx context.Context, log docket.Log, prog *gregor.Program) ([]*
 	splice = func(incs []gregor.Incorporation) error {
 		for _, inc := range incs {
 			if seen[inc.Name] {
-				continue // already on file; the law accumulates once per statute
+				continue
 			}
 			seen[inc.Name] = true
 			e, err := latestEnactment(ctx, log, inc.Name)
@@ -149,7 +138,7 @@ func incorporate(ctx context.Context, log docket.Log, prog *gregor.Program) ([]*
 			prog.Exhibits = append(prog.Exhibits, sProg.Exhibits...)
 			prog.Constants = append(prog.Constants, sProg.Constants...)
 			e.Name = inc.Name
-			e.Source = "" // the splice is done; only the pin travels on
+			e.Source = "" // retain only version metadata after splicing
 			pinned = append(pinned, e)
 		}
 		return nil
@@ -162,7 +151,8 @@ func incorporate(ctx context.Context, log docket.Log, prog *gregor.Program) ([]*
 
 // File opens a case: parses and compiles the source, creates the
 // topics, records the filing verbatim, and lays the proceedings down
-// record by record. The returned case number is your only receipt.
+// record by record. File returns the minted case number when topic creation or
+// population may have left state behind, so callers can inspect that case.
 func File(ctx context.Context, log docket.Log, src string) (docket.Case, error) {
 	prog, err := gregor.Parse(src)
 	if err != nil {
@@ -185,7 +175,7 @@ func File(ctx context.Context, log docket.Log, src string) (docket.Case, error) 
 		return docket.Case{}, err
 	}
 	if err := log.CreateCaseTopics(ctx, c); err != nil {
-		return docket.Case{}, fmt.Errorf("the case file could not be opened: %w", err)
+		return c, fmt.Errorf("case %s may have a partial file; inspect it before retrying: %w", c.ID, err)
 	}
 
 	appends := make([]docket.StepAppend, 0, len(instrs)+len(pinned)+strings.Count(src, "\n")+1)
@@ -202,27 +192,31 @@ func File(ctx context.Context, log docket.Log, src string) (docket.Case, error) 
 		appends = append(appends, docket.StepAppend{Topic: c.Filing(), Key: []byte("incorporation"), Value: []byte(note)})
 	}
 
-	// The proceedings. The offset each record lands at is the address
-	// every REFER and PETITION was compiled against; the topic must be
-	// fresh, and it is; the case number was minted moments ago.
+	// Proceedings are addressed by visible record order. Filing and bytecode
+	// share one transaction; Kafka's later control record is not an instruction.
 	for _, in := range instrs {
 		appends = append(appends, docket.StepAppend{Topic: c.Proceedings(), Value: in.Marshal()})
 	}
 	if _, err := log.AppendBatch(ctx, appends); err != nil {
+		// Kafka may have committed the batch even when the acknowledgement was
+		// lost. Preserve the case so the caller can inspect its filing and
+		// proceedings instead of deleting a filing that may have succeeded.
+		if _, ambiguous := errors.AsType[*docket.AmbiguousCommitError](err); ambiguous {
+			return c, err
+		}
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
 		cleanupErr := log.DeleteCaseTopics(cleanupCtx, c)
-		return c, errors.Join(err, cleanupErr)
+		if cleanupErr == nil {
+			return docket.Case{}, err
+		}
+		return c, fmt.Errorf("case %s may have a partial file; inspect it before retrying: %w", c.ID, errors.Join(err, cleanupErr))
 	}
 	return c, nil
 }
 
-// Amend enters a supplemental filing (Form K-2) into a live case: new
-// proceedings appended after the existing ones. A case that had
-// reached the end of its proceedings (apparent acquittal) resumes
-// against the new evidence the next time the Court convenes; this is
-// the sense in which it was never over. Returns the number of
-// instructions entered.
+// Amend appends a Form K-2 filing and its instructions to a live case. A case
+// at the current end resumes from the first appended instruction.
 func Amend(ctx context.Context, log docket.Log, c docket.Case, src string) (int, error) {
 	prog, err := gregor.Parse(src)
 	if err != nil {
@@ -249,17 +243,13 @@ func Amend(ctx context.Context, log docket.Log, c docket.Case, src string) (int,
 		return 0, errors.New("there is no such case on the docket; a supplement to nothing is a confession")
 	}
 
-	// The supplement's instructions begin where the proceedings end.
-	// The proceedings topic is written outside transactions, so its
-	// offsets are dense and the end is arithmetic.
+	// Instruction addresses are positions among visible proceedings. Physical
+	// Kafka offsets may contain transaction control records and are irrelevant.
 	existing, err := log.ReadAll(ctx, c.Proceedings())
 	if err != nil {
 		return 0, err
 	}
-	var base int64
-	if len(existing) > 0 {
-		base = existing[len(existing)-1].Offset + 1
-	}
+	base := int64(len(existing))
 
 	instrs, err := gregor.CompileAt(prog, base)
 	if err != nil {
@@ -279,10 +269,8 @@ func Amend(ctx context.Context, log docket.Log, c docket.Case, src string) (int,
 	return len(instrs), nil
 }
 
-// Reenact prepares a full replay: markers reset the dossier, appeals,
-// and records folds, and the program counter and summons position
-// return to zero. Nothing is deleted. Nothing is ever deleted. The
-// case simply begins again, with its entire history watching.
+// Reenact appends reset markers and returns the program and input cursors to
+// zero. Existing records are retained for deterministic replay and audit.
 func Reenact(ctx context.Context, log docket.Log, c docket.Case) error {
 	dossier, err := json.Marshal(dossierEvent{Op: "REENACTMENT"})
 	if err != nil {
@@ -301,8 +289,7 @@ func Reenact(ctx context.Context, log docket.Log, c docket.Case) error {
 	}})
 }
 
-// Status is what can be assembled about a case from the outside, which
-// is everything, because the case is the log.
+// Status is the case state reconstructed from its topics.
 type Status struct {
 	PC           int64
 	Started      bool

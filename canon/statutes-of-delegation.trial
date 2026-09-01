@@ -1,18 +1,17 @@
 FORM S-1.
 IN THE MATTER OF: statutes-of-delegation.
 
-OFF THE RECORD: The statutes of delegation: map, filter, and fold,
-OFF THE RECORD: each an office taking a power of attorney as a
-OFF THE RECORD: concern. The canon shipped concrete folds in v1.9
-OFF THE RECORD: because the language had no office-as-value to pass;
-OFF THE RECORD: the New Advocate was admitted to the bar in v2.6 and
-OFF THE RECORD: this statute pays the debt.
+OFF THE RECORD: Generic map, filter, and fold operations. Each office
+OFF THE RECORD: accepts a power of attorney as an argument. Earlier
+OFF THE RECORD: canon versions needed concrete folds because offices
+OFF THE RECORD: could not be passed as values. Powers of attorney now
+OFF THE RECORD: provide that capability, so these operations can be
+OFF THE RECORD: defined once.
 OFF THE RECORD:
-OFF THE RECORD: The counsel conferred must concern itself with one
-OFF THE RECORD: matter (applied-to-each, selected-by) or two
-OFF THE RECORD: (folded-with: the accumulation, then the item); a
-OFF THE RECORD: mismatch is a verdict at the moment of exercise, as
-OFF THE RECORD: it would be anywhere.
+OFF THE RECORD: applied-to-each and selected-by require a one-argument
+OFF THE RECORD: office. folded-with requires two arguments: the
+OFF THE RECORD: accumulated value and the current item. An arity
+OFF THE RECORD: mismatch produces a verdict when the power is used.
 
 THE OFFICE OF applied-to-each, CONCERNING counsel AND entries.
     REMAND WITH THE FINDING OF applied-from REGARDING counsel AND entries AND 1 AND AN EMPTY SCHEDULE.

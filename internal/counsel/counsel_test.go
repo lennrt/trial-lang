@@ -27,6 +27,27 @@ func TestDiagnoseRejectedFiling(t *testing.T) {
 	}
 }
 
+func TestDiagnoseUsesLSPUTF16Columns(t *testing.T) {
+	src := "FORM K-1.\nIN THE MATTER OF: broken.\nARTICLE 1.\nPROCLAIM \"😀\" EXTRA.\n"
+	diagnostics := Diagnose(src)
+	if len(diagnostics) != 1 {
+		t.Fatalf("expected one diagnostic, got %v", diagnostics)
+	}
+	rangeValue := diagnostics[0]["range"].(map[string]any)
+	start := rangeValue["start"].(position)
+	if start.Line != 3 || start.Character != 14 {
+		t.Fatalf("diagnostic starts at %+v, want line 3, UTF-16 column 14", start)
+	}
+
+	diagnostics = Diagnose("FORM K-1.\n😀\n")
+	rangeValue = diagnostics[0]["range"].(map[string]any)
+	start = rangeValue["start"].(position)
+	end := rangeValue["end"].(position)
+	if start.Character != 0 || end.Character != 2 {
+		t.Fatalf("diagnostic range for a supplementary rune = %+v..%+v, want columns 0..2", start, end)
+	}
+}
+
 func TestDiagnoseSkipsCompileWhenIncorporating(t *testing.T) {
 	// The clerk cannot fetch enactments from inside an editor: a filing
 	// that incorporates gets parse-level counsel only, not false
@@ -172,5 +193,29 @@ func TestServeInitializeOpenHover(t *testing.T) {
 	hover := messages[2]["result"].(map[string]any)["contents"].(map[string]any)["value"].(string)
 	if !strings.Contains(hover, "Output") {
 		t.Fatalf("hover on PROCLAIM = %q", hover)
+	}
+}
+
+func TestNotificationsReceiveNoResponseAndShutdownReturnsNull(t *testing.T) {
+	var in bytes.Buffer
+	in.WriteString(frame(map[string]any{"jsonrpc": "2.0", "method": "initialize", "params": map[string]any{}}))
+	in.WriteString(frame(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "shutdown"}))
+	in.WriteString(frame(map[string]any{"jsonrpc": "2.0", "method": "exit"}))
+
+	var out bytes.Buffer
+	s := &Server{In: &in, Out: &out, Version: "test"}
+	if err := s.Serve(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	message, err := readMessage(bufio.NewReader(&out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response map[string]json.RawMessage
+	if err := json.Unmarshal(message, &response); err != nil {
+		t.Fatal(err)
+	}
+	if string(response["id"]) != "1" || string(response["result"]) != "null" {
+		t.Fatalf("shutdown response = %s", message)
 	}
 }

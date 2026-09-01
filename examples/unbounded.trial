@@ -1,11 +1,8 @@
 FORM K-1.
 IN THE MATTER OF: unbounded-memory.
 
-OFF THE RECORD: the Turing-completeness witness. An exhibit may hold
-OFF THE RECORD: an exhibit, so a chain of parcels is a stack of any
-OFF THE RECORD: depth: unbounded memory, built from paperwork alone.
-OFF THE RECORD: Ten squares go into the pile; ten squares come back
-OFF THE RECORD: out, in reverse, as everything eventually does.
+OFF THE RECORD: Build a linked stack from nested exhibits. Push ten squares,
+OFF THE RECORD: then print them in reverse order.
 
 THE EXHIBIT OF parcel, COMPRISING contents AND remainder.
 

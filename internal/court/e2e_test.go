@@ -12,6 +12,7 @@ package court
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -149,22 +150,63 @@ ARTICLE 1.
 	if out := e2eProceed(t, log, c); out != OutcomeApparentAcquittal {
 		t.Fatalf("expected apparent acquittal, got %v", out)
 	}
+	before, err := log.ReadAll(t.Context(), c.Proceedings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	formerEnd := int64(len(before))
+	if record, err := log.FetchProceeding(t.Context(), c, formerEnd, false); err != nil || record != nil {
+		t.Fatalf("FetchProceeding at current end = %+v, %v; want nil", record, err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	if _, err := Amend(ctx, log, c, `FORM K-2.
 IN THE MATTER OF: supplement.
-ARTICLE 1.
-    PROCLAIM total PLUS 11.
+ARTICLE 2.
+    SHOULD total EQUAL 100, REFER TO ARTICLE 4.
+    PROCLAIM "wrong branch".
+ARTICLE 3.
+    PROCLAIM "wrong fallthrough".
+ARTICLE 4.
+    PROCLAIM total.
+    LET IT BE RECORDED THAT total IS total PLUS 1.
+    SHOULD total FAIL TO EXCEED 101, REFER TO ARTICLE 4.
+ARTICLE 5.
+    PROCLAIM total.
 `); err != nil {
 		t.Fatalf("the supplement was refused: %v", err)
+	}
+	after, err := log.ReadAll(ctx, c.Proceedings())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(before) == 0 || len(after) <= len(before) {
+		t.Fatalf("proceedings did not grow: before=%d after=%d", len(before), len(after))
+	}
+	if got, wantMoreThan := after[len(before)].Offset, before[len(before)-1].Offset+1; got <= wantMoreThan {
+		t.Fatalf("supplement began at raw offset %d; want a control-record gap after %d", got, wantMoreThan-1)
+	}
+	record, err := log.FetchProceeding(ctx, c, formerEnd, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record == nil || record.Offset != formerEnd || !slices.Equal(record.Value, after[len(before)].Value) {
+		t.Fatalf("FetchProceeding after same-log amendment = %+v, want logical instruction %d", record, formerEnd)
 	}
 	if out := e2eProceed(t, log, c); out != OutcomeApparentAcquittal {
 		t.Fatalf("expected apparent acquittal after the supplement, got %v", out)
 	}
 	got := e2eProclamations(t, log, c)
-	want := []string{"first filing", "111"}
+	want := []string{"first filing", "100", "101", "102"}
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("proclamations = %q, want %q", got, want)
+	}
+	report, err := Audit(ctx, log, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Consistent() {
+		t.Fatalf("amended Kafka case audited dirty: %v", report.Findings)
 	}
 }
 

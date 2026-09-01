@@ -1,16 +1,7 @@
 FORM K-1.
 IN THE MATTER OF: eleven-sons.
-FILED BY: a father, for the record, with reservations.
-
-OFF THE RECORD: Kafka's father describes his eleven sons, one keyed
-OFF THE RECORD: entry after another, each praised and then undercut
-OFF THE RECORD: in the same breath. A register is the third
-OFF THE RECORD: collection: names to values, value semantics, and no
-OFF THE RECORD: order except the one the roster imposes, which is
-OFF THE RECORD: alphabetical, because the Court files everything
-OFF THE RECORD: alphabetically eventually. The sons were born in one
-OFF THE RECORD: order and are proclaimed in another; neither order
-OFF THE RECORD: is the father's preference, which is the point.
+OFF THE RECORD: Store eleven named values in a register. THE ROSTER OF returns
+OFF THE RECORD: the keys in alphabetical order.
 
 ARTICLE 1.
     LET IT BE RECORDED THAT sons IS AN EMPTY REGISTER.

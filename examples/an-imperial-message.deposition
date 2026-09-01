@@ -1,11 +1,8 @@
 DEPOSITION OF: an-imperial-message.trial.
 
-OFF THE RECORD: The junior official convenes the subject the palace
-OFF THE RECORD: commences; the message is published in the gazette;
-OFF THE RECORD: two court days later the palace confirms, by
-OFF THE RECORD: discovery, that the message arrived. Kafka wrote it
-OFF THE RECORD: the other way, but Kafka did not have exactly-once
-OFF THE RECORD: semantics.
+OFF THE RECORD: The parent case starts the subject, publishes a gazette
+OFF THE RECORD: message, waits two court days, and confirms by discovery
+OFF THE RECORD: that the subject received it.
 
 EXPECT PROCLAMATION: "the subject, per discovery, received: a message from the emperor, whispered to the messenger, confirmed in your ear".
 EXPECT PROCLAMATION: "the message has arrived. This is not canon, but it is on the record.".

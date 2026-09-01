@@ -47,7 +47,7 @@ func (k tokenKind) String() string {
 	case tokRParen:
 		return "')'"
 	}
-	return "an unclassifiable mark"
+	return "an unknown token"
 }
 
 type token struct {
@@ -57,8 +57,7 @@ type token struct {
 	col  int
 }
 
-// RejectedFiling is a compile error. The public text cites the Article;
-// the particulars are available to counsel.
+// RejectedFiling reports a source position and parser or compiler error.
 type RejectedFiling struct {
 	Line, Col   int
 	Particulars string
@@ -133,16 +132,14 @@ func lex(src string) ([]token, error) {
 			for j < n && isDigit(src[j]) {
 				j++
 			}
-			// A period followed by a digit is not the end of a sentence;
-			// it is a decimal point, and what follows must be exactly two
-			// figures. The Court keeps sums to the penny and no further.
+			// A decimal point must be followed by exactly two digits.
 			if j+1 < n && src[j] == '.' && isDigit(src[j+1]) {
 				k := j + 1
 				for k < n && isDigit(src[k]) {
 					k++
 				}
 				if k-j-1 != 2 {
-					return nil, reject(startLine, startCol, "the sum %q is not stated to the penny; sums carry exactly two figures after the point, by standing order", src[i:k])
+					return nil, reject(startLine, startCol, "sum %q must have exactly two digits after the decimal point", src[i:k])
 				}
 				toks = append(toks, token{tokSum, src[i:k], startLine, startCol})
 				advance(k - i)
@@ -157,14 +154,14 @@ func lex(src string) ([]token, error) {
 			j := i + 1
 			for {
 				if j >= n || src[j] == '\n' {
-					return nil, reject(startLine, startCol, "a quotation was opened and never closed; the record cannot abide an open quotation")
+					return nil, reject(startLine, startCol, "unterminated string literal")
 				}
 				if src[j] == '"' {
 					break
 				}
 				if src[j] == '\\' {
 					if j+1 >= n {
-						return nil, reject(startLine, startCol, "the filing ends mid-escape")
+						return nil, reject(startLine, startCol, "string literal ends after a backslash")
 					}
 					switch src[j+1] {
 					case '"':
@@ -176,7 +173,7 @@ func lex(src string) ([]token, error) {
 					case 't':
 						sb.WriteByte('\t')
 					default:
-						return nil, reject(startLine, startCol, "the escape '\\%c' is not recognized by this office", src[j+1])
+						return nil, reject(startLine, startCol, "unsupported escape '\\%c'", src[j+1])
 					}
 					j += 2
 					continue
@@ -204,7 +201,7 @@ func lex(src string) ([]token, error) {
 			advance(1)
 
 		default:
-			return nil, reject(line, col, "the character %q has no legal standing", string(c))
+			return nil, reject(line, col, "unsupported character %q", string(c))
 		}
 	}
 	toks = append(toks, token{tokEOF, "", line, col})

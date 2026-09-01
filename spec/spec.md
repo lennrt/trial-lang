@@ -32,13 +32,13 @@ disagree, file an issue to resolve the discrepancy.
 
 ## 1. Introduction
 
-triallang is a toy imperative programming language whose machine
-state (source code, compiled program, program counter, operand stack,
-call stack, variables, standard input, standard output, and exit
-status) resides in Apache Kafka topics. The implementation outside
-Kafka is a stateless *court official* (the interpreter) and a compiler
-(*Gregor*); both may be killed at any time and replaced without loss,
-because the program state is the log, not the process.
+triallang is a toy imperative programming language whose committed machine
+state (source code, compiled program, program counter, operand stack, call
+stack, variables, standard input, standard output, and exit status) resides in
+Apache Kafka topics. The interpreter rebuilds its working state from the
+authoritative attention record and the other topics. Uncommitted work is
+discarded; if Kafka cannot confirm a commit, the caller must reread attention
+before retrying.
 
 A program is called a **case**. Writing a program is **filing** it;
 running it is **the proceedings**; its output is **proclamations**; a
@@ -1096,11 +1096,11 @@ referral = "REFER TO" , ( "ARTICLE" , integer-literal
                         | "SECTION" , integer-literal ) , terminator ;
 ```
 
-An unconditional jump, compiled to a `seek()` on the proceedings topic
-(§14.1). Jurisdiction applies (§9): articles are invisible inside an
-office, sections invisible outside their office. A referral to an
-article or section that does not exist is a rejected filing; the
-referral is returned unopened.
+An unconditional jump sets the logical program counter to the referred
+instruction (§14.1). Jurisdiction applies (§9): articles are invisible inside
+an office, sections invisible outside their office. A referral to an article or
+section that does not exist is a rejected filing; the referral is returned
+unopened.
 
 ### 11.7 Petition and remand (call and return)
 
@@ -1122,9 +1122,9 @@ adjournment = "ADJOURN INDEFINITELY" , terminator
             | "ADJOURN FOR" , expression , ( "DAY" | "DAYS" ) , terminator ;
 ```
 
-**`ADJOURN INDEFINITELY.`** The offset is committed, the official exits,
-and the case is suspended and resumable (§15). This is the only requested
-ending.
+**`ADJOURN INDEFINITELY.`** The next program counter is committed, the
+official exits, and the case is suspended and resumable (§15). This is the only
+requested ending.
 
 **`ADJOURN FOR n DAYS.`** A *continuance*: the same motion with a
 resumption date attached. One court day is one second of wall-clock time.
@@ -1502,10 +1502,10 @@ PROCLAIM THE FINDING UNDER counsel REGARDING 21.
 PETITION UNDER counsel WITH 4.
 ```
 
-A **power of attorney** is the office as a value: the right to
-petition it, wherever the instrument travels within the case. An office is an
-offset into the proceedings topic, so the stored value is a function pointer.
-It remains valid while the append-only proceedings history is retained (§3).
+A **power of attorney** is the office as a value: the right to petition it,
+wherever the instrument travels within the case. An office is a logical address
+in the proceedings, so the stored value is a function pointer. It remains valid
+while the append-only proceedings history is retained (§3).
 
 - **The instrument records** the office's name, its instruction
   address, its concerns, and the case that *executed* it.
@@ -1619,7 +1619,7 @@ records behind in the incorporating case.
 `ARTICLE n.` is a label. Article numbers must be unique within a
 filing; they need not be consecutive, ascending, or reasonable.
 Execution begins at the first article in filing order and falls through from
-each article to the next. Articles compile into proceedings-topic offsets.
+each article to the next. Articles compile into logical instruction addresses.
 
 ## 14. The execution model
 
@@ -1634,7 +1634,7 @@ A case `case-x` is the following family of single-partition topics
 | Topic | Machine concept |
 |---|---|
 | `case-x.filing` | source code, verbatim |
-| `case-x.proceedings` | compiled instructions; **record offset = instruction address** |
+| `case-x.proceedings` | compiled instructions; **visible record index = instruction address** |
 | `case-x.attention` | the program counter (sealed original), with the summons cursor, the ledger cursor, the gazette cursor, and the offsets heard out of turn (§11.4b) beside it |
 | `case-x.dossier` | operand stack, as an event log of PUSH/POP motions |
 | `case-x.appeals` | call stack, as an event log of CALL/RETURN/AMEND events |
@@ -1652,9 +1652,9 @@ cache rebuilt at the start of every session by refolding the topics.
 The Court fetches the instruction at the committed program counter,
 executes it against the cached state, and enters the instruction's
 complete effect (every record it appends, plus the advance of the
-Court's attention) as one Kafka transaction. A jump is a `seek()`. The
-transaction-per-instruction design limits a case to a few hundred instructions
-per second in the recorded benchmark (§17.7).
+Court's attention) as one Kafka transaction. A jump assigns a different logical
+program counter. The transaction-per-instruction design limits a case to a few
+hundred instructions per second in the recorded benchmark (§17.7).
 
 ### 14.3 Exactly-once execution
 
@@ -1710,7 +1710,7 @@ The parity suite checks that several batch sizes produce the same timelines:
 
 ### 14.4 Suspension, migration, replay, and the ledger
 
-Because the machine state is in topics, suspending commits an offset and exits,
+Because the machine state is in topics, suspending commits attention and exits,
 resuming reads it back on another compatible machine, and replaying (`trial
 reenact`) resets the folds and attention to zero. Retained input in the summons
 topic is then served again.
@@ -1884,10 +1884,10 @@ history never reached do not appear.
 
 A case reaches one of three terminal or suspended states:
 
-1. **`ADJOURN INDEFINITELY.`**: the offset is committed, the official
-   exits, and the case is suspended and resumable. This is the only ending a
-   program may request. `ADJOURN FOR n DAYS` (§11.8) instead resumes after its
-   deadline.
+1. **`ADJOURN INDEFINITELY.`**: the next program counter is committed, the
+   official exits, and the case is suspended and resumable. This is the only
+   ending a program may request. `ADJOURN FOR n DAYS` (§11.8) instead resumes
+   after its deadline.
 2. **Apparent acquittal**: execution reaches the end of the
    proceedings topic. Nothing happens: the Court blocks, awaiting
    proceedings that may never come. The case is not finished; it is
@@ -1987,22 +1987,21 @@ cases; check its policy before filing.
 
 ### 17.2 Do not add partitions
 
-One partition per topic, everywhere, always. The proceedings topic's
-record offsets are the instruction addresses; a second partition would
-make the address scheme invalid. The state topics are folds and require total
-order. Do not repartition a case.
+One partition per topic, everywhere, always. Proceedings are addressed by their
+order among visible records; a second partition would make that order
+ambiguous. The state topics are folds and require total order. Do not
+repartition a case.
 
-### 17.3 Transactional markers make offsets non-dense (in state topics)
+### 17.3 Transactional markers make physical offsets non-dense
 
-Kafka transactions write invisible commit markers into the log, so the
-**state** topics (dossier, appeals, records, attention,
-proclamations) have gaps in their offsets. Readers must treat "fetch
-at offset" as "first committed record at or after"; the bundled CLI
-and interpreter do, and your own tooling must too. The **proceedings**
-topic is written outside any transaction, precisely so that its
-offsets stay dense and addressable. Corollary: never write to a
-proceedings topic with a transactional producer; you would perforate
-the address space.
+Kafka transactions write invisible control records after their data in each
+touched partition. Aborted attempts can leave larger invisible spans. Filing
+and amendment transactions include the proceedings topic, so its physical
+offsets can have gaps too. The runtime addresses proceedings by the zero-based
+order of visible committed instruction records and stores that logical number
+in attention. Generic topic readers still treat "fetch at offset" as "first
+committed record at or after"; tooling that reads proceedings directly must not
+confuse a physical Kafka offset with an instruction address.
 
 ### 17.4 Compaction: where it is safe and where it is fatal
 
@@ -2018,16 +2017,17 @@ the address space.
 - **Compacting the dossier or appeals topics destroys the machine.**
   They are event logs; the fold is the whole history since the last
   reenactment marker. Never set `cleanup.policy=compact` on them.
-- The filing, summons, proclamations, and verdicts topics must not be
+- The filing, proceedings, summons, proclamations, and verdicts topics must not be
   compacted either (the summons topic is replayed in full by
   reenactment; the filing is the source of record).
 
 ### 17.5 The consumer group is the public record, not the truth
 
-The program counter is committed twice: to the `attention` topic
-*inside* each instruction's transaction (the sealed original), and to
-the consumer group `the-court.<case>` afterward (the public record).
-Two consequences:
+The logical program counter is committed to the `attention` topic inside each
+instruction's transaction. Afterward, the runtime mirrors it to consumer group
+`the-court.<case>` as the equivalent physical cursor immediately after the
+previous visible instruction. The numbers can differ across control-record
+gaps. Two consequences:
 
 - When they disagree (a crash landed between the two), the sealed
   original prevails.
@@ -2167,7 +2167,7 @@ and joined; `AN EXCERPT OF` also makes a string an addressable tape.
   one: any number of cases run in parallel, may correspond by
   `SERVE NOTICE` (§11.11), and may open one another by `COMMENCE
   PROCEEDINGS` (§11.12). Partitions-as-threads within a case remains
-  post-1.0 discourse; it breaks PC-as-offset determinism.
+  post-1.0 discourse; it would make logical instruction order ambiguous.
 - No closures. Office values exist as powers of attorney but cannot be
   exercised outside the case that executed them (§12.5).
 - No environment variables, no filesystem except the archive (§10.9,

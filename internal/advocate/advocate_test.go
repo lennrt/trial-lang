@@ -20,6 +20,26 @@ type session struct {
 	id  int
 }
 
+type ambiguousBatchLog struct {
+	*docket.MemoryLog
+	err error
+}
+
+type failingCaseCreationLog struct {
+	*docket.MemoryLog
+	err    error
+	caseID string
+}
+
+func (l *failingCaseCreationLog) CreateCaseTopics(_ context.Context, c docket.Case) error {
+	l.caseID = c.ID
+	return l.err
+}
+
+func (l *ambiguousBatchLog) AppendBatch(context.Context, []docket.StepAppend) ([]int64, error) {
+	return nil, &docket.AmbiguousCommitError{Err: l.err}
+}
+
 func open(t *testing.T) *session {
 	t.Helper()
 	inR, inW := io.Pipe()
@@ -117,7 +137,7 @@ func TestAdvocateProtocol(t *testing.T) {
 
 	// An unknown tool is an error result, not a protocol error.
 	res, isErr := s.call("trial_appeal", nil)
-	if !isErr || !strings.Contains(res["error"].(string), "not a tool of this court") {
+	if !isErr || !strings.Contains(res["error"].(string), "unknown tool") {
 		t.Fatalf("expected a tool error, got %v", res)
 	}
 
@@ -194,6 +214,62 @@ func TestToolArgumentsFailClosed(t *testing.T) {
 	))
 	if !result.IsError {
 		t.Fatalf("oversized session was accepted: %+v", result)
+	}
+}
+
+func TestFileReportsRecoverableCaseAfterAmbiguousCommit(t *testing.T) {
+	log := &ambiguousBatchLog{
+		MemoryLog: docket.NewMemoryLog(),
+		err:       errors.New("acknowledgement lost"),
+	}
+	srv := &Server{Log: log}
+	result := srv.call(t.Context(), "trial_file", json.RawMessage(`{"source":"FORM K-1.\nIN THE MATTER OF: uncertain.\nARTICLE 1.\nADJOURN INDEFINITELY.\n"}`))
+	if !result.IsError {
+		t.Fatalf("ambiguous filing returned success: %+v", result)
+	}
+	cases, err := log.ListCases(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cases) != 1 {
+		t.Fatalf("preserved cases = %v, want one", cases)
+	}
+	message := result.Content[0].Text
+	if !strings.Contains(message, cases[0].ID) || !strings.Contains(message, "inspect case "+cases[0].ID+" before taking further action") {
+		t.Fatalf("ambiguous filing message = %q, want case ID and recovery instruction", message)
+	}
+}
+
+func TestFileReportsRecoverableCaseAfterNonAmbiguousPartialFailure(t *testing.T) {
+	log := &failingCaseCreationLog{MemoryLog: docket.NewMemoryLog(), err: errors.New("topic creation failed")}
+	result := (&Server{Log: log}).call(t.Context(), "trial_file", json.RawMessage(`{"source":"FORM K-1.\nIN THE MATTER OF: partial.\nARTICLE 1.\nADJOURN INDEFINITELY.\n"}`))
+	if !result.IsError {
+		t.Fatalf("partial filing returned success: %+v", result)
+	}
+	message := result.Content[0].Text
+	if log.caseID == "" || !strings.Contains(message, log.caseID) || !strings.Contains(message, "may be partial") || !strings.Contains(message, "before retrying") {
+		t.Fatalf("partial filing message = %q, want recoverable case %s and inspection guidance", message, log.caseID)
+	}
+}
+
+func TestServeReportsAmbiguousBatchWithoutInvitingDuplicateInput(t *testing.T) {
+	c := docket.Case{ID: "case-000000000000000000000004"}
+	log := &ambiguousBatchLog{
+		MemoryLog: docket.NewMemoryLog(),
+		err:       errors.New("acknowledgement lost"),
+	}
+	if err := log.EnsureTopic(t.Context(), c.Summons()); err != nil {
+		t.Fatal(err)
+	}
+	result := (&Server{Log: log}).call(t.Context(), "trial_serve", json.RawMessage(
+		`{"case":"case-000000000000000000000004","values":["one","two"]}`,
+	))
+	if !result.IsError {
+		t.Fatalf("ambiguous service returned success: %+v", result)
+	}
+	message := result.Content[0].Text
+	if !strings.Contains(message, c.ID) || !strings.Contains(message, "may already be committed") || !strings.Contains(message, "before taking further action") {
+		t.Fatalf("ambiguous service message = %q, want case ID and no-blind-retry guidance", message)
 	}
 }
 
@@ -294,6 +370,19 @@ func TestBoundedNarration(t *testing.T) {
 	byBytes.add(strings.Repeat("x", maxToolOutputBytes+1))
 	if !byBytes.truncated || len(byBytes.lines) != 0 {
 		t.Fatalf("narration above byte limit = lines %d, truncated %v", len(byBytes.lines), byBytes.truncated)
+	}
+}
+
+func TestTextResultIsBoundedAndReportsEncodingErrors(t *testing.T) {
+	if result := textResult(map[string]any{"unsupported": make(chan int)}); !result.IsError {
+		t.Fatal("an unencodable result was returned as successful")
+	}
+	if result := textResult(map[string]string{"large": strings.Repeat("x", maxToolOutputBytes+1)}); !result.IsError {
+		t.Fatal("an oversized result was returned as successful")
+	}
+	result := errorResult("failure: %s", strings.Repeat("\\", maxToolOutputBytes))
+	if !result.IsError || len(result.Content[0].Text) >= maxToolOutputBytes {
+		t.Fatalf("oversized error was not replaced: text bytes %d", len(result.Content[0].Text))
 	}
 }
 
@@ -537,7 +626,7 @@ ARTICLE 1.
     PROCLAIM roll.
 `})
 	caseID := filed["case"].(string)
-	if res, _ := s.call("trial_proceed", map[string]any{"case": caseID}); res["outcome"] != "apparently acquitted (do not celebrate)" {
+	if res, _ := s.call("trial_proceed", map[string]any{"case": caseID}); res["outcome"] != "apparently acquitted" {
 		t.Fatalf("expected apparent acquittal, got %v", res)
 	}
 

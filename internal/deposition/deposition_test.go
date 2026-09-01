@@ -53,7 +53,7 @@ EXPECT ADJOURNMENT.
 	if res.OK() {
 		t.Fatal("expected a contradiction; the witness agreed with everything")
 	}
-	if !strings.Contains(res.Contradictions[0], `the witness said "1"`) {
+	if !strings.Contains(res.Contradictions[0], `got "1"`) {
 		t.Fatalf("contradiction = %q", res.Contradictions)
 	}
 }
@@ -77,7 +77,7 @@ ARTICLE 1.
 
 func TestDepositionRejection(t *testing.T) {
 	d, err := Parse(`DEPOSITION OF: sloppy.trial.
-EXPECT REJECTION CITING "penny".
+EXPECT REJECTION CITING "two digits".
 `)
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ ARTICLE 1.
     AWAIT SUMMONS, FILED UNDER godot.
     ADJOURN INDEFINITELY.
 `, d)
-	if res.OK() || !strings.Contains(res.Contradictions[0], "ran out of court days") {
+	if res.OK() || !strings.Contains(res.Contradictions[0], "timed out after 1 court days") {
 		t.Fatalf("expected the allowance to lapse, got %q", res.Contradictions)
 	}
 }
@@ -136,12 +136,19 @@ func TestDepositionParseErrors(t *testing.T) {
 		"SERVE: 3.",                          // no DEPOSITION OF
 		"SERVE: 3.\nDEPOSITION OF: x.trial.", // DEPOSITION OF is not first
 		"DEPOSITION OF: .",                   // empty program
-		"DEPOSITION OF: x.trial.\nDEPOSITION OF: y.trial.",   // duplicate DEPOSITION OF
-		"DEPOSITION OF: x.trial.\nEXPECT MERCY.",             // unknown testimony
-		"DEPOSITION OF: x.trial.\nSERVE: 3",                  // no period
-		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAYS EXTRA.", // trailing ALLOW text
-		"DEPOSITION OF: x.trial.\nALLOW one COURT DAYS.",     // invalid ALLOW value
-		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAY.",        // invalid ALLOW unit
+		"DEPOSITION OF: x.trial.\nDEPOSITION OF: y.trial.",                  // duplicate DEPOSITION OF
+		"DEPOSITION OF: x.trial.\nEXPECT MERCY.",                            // unknown testimony
+		"DEPOSITION OF: x.trial.\nSERVE: 3",                                 // no period
+		"DEPOSITION OF: x.trial.\nENACT: .",                                 // empty enactment path
+		"DEPOSITION OF: x.trial.\nEXPECT RECORD : 1.",                       // empty record name
+		"DEPOSITION OF: x.trial.\nEXPECT VERDICT.\nEXPECT ADJOURNMENT.",     // conflicting outcomes
+		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAYS.\nALLOW 2 COURT DAYS.", // duplicate allowance
+		"DEPOSITION OF: x.trial.\nEXPECT VERDICT CITINGLY x.",               // malformed CITING clause
+		"DEPOSITION OF: x.trial.\nEXPECT VERDICT CITING .",                  // empty verdict citation
+		"DEPOSITION OF: x.trial.\nEXPECT REJECTION CITING \"\".",            // empty rejection citation
+		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAYS EXTRA.",                // trailing ALLOW text
+		"DEPOSITION OF: x.trial.\nALLOW one COURT DAYS.",                    // invalid ALLOW value
+		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAY.",                       // invalid ALLOW unit
 	} {
 		if _, err := Parse(bad); err == nil {
 			t.Fatalf("expected %q to be rejected", bad)

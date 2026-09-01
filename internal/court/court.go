@@ -38,7 +38,7 @@ func (o Outcome) String() string {
 	case OutcomeGuilty:
 		return "GUILTY"
 	case OutcomeApparentAcquittal:
-		return "apparently acquitted (do not celebrate)"
+		return "apparently acquitted"
 	}
 	return "unrecorded"
 }
@@ -71,33 +71,23 @@ type appealsEvent struct {
 // ReenactmentKey marks a records-topic entry that resets the fold.
 const ReenactmentKey = "__reenactment__"
 
-// RegistryTopic is the court-wide patent registry. One partition, so
-// the offset order is the priority order: "first to file" is not a
-// figure of speech here, it is an integer comparison.
+// RegistryTopic is the single-partition patent registry. Offset order defines
+// filing priority.
 const RegistryTopic = "the-patent-office"
 
-// GazetteTopic is the court-wide gazette: one topic, one partition,
-// published to by any case within its own step's transaction, read by
-// every case at its own cursor, at its own pace. A message sent to
-// everyone arrives at whoever comes to read it.
+// GazetteTopic is a single-partition stream published by all cases. Each case
+// reads it at its own cursor.
 const GazetteTopic = "the-gazette"
 
-// ledgerEvent is one entry in the case's ledger: a draw of the
-// discretion or a reading of the clock, recorded so that a reenactment
-// may consume the recorded value instead of taking a fresh one. This
-// is how the timeline is kept bit-exact: the dice and the clock, the
-// two things the log cannot hold still, are written down the moment
-// they move.
+// ledgerEvent records a nondeterministic result so reenactment can reuse it.
 type ledgerEvent struct {
 	PC    int64     `json:"pc"`
 	Kind  string    `json:"kind"` // "discretion" or "presents"
 	Value law.Value `json:"value"`
 }
 
-// patentEvent is one record in the registry: a claim (the founding
-// record; Kind is empty for compatibility with letters issued before
-// v2.1), a license, or an assignment. Everything about all of them is
-// public, including especially the invention; that is the bargain.
+// patentEvent is a claim, license, or assignment. An empty Kind is a claim for
+// compatibility with records written before v2.1.
 type patentEvent struct {
 	Kind       string     `json:"kind,omitempty"` // "": a claim; "license"; "assignment"
 	Name       string     `json:"name"`
@@ -108,12 +98,7 @@ type patentEvent struct {
 	To         string     `json:"to,omitempty"`   // license: the licensee; assignment: the assignee
 }
 
-// claimState is one claim with its later history applied: the current
-// holder (assignments move it) and the licenses outstanding under it.
-// The ownership discipline, folded from the log: the holder practices
-// exclusively, licensees practice concurrently and read-only, an
-// assignment is a move, and a license is a borrow whose lifetime the
-// letters bound.
+// claimState is a claim with later licenses and assignments applied.
 type claimState struct {
 	name       string
 	holder     string
@@ -180,19 +165,12 @@ type motion struct {
 // CourtDay is one second of wall-clock time.
 const CourtDay = time.Second
 
-// continuance is the grant on file: which instruction was continued and
-// the wall-clock moment (unix milliseconds) at which the matter resumes.
-// Recording the absolute deadline is what makes the timer durable: an
-// official who perishes mid-wait is replaced by one who honors the
-// original date, not one who starts counting again.
+// continuance stores the instruction and absolute deadline for a durable wait.
 type continuance struct {
 	PC    int64 `json:"pc"`
 	Until int64 `json:"until_unix_ms"`
 	Days  int64 `json:"days"`
-	// From, on a timed selective await (AWAIT SUMMONS FROM c FOR AT
-	// MOST n DAYS), is the case whose voice is awaited. Popped and
-	// filed with the grant so the deadline and the name both survive
-	// the official.
+	// From identifies the sender for a timed selective await.
 	From string `json:"from,omitempty"`
 }
 
@@ -237,8 +215,7 @@ type Court struct {
 	// waiting out their elapsed duration again.
 	Chambers bool
 
-	// Observer, if set, receives a line whenever something worth a
-	// status line occurs. The Court narrates; it does not explain.
+	// Observer receives status lines when set.
 	Observer func(string)
 
 	stack      []law.Value
@@ -263,9 +240,8 @@ type Court struct {
 	ledger    []ledgerEvent
 	ledgerPos int64
 
-	// pending accumulates the current instruction's effects; they are
-	// entered as one atomic step, or, if guilt intervenes, not at all.
-	// A guilty instruction has no effects. It has consequences.
+	// pending holds effects until their atomic step commits. Effects from an
+	// instruction that produces a verdict are discarded.
 	pending []docket.StepAppend
 }
 
@@ -314,6 +290,16 @@ type guiltyErr struct {
 
 func (g guiltyErr) Error() string { return g.sealed }
 
+// recoverableCommencementError marks a COMMENCE failure that happened after
+// File minted a child identifier. Proceed must surface it even when its cause
+// is context cancellation so the caller can inspect the possibly partial child.
+type recoverableCommencementError struct {
+	err error
+}
+
+func (e *recoverableCommencementError) Error() string { return e.err.Error() }
+func (e *recoverableCommencementError) Unwrap() error { return e.err }
+
 func guilty(format string, args ...any) error {
 	return guiltyErr{sealed: fmt.Sprintf(format, args...)}
 }
@@ -322,17 +308,14 @@ func unpardonable(format string, args ...any) error {
 	return guiltyErr{sealed: fmt.Sprintf(format, args...), unpardonable: true}
 }
 
-// Recover rebuilds the Court's working memory from the topics: the
-// dossier fold, the appeals fold, the records fold, and the Court's
-// recorded attention. This runs at the start of every session; the
-// Court remembers nothing and needs to remember nothing.
+// Recover rebuilds runtime state from the case topics and recorded attention.
 func (c *Court) Recover(ctx context.Context) error {
 	c.stack = nil
 	c.frames = nil
 	c.globals = make(map[string]law.Value)
 	c.pending = nil
 
-	// Dossier: replay every motion since the last reenactment marker.
+	// Replay dossier events since the last reset marker.
 	recs, err := c.Log.ReadAll(ctx, c.Case.Dossier())
 	if err != nil {
 		return err
@@ -354,7 +337,7 @@ func (c *Court) Recover(ctx context.Context) error {
 		}
 	}
 
-	// Appeals: rebuild the call stack, amendments included.
+	// Rebuild the call stack, including local amendments.
 	recs, err = c.Log.ReadAll(ctx, c.Case.Appeals())
 	if err != nil {
 		return err
@@ -384,7 +367,7 @@ func (c *Court) Recover(ctx context.Context) error {
 		}
 	}
 
-	// Records: last writing per key since the last reenactment marker.
+	// Fold the latest record per key since the last reset marker.
 	recs, err = c.Log.ReadAll(ctx, c.Case.Records())
 	if err != nil {
 		return err
@@ -402,10 +385,7 @@ func (c *Court) Recover(ctx context.Context) error {
 		if r.Offset <= markerOffset || string(r.Key) == ReenactmentKey {
 			continue
 		}
-		// A record with no value is a tombstone. For the program's
-		// records it means STRUCK FROM THE RECORD; for the Court's own
-		// paperwork it means the grant was honored and withdrawn. The
-		// fold forgets it either way; the log does not.
+		// Empty values are tombstones for program records and internal grants.
 		if len(r.Value) == 0 {
 			switch string(r.Key) {
 			case ContinuanceKey:
@@ -419,9 +399,7 @@ func (c *Court) Recover(ctx context.Context) error {
 			}
 			continue
 		}
-		// The Court's own paperwork travels in the records topic under
-		// reserved keys; it is folded into the Court's memory, not the
-		// program's.
+		// Reserved keys hold internal state rather than program records.
 		if string(r.Key) == ContinuanceKey || string(r.Key) == AttendanceKey {
 			var g continuance
 			if err := json.Unmarshal(r.Value, &g); err != nil {
@@ -449,8 +427,7 @@ func (c *Court) Recover(ctx context.Context) error {
 		c.globals[string(r.Key)] = v
 	}
 
-	// Fold the recorded draws and clock readings. Reenactment reuses them
-	// instead of resetting the ledger.
+	// Reenactment reuses recorded nondeterministic results.
 	recs, err = c.Log.ReadAll(ctx, c.Case.Ledger())
 	if err != nil {
 		return err
@@ -464,8 +441,7 @@ func (c *Court) Recover(ctx context.Context) error {
 		c.ledger = append(c.ledger, ev)
 	}
 
-	// The Court's attention: the sealed original. A case never yet
-	// convened begins, like everyone, at zero.
+	// A case that has not started has zero-valued attention.
 	att, err := c.Log.Attention(ctx, c.Case)
 	if err != nil {
 		return err
@@ -513,33 +489,27 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 	}
 
 	for {
-		// A judgment may have been entered from outside (v3.2, the
-		// sentence from the bed). The Court looks for it at each commit
-		// boundary: the verdict is on file the moment the parent's step
-		// commits, and takes effect the moment the condemned next looks
-		// up, which is now. An official asleep in an await sleeps on;
-		// the sentence is waiting when he wakes, as is customary.
+		// Check for a verdict entered by a parent case at each commit boundary.
+		// A blocked instruction observes it after the wait returns.
 		if batched == 0 {
 			if rec, err := c.Log.Fetch(ctx, c.Case.Verdicts(), 0, false); err == nil && rec != nil {
 				c.note("A verdict has been reached in this case, elsewhere. The proceedings halt.")
 				return OutcomeGuilty, nil
 			}
 		}
-		// The next instruction. With work batched, a wait at the end of
-		// the proceedings is preceded by a flush: the Court does not
-		// doze over unentered paperwork.
+		// Flush a partial batch before waiting for more proceedings.
 		var rec *docket.Record
 		var err error
 		if batched > 0 {
-			rec, err = c.Log.Fetch(ctx, c.Case.Proceedings(), c.pc, false)
+			rec, err = c.Log.FetchProceeding(ctx, c.Case, c.pc, false)
 			if err == nil && rec == nil {
 				if err := flush(c.pc); err != nil {
 					return OutcomeAdjourned, err
 				}
-				rec, err = c.Log.Fetch(ctx, c.Case.Proceedings(), c.pc, c.WaitForProceedings)
+				rec, err = c.Log.FetchProceeding(ctx, c.Case, c.pc, c.WaitForProceedings)
 			}
 		} else {
-			rec, err = c.Log.Fetch(ctx, c.Case.Proceedings(), c.pc, c.WaitForProceedings)
+			rec, err = c.Log.FetchProceeding(ctx, c.Case, c.pc, c.WaitForProceedings)
 		}
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -548,8 +518,7 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 			return OutcomeAdjourned, err
 		}
 		if rec == nil {
-			// The end of the proceedings. Nothing happens. This is
-			// apparent acquittal, and it is not the same as innocence.
+			// Reaching the current end is an apparent acquittal.
 			return OutcomeApparentAcquittal, nil
 		}
 		instr, err := law.Unmarshal(rec.Value)
@@ -562,21 +531,16 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 			return c.deliverVerdictSealed(ctx, fmt.Sprintf("instruction %d could not be read; the handwriting is the Court's own", c.pc), "")
 		}
 
-		// An instruction that reads what the batch may have written (its
-		// own summons topic, the catalog, the registry, the gazette), or
-		// whose grant must be durable before any waiting begins, sees the
-		// batch entered first.
+		// Commit before instructions that can read pending effects or begin a
+		// durable wait.
 		if batched > 0 && expeditionBoundary(instr.Op) {
 			if err := flush(c.pc); err != nil {
 				return OutcomeAdjourned, err
 			}
 		}
 
-		// A snapshot of what the last completed instruction left behind:
-		// a guilty instruction may have consulted the ledger or the
-		// summons before its guilt emerged, and a guilty instruction has
-		// no effects, whether the verdict stands or a motion intercepts
-		// it. Its innocent neighbors in the batch keep theirs.
+		// Save mutable cursors so a verdict can discard only the failing
+		// instruction while retaining earlier work in the batch.
 		prefixLen := len(c.pending)
 		ledgerLen, ledgerPos, summonsPos, gazettePos := len(c.ledger), c.ledgerPos, c.summonsPos, c.gazettePos
 		heard := slices.Clone(c.heard)
@@ -602,11 +566,14 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 				}
 				return c.deliverVerdictSealed(ctx, g.sealed, instr.Pos)
 			}
-			// An official dismissed mid-instruction (mid-summons,
-			// mid-continuance) has committed nothing since the last
-			// flush; the case stands exactly where the record says it
-			// stands, and whatever the batch had underway is re-executed
-			// identically by whoever convenes next.
+			// A cancelled COMMENCE can still have minted a child case. Surface
+			// that recovery identifier instead of treating the session as a
+			// routine expiry and silently discarding it.
+			if _, ok := errors.AsType[*recoverableCommencementError](stepErr); ok {
+				return OutcomeAdjourned, stepErr
+			}
+			// Cancellation leaves the uncommitted batch for the next session to
+			// recover and execute again.
 			if errors.Is(stepErr, context.Canceled) || errors.Is(stepErr, context.DeadlineExceeded) {
 				return OutcomeAdjourned, nil
 			}
@@ -621,19 +588,14 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 			}
 		}
 		if instr.Op == law.OpAdjourn {
-			c.note("The case is adjourned indefinitely. It may be reopened at any time. It is never over.")
+			c.note("The case is adjourned indefinitely.")
 			return OutcomeAdjourned, nil
 		}
 	}
 }
 
-// expeditionBoundary reports whether an instruction must see the batch
-// committed before it executes: the awaits and the grants (a
-// self-served notice must be on file before the summons topic is
-// scanned; a deadline is durable before any waiting begins), the
-// archive reads (the catalog pointer may be riding the batch), and the
-// registry instructions (double patenting is checked against the
-// committed registry, not against intentions).
+// expeditionBoundary reports whether an instruction must run after pending
+// effects commit. This covers waits, external reads, and court-wide writes.
 func expeditionBoundary(op string) bool {
 	switch op {
 	case law.OpAwait, law.OpAwaitFrom, law.OpAwaitFor, law.OpAwaitFromFor, law.OpAwaitGazette,
@@ -644,14 +606,9 @@ func expeditionBoundary(op string) bool {
 	return false
 }
 
-// reconsider grants the motion on file in place of a verdict, as one
-// atomic step: the dossier is impounded (the filing fee is everything
-// you have in evidence), the pending appeals are dismissed with it, the
-// motion is marked spent (the Court reconsiders once per case, which is
-// once more than the novel allows), the grounds are filed where the
-// movant asked, and the Court's attention seeks to the named article.
-// The guilty instruction's own effects are discarded unentered, exactly
-// as they would have been had the verdict stood.
+// reconsider replaces a verdict with one atomic reset: clear the dossier and
+// frames, mark the motion spent, optionally file the grounds, and resume at
+// the motion target. Effects from the failing instruction are discarded.
 func (c *Court) reconsider(ctx context.Context, sealed string) error {
 	c.pending = nil
 	b, _ := json.Marshal(dossierEvent{Op: "IMPOUND"})
@@ -681,9 +638,8 @@ func (c *Court) reconsider(ctx context.Context, sealed string) error {
 }
 
 func (c *Court) deliverVerdictSealed(ctx context.Context, sealed, pos string) (Outcome, error) {
-	// A guilty instruction's effects are struck: the pending step is
-	// discarded unentered. What remains of the instruction is the
-	// verdict, which is entered instead, and is final.
+	// Discard the failing instruction's pending effects before recording the
+	// verdict.
 	c.pending = nil
 	v := Verdict{Verdict: "GUILTY", Sealed: sealed, PC: c.pc, Pos: pos}
 	b, _ := json.Marshal(v)
@@ -694,7 +650,7 @@ func (c *Court) deliverVerdictSealed(ctx context.Context, sealed, pos string) (O
 	return OutcomeGuilty, nil
 }
 
-// --- stack plumbing: every motion is entered into the dossier ---------
+// Stack operations are recorded in the dossier.
 
 func (c *Court) buffer(topic string, key, value []byte) {
 	c.pending = append(c.pending, docket.StepAppend{Topic: topic, Key: key, Value: value})
@@ -717,20 +673,13 @@ func (c *Court) pop() (law.Value, error) {
 	return v, nil
 }
 
-// consult routes a nondeterministic reading (a draw of the discretion,
-// a look at the clock) through the ledger. If the current timeline has
-// not yet consumed all recorded entries, the recorded value is
-// re-served and nothing new is taken: this is what makes a reenactment
-// bit-exact. At the tail, the fresh value is taken and recorded in the
-// same step it is used, so the next timeline finds it waiting.
+// consult reuses the next matching ledger value or records a fresh one in the
+// current step.
 func (c *Court) consult(kind string, fresh func() law.Value) (law.Value, error) {
 	return c.consultErr(kind, func() (law.Value, error) { return fresh(), nil })
 }
 
-// consultErr is consult for readings whose taking can itself fail
-// (opening a case file, for instance). The failure occurs before
-// anything is recorded: a reading never taken is not in the ledger,
-// and a guilty instruction has no effects.
+// consultErr is consult for reads that can fail. Failed reads are not recorded.
 func (c *Court) consultErr(kind string, fresh func() (law.Value, error)) (law.Value, error) {
 	if c.ledgerPos < int64(len(c.ledger)) {
 		ev := c.ledger[c.ledgerPos]
@@ -752,9 +701,7 @@ func (c *Court) consultErr(kind string, fresh func() (law.Value, error)) (law.Va
 	return ev.Value, nil
 }
 
-// servedValue reads a summons record the way the Court reads all
-// input: an integer if it parses as one, a sum if it parses to the
-// penny, otherwise the string itself.
+// servedValue parses an integer or sum and otherwise returns the input string.
 func servedValue(text string) law.Value {
 	if n, err := strconv.ParseInt(text, 10, 64); err == nil {
 		return law.Int(n)
@@ -772,10 +719,8 @@ func (c *Court) heardOutOfTurn(off int64) bool {
 	return found
 }
 
-// advanceSummons moves the cursor past an in-order consumption at off
-// and drops every heard entry the cursor has caught up with, stepping
-// over any that sit at the new position: an offset behind the cursor
-// needs no remembering.
+// advanceSummons moves past an in-order record and any consecutive records
+// already consumed out of turn.
 func (c *Court) advanceSummons(off int64) {
 	c.summonsPos = off + 1
 	for len(c.heard) > 0 && c.heard[0] <= c.summonsPos {
@@ -786,9 +731,7 @@ func (c *Court) advanceSummons(off int64) {
 	}
 }
 
-// hearOutOfTurn records that the summons at off was consumed ahead of
-// its turn. The record itself stays exactly where it is; only the
-// attention remembers.
+// hearOutOfTurn records an offset consumed by selective receive.
 func (c *Court) hearOutOfTurn(off int64) {
 	if off < c.summonsPos {
 		return // already behind the cursor; nothing to remember
@@ -804,8 +747,7 @@ func (c *Court) hearOutOfTurn(off int64) {
 	c.heard = slices.Insert(c.heard, i, off)
 }
 
-// nextSummonsInTurn blocks for the earliest summons not already heard
-// out of turn: what a plain AWAIT SUMMONS receives.
+// nextSummonsInTurn blocks for the first summons not already consumed.
 func (c *Court) nextSummonsInTurn(ctx context.Context) (*docket.Record, error) {
 	pos := c.summonsPos
 	for {
@@ -820,9 +762,8 @@ func (c *Court) nextSummonsInTurn(ctx context.Context) (*docket.Record, error) {
 	}
 }
 
-// awaitVoice blocks for the earliest summons bearing the named case's
-// seal, skipping voices already heard. The records passed over are not
-// consumed; they await their own turn.
+// awaitVoice blocks for the first unconsumed summons from a case. Records from
+// other cases remain available.
 func (c *Court) awaitVoice(ctx context.Context, from string) (*docket.Record, error) {
 	pos := c.summonsPos
 	for {
@@ -837,17 +778,13 @@ func (c *Court) awaitVoice(ctx context.Context, from string) (*docket.Record, er
 	}
 }
 
-// attendVoice scans, against a deadline, for a summons the grant on
-// file is waiting for: any voice when grant.From is empty on a plain
-// timed await, the named voice on a selective one. It reports only
-// whether anyone came; the consumption happens afterward, through the
-// same scan every reenactment performs.
+// attendVoice waits until a matching summons is visible or the grant expires.
+// The caller performs the actual consumption after recording the outcome.
 func (c *Court) attendVoice(ctx context.Context, grant *continuance, selective bool) (law.Value, error) {
 	until := time.UnixMilli(grant.Until)
 	pos := c.summonsPos
 	for {
-		// Whatever has already arrived takes precedence over any
-		// deadline: the Court looks at its inbox before its watch.
+		// A record already present wins even when the deadline has passed.
 		for {
 			rec, err := c.Log.Fetch(ctx, c.Case.Summons(), pos, false)
 			if err != nil {
@@ -871,14 +808,11 @@ func (c *Court) attendVoice(ctx context.Context, grant *continuance, selective b
 		if err != nil && ctx.Err() != nil {
 			return law.Value{}, ctx.Err()
 		}
-		// Something arrived at the frontier, or the deadline elapsed
-		// mid-wait; either way, one more look from the top.
+		// Recheck both the topic and deadline after the wait.
 	}
 }
 
-// courtDay reads the clock through the ledger: the current date in
-// court days since the epoch, recorded so every future timeline agrees
-// on what time it was.
+// courtDay records and returns the current day so reenactments reuse it.
 func (c *Court) courtDay() (int64, error) {
 	v, err := c.consult("presents", func() law.Value {
 		return law.Int(c.now().UnixMilli() / CourtDay.Milliseconds())
@@ -889,12 +823,9 @@ func (c *Court) courtDay() (int64, error) {
 	return v.I, nil
 }
 
-// readRegistry folds the patent registry: every claim ever filed, in
-// priority order (offset order, which is the only order), with every
-// later license and assignment applied to the claim it was validated
-// against: the claim of that name in force on the event's day, held
-// then by the actor. An event that attaches to nothing is
-// unenforceable and folds to nothing.
+// readRegistry folds claims in filing order, applying later licenses and
+// assignments to the claim held by the event's actor on that day. Invalid or
+// unattached events are ignored.
 func (c *Court) readRegistry(ctx context.Context) ([]*claimState, error) {
 	if err := c.Log.EnsureTopic(ctx, RegistryTopic); err != nil {
 		return nil, err
@@ -945,8 +876,7 @@ func (c *Court) readRegistry(ctx context.Context) ([]*claimState, error) {
 	return states, nil
 }
 
-// letters picks out, for one invention, the governing claim (the first
-// in force now, in priority order) and the latest claim of any age.
+// letters returns the first live claim and the latest claim for a name.
 func letters(states []*claimState, name string, now int64) (governing, latest *claimState) {
 	for _, st := range states {
 		if st.name != name {
@@ -960,10 +890,7 @@ func letters(states []*claimState, name string, now int64) (governing, latest *c
 	return governing, latest
 }
 
-// foldRecord folds one name out of a records topic the way Recover
-// folds them all: the last writing per key since the latest
-// reenactment marker, tombstones honored, the Court's own paperwork
-// (reserved keys, which no identifier can name anyway) ignored.
+// foldRecord returns the last live value for a name after the latest reset.
 func foldRecord(recs []docket.Record, name string) (law.Value, bool, error) {
 	var markerOffset int64 = -1
 	for _, r := range recs {
@@ -1209,8 +1136,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if _, ok := c.globals[in.Name]; !ok {
 			return 0, guilty("there is no record of %q to strike; it has nonetheless been noted that you tried", in.Name)
 		}
-		// A tombstone: the record's key with nothing attached. The fold
-		// forgets the record; the log retains the forgetting.
+		// An empty value is a tombstone for the record.
 		c.buffer(c.Case.Records(), []byte(in.Name), nil)
 		delete(c.globals, in.Name)
 		return next, nil
@@ -1251,13 +1177,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpAwaitFrom:
-		// The selective receive: one voice among the folk. The scan
-		// starts at the cursor and consumes the first record bearing
-		// the named case's seal, out of turn; everything passed over
-		// stays exactly where it is, awaiting a plain AWAIT SUMMONS.
-		// The scan is a deterministic fold over an append-only topic,
-		// so, like the gazette, this needs no ledger entry: every
-		// reenactment hears the same voice at the same offset.
+		// Selective receive consumes the first matching record. Earlier
+		// nonmatching records remain available to a plain await.
 		from, err := c.pop()
 		if err != nil {
 			return 0, err
@@ -1288,9 +1209,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return in.Target, nil
 
 	case law.OpPower:
-		// The instrument is executed: the office's address, name, and
-		// concerns, sealed with the case number whose proceedings the
-		// address points into. Enforceable here and nowhere else.
+		// Bind the office address and parameters to this case.
 		c.push(law.Power(in.Name, in.Target, c.Case.ID, in.Params))
 		return next, nil
 
@@ -1408,8 +1327,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if key.T != law.KindString {
 			return 0, guilty("entries are inscribed under names, which are strings; %s is not a name the register recognizes", describe(key))
 		}
-		// A corrected copy, not a correction: the register already in
-		// evidence must not be altered by what happens to its copies.
+		// Return a new register; values have copy semantics.
 		entries := make(map[string]law.Value, len(reg.X)+1)
 		maps.Copy(entries, reg.X)
 		entries[key.S] = val
@@ -1491,8 +1409,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if sched.T != law.KindSchedule {
 			return 0, guilty("annexation requires a schedule; %s accepts no annexes", describe(sched))
 		}
-		// A fresh copy: schedules are documents, and the one already in
-		// evidence must not grow behind the Court's back.
+		// Return a new schedule; values have copy semantics.
 		items := append(slices.Clone(sched.L), v)
 		c.push(law.Schedule(items))
 		return next, nil
@@ -1525,11 +1442,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpPresents:
-		// Wall-clock time, in court days since the epoch, read through
-		// the ledger: the first timeline records what the clock said, and
-		// every reenactment is told the same time. Clocks and dice are
-		// the two things the log cannot hold still; since v0.8 the ledger
-		// holds them still anyway.
+		// The ledger makes this wall-clock read deterministic on reenactment.
 		day, err := c.courtDay()
 		if err != nil {
 			return 0, err
@@ -1553,26 +1466,17 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if lookupErr != nil {
 			return 0, lookupErr
 		}
-		// The respondent must have a matter before this court. Serving a
-		// case upon itself is permitted; the Court finds self-service
-		// consistent with the general procedure.
+		// Self-service is valid, but the target case must exist.
 		if !exists {
 			return 0, guilty("service could not be effected: there is no matter %q before this court. The notice is returned; the record of the attempt is retained", target.S)
 		}
-		// The notice lands in the respondent's summons topic within this
-		// instruction's own transaction: served exactly once, keyed with
-		// the seal of the serving party.
+		// Append the notice in this step, keyed by the sender case.
 		c.buffer(respondent.Summons(), []byte(c.Case.ID), []byte(notice.Display()))
 		return next, nil
 
 	case law.OpJudgment:
-		// The sentence from the bed (v3.2): a verdict entered in another
-		// case's file. Jurisdiction is parental and strict: only the case
-		// that commenced the condemned may sentence it, the commencement
-		// being a matter of this case's own ledger. The entry rides the
-		// ledger like every court-wide effect: a reenacted parent is told
-		// the judgment was entered and enters nothing, so the condemned
-		// dies exactly once, which is the usual allotment.
+		// Only a case that recorded the target's commencement may enter its
+		// verdict. The ledger prevents the court-wide write from repeating.
 		target, err := c.pop()
 		if err != nil {
 			return 0, err
@@ -1635,16 +1539,15 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if src.T != law.KindString {
 			return 0, guilty("proceedings are commenced upon a filing, which is a string bearing Form K-1; %s commences nothing", describe(src))
 		}
-		// The new case is opened at the clerk's counter, outside the
-		// step, like an archived document: its case number must exist
-		// before it can be recorded. If the official perishes between
-		// counter and commitment, the case remains on the docket,
-		// unreferenced: a draft. The ledger is the truth, and a
-		// reenactment re-serves the recorded number rather than opening
-		// the file twice.
+		// File the child before committing its identifier. A failure between
+		// those operations can leave an unreferenced draft; the ledger prevents
+		// reenactment from filing another child.
 		v, err := c.consultErr("commencement", func() (law.Value, error) {
 			child, ferr := File(ctx, c.Log, src.S)
 			if ferr != nil {
+				if child.ID != "" {
+					return law.Value{}, &recoverableCommencementError{err: fmt.Errorf("commenced filing %s failed and may be partial; inspect that case before retrying: %w", child.ID, ferr)}
+				}
 				return law.Value{}, guilty("the commenced filing was rejected at the counter: %v", ferr)
 			}
 			return law.Str(child.ID), nil
@@ -1660,11 +1563,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if c.motion != nil && c.motion.Spent {
 			return 0, guilty("the Court has reconsidered this case once, which is the number of times the Court reconsiders a case; the second motion is itself the offense")
 		}
-		// The motion goes on file with the step, durably: an official who
-		// perishes after this instruction is replaced by one who honors
-		// the motion, verdicts being the one appointment everyone keeps.
-		// Re-filing before any grant is lawful and supersedes: paperwork
-		// may always be replaced by more paperwork.
+		// Store the motion in this step. Refiling before it is spent replaces it.
 		m := motion{Target: in.Target, Grounds: in.Name}
 		b, _ := json.Marshal(m)
 		c.buffer(c.Case.Records(), []byte(MotionKey), b)
@@ -1679,10 +1578,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if target.T != law.KindString {
 			return 0, guilty("standing is inquired of a case number, which is a string; %s stands nowhere", describe(target))
 		}
-		// The reading goes through the ledger: the world changes, but a
-		// reenactment is told what the world said the first time. What
-		// this case did with the answer must replay; the answer itself
-		// is therefore part of the record.
+		// Record the external status so reenactment sees the same result.
 		v, err := c.consultErr("standing", func() (law.Value, error) {
 			respondent, exists, ferr := caseOnFile(ctx, c.Log, target.S)
 			if ferr != nil {
@@ -1711,10 +1607,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// The gazette is opened on first use, like the patent registry;
-		// the publication itself rides the step's transaction, so an
-		// edition appears exactly once, however many officials perish
-		// at the press.
+		// Publish in this step so the edition appears at most once.
 		if err := c.Log.EnsureTopic(ctx, GazetteTopic); err != nil {
 			return 0, err
 		}
@@ -1722,11 +1615,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpAwaitGazette:
-		// Read at this case's own cursor, which advances with the step:
-		// every case consumes the whole gazette, in order, at its own
-		// pace, exactly once. The gazette is append-only and immutable,
-		// so a reenactment (cursor back to zero) re-reads the same
-		// editions at the same offsets; no ledger entry is needed.
+		// Advance this case's gazette cursor in the same step. The immutable
+		// stream can be reread directly during reenactment.
 		if err := c.Log.EnsureTopic(ctx, GazetteTopic); err != nil {
 			return 0, err
 		}
@@ -1735,16 +1625,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 			return 0, err
 		}
 		c.gazettePos = rec.Offset + 1
-		text := string(rec.Value)
-		var v law.Value
-		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
-			v = law.Int(n)
-		} else if m, ok := law.ParseSum(text); ok {
-			v = law.Sum(m)
-		} else {
-			v = law.Str(text)
-		}
-		c.push(v)
+		c.push(servedValue(string(rec.Value)))
 		return next, nil
 
 	case law.OpDiscovery:
@@ -1755,12 +1636,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if target.T != law.KindString {
 			return 0, guilty("discovery is had of a case number, which is a string; %s discloses nothing", describe(target))
 		}
-		// The reading goes through the ledger, like a draw of the
-		// discretion: the respondent's records keep changing after the
-		// world moves on, and what this case did with the answer must
-		// replay bit-exactly anyway. Absence, of the case or of the
-		// record, is a verdict: THE STANDING OF exists precisely so you
-		// may ask safely first, and you did not.
+		// Record the external read so reenactment sees the same value.
 		v, err := c.consultErr("discovery", func() (law.Value, error) {
 			respondent, exists, ferr := caseOnFile(ctx, c.Log, target.S)
 			if ferr != nil {
@@ -1790,9 +1666,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 
 	case law.OpContinuance:
 		if c.cont != nil && c.cont.PC == c.pc {
-			// The continuance was granted (perhaps by a predecessor, since
-			// deceased); the Court waits out the remainder of the term and
-			// then, in a step of its own, moves on.
+			// Honor the existing grant before advancing.
 			until := time.UnixMilli(c.cont.Until)
 			if d := time.Until(until); d > 0 && !c.Chambers {
 				c.note("The matter is continued. The Court will return in %s.", d.Round(time.Millisecond))
@@ -1802,18 +1676,12 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 				case <-time.After(d):
 				}
 			}
-			// The grant is withdrawn in the same step that advances past
-			// it: a tombstone, so a successor recovering after this step
-			// does not mistake the honored grant for a live one should
-			// the proceedings ever return to this instruction.
+			// Remove the grant in the step that advances past it.
 			c.buffer(c.Case.Records(), []byte(ContinuanceKey), nil)
 			c.cont = nil
 			return next, nil
 		}
-		// No grant on file for this instruction: pop the term, grant the
-		// continuance, and do not advance. The grant commits as its own
-		// step; the wait belongs to whoever convenes next, which may be
-		// years from now and someone else entirely.
+		// Persist a new grant without advancing. The next session honors it.
 		v, err := c.pop()
 		if err != nil {
 			return 0, err
@@ -1840,10 +1708,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 
 	case law.OpAwaitFor:
 		if c.att == nil || c.att.PC != c.pc {
-			// No deadline on file for this instruction: pop the term and
-			// grant it, durably, without advancing. The absolute deadline
-			// is on file before any waiting begins, so the timeout
-			// survives the official, exactly as a continuance does.
+			// Persist the absolute deadline before waiting and do not advance.
 			v, err := c.pop()
 			if err != nil {
 				return 0, err
@@ -1868,11 +1733,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 			c.att = &g
 			return c.pc, nil // the attention does not advance; the Court waits
 		}
-		// A deadline is on file: wait for whichever comes first, the
-		// summons or the date. The outcome is entered in the ledger like
-		// a draw of the discretion, because the summons topic keeps
-		// filling after the world moves on: a record that arrived too
-		// late must stay too late in every reenactment.
+		// Record whether a summons beat the deadline so later arrivals cannot
+		// change reenactment.
 		grant := c.att
 		v, err := c.consultErr("attendance", func() (law.Value, error) {
 			return c.attendVoice(ctx, grant, false)
@@ -1897,8 +1759,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 
 	case law.OpAwaitFromFor:
 		if c.att == nil || c.att.PC != c.pc {
-			// No deadline on file for this instruction: pop the term and
-			// the voice, and grant both, durably, without advancing.
+			// Persist the sender and absolute deadline before waiting.
 			v, err := c.pop()
 			if err != nil {
 				return 0, err
@@ -1931,10 +1792,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 			c.att = &g
 			return c.pc, nil // the attention does not advance; the Court listens
 		}
-		// A deadline is on file: the named voice, or the date, whichever
-		// comes first. The outcome is entered in the ledger exactly as a
-		// plain timed await's is; a song that arrived after the deadline
-		// must stay late in every reenactment.
+		// Record whether the named sender beat the deadline.
 		grant := c.att
 		v, err := c.consultErr("attendance", func() (law.Value, error) {
 			return c.attendVoice(ctx, grant, true)
@@ -2032,8 +1890,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if _, ok := ex.X[in.Name]; !ok {
 			return 0, guilty("the exhibit of %s bears no entry %q; entries may not be invented at this stage of the proceedings", ex.Of, in.Name)
 		}
-		// A corrected copy, not a correction: the exhibit already in
-		// evidence must not be altered by what happens to its copies.
+		// Return a new exhibit; values have copy semantics.
 		entries := make(map[string]law.Value, len(ex.X))
 		maps.Copy(entries, ex.X)
 		entries[in.Name] = val
@@ -2052,11 +1909,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if name.T != law.KindString {
 			return 0, guilty("documents are archived under names, which are strings; %s is not a name the catalog will hold", describe(name))
 		}
-		// The document goes to the archive at the clerk's counter, outside
-		// the step: its offset must be known before the catalog can point
-		// at it. If the official perishes between counter and commitment,
-		// the document remains in the archive, uncataloged: a draft. The
-		// archive accumulates drafts. The catalog is the truth.
+		// Append before committing the catalog pointer because the pointer needs
+		// the archive offset. A failure between them leaves an uncataloged draft.
 		b, _ := json.Marshal(doc)
 		off, err := c.Log.Append(ctx, c.Case.Archive(), []byte(name.S), b)
 		if err != nil {
@@ -2127,12 +1981,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if _, ok := addNonnegative(now, term.I); !ok {
 			return 0, guilty("letters patent for a term of %d days exceed the calendar's jurisdiction", term.I)
 		}
-		// The scan and the grant ride the ledger (v2.8): the registry
-		// keeps moving after the fact, and a court-wide effect happens
-		// once, which is the commencement doctrine extended to the
-		// patent office. A reenactment is told the letters issued and
-		// issues nothing, scanning nothing, so it cannot rediscover its
-		// own claim and convict itself of double patenting.
+		// Record issuance in the ledger so reenactment does not scan or write
+		// the registry again.
 		if _, err := c.consultErr("issuance", func() (law.Value, error) {
 			states, err := c.readRegistry(ctx)
 			if err != nil {
@@ -2147,11 +1997,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 				}
 				return law.Value{}, guilty("anticipated by prior art: %q was disclosed by %s and stands as entry %d of the registry, which is earlier than yours, because everything is earlier than yours", in.Name, st.holder, i+1)
 			}
-			// The grant rides the step's transaction: letters issue
-			// exactly once, however many officials perish in the
-			// issuing. Priority among simultaneous applicants is settled
-			// by the topic itself; one of them will be first, and the
-			// registry will say which.
+			// Write the claim in this step. Registry order resolves concurrent
+			// applications.
 			b, _ := json.Marshal(patentEvent{Name: in.Name, Holder: c.Case.ID, Disclosure: &disclosure, Granted: now, Term: term.I})
 			c.buffer(RegistryTopic, []byte(in.Name), b)
 			return law.Finding(true), nil
@@ -2165,10 +2012,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// What the practice yielded rides the ledger (v2.8): the
-		// registry keeps moving, terms lapse, letters change hands, and
-		// a reenactment must practice what was practiced the first
-		// time, not what the office would say today.
+		// Record the result because registry ownership and terms can change.
 		v, err := c.consultErr("practice", func() (law.Value, error) {
 			states, err := c.readRegistry(ctx)
 			if err != nil {
@@ -2183,16 +2027,12 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 					return governing.disclosure, nil
 				}
 				if until, licensed := governing.licenses[c.Case.ID]; licensed && until > now {
-					// A licensee practices concurrently and read-only,
-					// which is the only way anyone practices anything
-					// here.
+					// A license permits concurrent, read-only practice.
 					return governing.disclosure, nil
 				}
 				return law.Value{}, guilty("infringement: the letters for %q are held by %s and run through court day %d. The disclosure is public; the practice is not; the distinction is the entire patent system", in.Name, governing.holder, governing.expiry()-1)
 			}
-			// Every term has lapsed: the invention is in the public
-			// domain, as everything eventually is. The latest disclosure
-			// controls.
+			// Once all terms lapse, the latest disclosure is public.
 			return latest.disclosure, nil
 		})
 		if err != nil {
@@ -2227,9 +2067,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if !ok {
 			return 0, guilty("a license for a term of %d days exceeds the calendar's jurisdiction", term.I)
 		}
-		// The grant rides the ledger (v2.8), as the issuance does: a
-		// reenactment is told the license was granted and grants
-		// nothing.
+		// Record the grant so reenactment does not write it again.
 		if _, err := c.consultErr("license", func() (law.Value, error) {
 			states, err := c.readRegistry(ctx)
 			if err != nil {
@@ -2252,8 +2090,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 			if !exists {
 				return law.Value{}, guilty("a license cannot be granted to %q: there is no such matter before this court, and imaginary licensees pay no royalties", licensee.S)
 			}
-			// The lifetime rule: a license may not outlive the letters
-			// it derives from. Nothing borrows past its owner's term.
+			// A license cannot extend beyond the patent term.
 			if licenseUntil > governing.expiry() {
 				return law.Value{}, guilty("a license may not outlive the letters it derives from: the letters for %q lapse on court day %d and the license would run to day %d. Nothing borrows past its owner's term", in.Name, governing.expiry(), licenseUntil)
 			}
@@ -2277,8 +2114,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		// The move rides the ledger (v2.8), as the issuance does: a
-		// reenactment is told the letters moved and moves nothing.
+		// Record the assignment so reenactment does not write it again.
 		if _, err := c.consultErr("assignment", func() (law.Value, error) {
 			states, err := c.readRegistry(ctx)
 			if err != nil {
@@ -2301,10 +2137,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 			if !exists {
 				return law.Value{}, guilty("the letters for %q cannot be assigned to %q: there is no such matter before this court", in.Name, assignee.S)
 			}
-			// The aliasing rule: no assignment while licenses are
-			// outstanding. The licensees relied on the grant, and the
-			// grant relied on the holder; the letters move only when no
-			// one is borrowing them.
+			// Outstanding licenses prevent assignment.
 			if n := governing.outstanding(now); n > 0 {
 				return law.Value{}, guilty("the letters for %q cannot be assigned while %d license(s) are outstanding; the licensees relied on the grant, and the letters move only when no one is borrowing them", in.Name, n)
 			}

@@ -2,13 +2,14 @@
 
 Gregor compiles a `.trial` filing into **proceedings**: a sequence of JSON
 records, one instruction per record, appended to the case's proceedings
-topic. **The offset a record lands at is its address.** Every `REFER` and
-`PETITION` is compiled against those addresses, so instructions must be written
-once, in order, to the fresh topic opened for each case.
+topic. An instruction's zero-based position among visible committed records is
+its address. Every `REFER` and `PETITION` is compiled against those logical
+positions. Physical Kafka offsets may contain invisible transaction control
+records and are not instruction addresses.
 
-The attention record is the authoritative program counter. Consumer group
-`the-court.<case>` mirrors it on this topic, so
-`kafka-consumer-groups.sh --describe` can inspect the public offset.
+The attention record is the authoritative logical program counter. Consumer
+group `the-court.<case>` mirrors the equivalent physical Kafka cursor, so its
+numeric offset can differ where transaction control records occupy offsets.
 
 ## Instruction record
 
@@ -21,12 +22,12 @@ The attention record is the authoritative program counter. Consumer group
 | `op` | all | opcode, below |
 | `value` | SUBMIT | the literal to push |
 | `name` | RETRIEVE, FILE, STRIKE | the record's name; on PETITION, the office's name (decorative); on EXHIBIT, the exhibit's name; on INSPECT and ENTER, the entry's name |
-| `target` | REFER, REFER-OVERRULED, PETITION | destination offset |
+| `target` | REFER, REFER-OVERRULED, PETITION | destination logical instruction address |
 | `params` | PETITION, EXHIBIT | PETITION: names bound in the office's frame, in order; EXHIBIT: the entries, in filing order |
 | `wants` | PETITION | the caller awaits a finding |
 | `with` | REMAND | a finding accompanies the remand |
 | `count` | SCHEDULE | how many items to pop |
-| `pos` | any | source position, revealed only to counsel |
+| `pos` | any | source position |
 
 ## Values
 
@@ -36,7 +37,7 @@ The attention record is the authoritative program counter. Consumer group
 (exhibits nest: any entry may itself be an exhibit) ·
 `{"t":"sched","l":[{"t":"int","i":1},…]}` (schedules hold any values,
 including exhibits and other schedules; an empty schedule omits `l`) ·
-`{"t":"reg","x":{"first":{"t":"str","s":"handsome"},…}}` (registers
+`{"t":"reg","x":{"key":{"t":"str","s":"value"},…}}` (registers
 reuse the exhibit's entry field, being exhibits of nothing in
 particular; an empty register omits `x`) ·
 `{"t":"poa","s":"doubled","i":17,"of":"case-000001a2b3c4d5e6f708192a","l":[{"t":"str","s":"amount"}]}`
@@ -73,7 +74,7 @@ executing case, and the concerns as strings).
 | `EXCERPT` | s i j → s′ | AN EXCERPT OF: substring, 1-indexed, inclusive, in code points; bounds outside 1 ≤ i ≤ j ≤ len, or a non-string, or non-integer bounds: GUILTY |
 | `TRANSCRIBE` | v → s | THE TRANSCRIPT OF: any value → its `Display()` string |
 | `SUM-CERTAIN` | v → n | THE SUM CERTAIN OF: a string of optional sign + digits → the integer, or of a decimal to the penny → the sum; integers and sums pass through; anything else: GUILTY |
-| `CONTEMPT` | v → | HOLD … IN CONTEMPT: a verdict, deliberately; sealed particulars = `held in contempt: <display>` |
+| `CONTEMPT` | v → | HOLD … IN CONTEMPT: emit a verdict with sealed particulars `held in contempt: <display>` |
 | `STRIKE` | — | strike record `name`: a **tombstone** (key = `name`, null value) in the records topic; no such record: GUILTY |
 | `SERVE` | v w → | SERVE NOTICE OF v UPON w: append `v.Display()` to case `w`'s summons topic, key = the serving case's number, inside this instruction's transaction; `w` not a string, or no such case on file: GUILTY |
 | `CASE-AT-BAR` | → s | push this case's own number, as a string |
@@ -86,17 +87,17 @@ executing case, and the concerns as strings).
 | `SUBSTITUTE` | s i v → s′ | pop value, index, schedule; push a *copy* with item `i` replaced; non-schedule, non-integer index, or out of bounds: GUILTY |
 | `INSCRIBE` | r k v → r′ | pop value, key, register; push a *copy* with the value inscribed under the key; non-register or non-string key: GUILTY |
 | `ENTRY` | r k → v | pop key, pop register; push the entry under the key; non-register, non-string key, or an absent entry: GUILTY |
-| `EXPUNGE` | r k → r′ | pop key, pop register; push a *copy* without the entry; expunging what is not there succeeds vacuously; non-register or non-string key: GUILTY |
+| `EXPUNGE` | r k → r′ | pop key, pop register; push a *copy* without the entry; an absent entry succeeds; non-register or non-string key: GUILTY |
 | `ROSTER` | r → s | pop a register; push a schedule of its keys, alphabetically; non-register: GUILTY |
 | `POWER` | → p | push a power of attorney over the office at `target`: `name`, `params`, and the executing case travel with it. The target is resolved at compile time like a `PETITION`'s and shifted by `CompileAt` like one |
 | `PETITION-UNDER` | p args… → | pop `count` arguments, pop the power; verify it is a power, that it was executed in this case, and that the arity fits (each failure: GUILTY); then open a frame exactly as `PETITION` does (CALL event in the appeals topic, locals bound from the instrument's concerns) and jump to the conferred address. `wants` says whether a finding is expected back |
-| `ARCHIVE` | v s → | COMMIT v TO THE ARCHIVE AS s: append the document to the archive topic at the clerk's counter (its offset becomes the handle), then repoint the catalog (key = s, value = `{"offset":N}`) inside this step's transaction; non-string name: GUILTY |
+| `ARCHIVE` | v s → | COMMIT v TO THE ARCHIVE AS s: append the document to the archive topic (its offset becomes the handle), then update the catalog (key = s, value = `{"offset":N}`) inside this step's transaction; non-string name: GUILTY |
 | `DOCUMENT` | s → v | THE DOCUMENT s FROM THE ARCHIVE: fold the catalog, fetch the archive record at the current offset, push the value; unknown name: GUILTY |
 | `PATENT` | v n → | LET LETTERS PATENT ISSUE FOR `name`: pop term (days) then disclosure; read the court day via the ledger; scan `the-patent-office`; a claim in force on `name` is GUILTY (prior art, or double patenting if yours); otherwise append the claim (key = `name`) inside this step's transaction |
 | `PRACTICE` | → v | THE PRACTICE OF `name`: read the court day via the ledger; the first in-force claim in registry (offset) order governs; the holder (assignments applied) and live licensees get the disclosure, others GUILTY (infringement); all terms lapsed: the latest disclosure (the public domain); no claim ever: GUILTY |
 | `LICENSE` | c n → | GRANT A LICENSE UNDER `name`: pop term (days) then licensee (a case number). Only the holder grants; the licensee must be a matter on file and not the holder; the term must be positive and may not run past the letters' expiry (a license may not outlive the letters it derives from). Appends `{"kind":"license","name","holder","to","granted","term"}` to the registry inside this step's transaction |
-| `ASSIGN` | c → | ASSIGN THE LETTERS FOR `name`: pop the assignee (a case number). Only the holder assigns; the assignee must be a matter on file and someone else; refused while licenses are outstanding (nothing moves while it is borrowed). Appends `{"kind":"assignment","name","holder","to","granted"}`; the old holder's later practice is infringement (use after assignment) |
-| `COMMENCE` | s → s′ | COMMENCE PROCEEDINGS UPON s: parse, compile, and file the source string as a new case at the clerk's counter (its case number must exist before it can be recorded), enter the assigned number in the ledger inside this step's transaction, push the number; a reenactment re-serves the recorded number and opens nothing; non-string source, or a source the compiler rejects: GUILTY, and nothing is opened |
+| `ASSIGN` | c → | ASSIGN THE LETTERS FOR `name`: pop the assignee (a case number). Only the holder assigns; the assignee must be another case on file; outstanding licenses prevent assignment. Appends `{"kind":"assignment","name","holder","to","granted"}`; later practice by the old holder is use after assignment |
+| `COMMENCE` | s → s′ | COMMENCE PROCEEDINGS UPON s: parse, compile, and file the source string as a new case, enter the assigned number in the ledger inside this step's transaction, and push the number; reenactment uses the recorded number without opening another case; non-string or rejected source: GUILTY |
 | `STANDING` | s → s′ | THE STANDING OF s: pop a case number; push `GUILTY` (a verdict is on file), `IN GOOD STANDING` (on file, undecided), or `NO MATTER ON FILE`; the reading is entered in the ledger in this step, so a reenactment re-serves it; non-string: GUILTY |
 | `MOTION` | — | FILE A MOTION TO RECONSIDER: place the motion on file (records topic, reserved key `__motion__`, value `{"target":N,"grounds":"name"}`), durably, within this step's transaction. While on file and unspent, the first verdict that would issue is intercepted instead of delivered, as one atomic step: an `IMPOUND` event in the dossier topic (empties the stack fold), an `IMPOUND` event in the appeals topic (empties the call-stack fold), the motion rewritten spent, the sealed particulars filed under `grounds` (if named), and the committed attention seeking to `target`. Filing again after the grant: GUILTY. A ledger/proceedings mismatch and an unreadable instruction record are not intercepted |
 | `DISCOVERY` | s → v | THE RECORD `name` IN THE MATTER OF s: pop a case number; fold the respondent's records topic as its own Court would (last writing per key since its latest reenactment marker, tombstones honored) and push the record `name`; the reading is entered in the ledger in this step, so a reenactment re-serves it. Non-string, no such matter, or no such record: GUILTY |
@@ -143,7 +144,7 @@ the grant), so both survive the official together.
 1. The case in chief is laid down first, article by article, in filing
    order. Labels compile away.
 2. If offices exist, an implicit `ADJOURN` follows the last article, so
-   control cannot wander into an office uninvited. If no offices exist,
+   control cannot fall through into an office. If no offices exist,
    nothing follows: running off the end is **apparent acquittal**; the
    Court blocks on `poll()`, and new proceedings may be appended to a
    running case at any time.
@@ -208,7 +209,7 @@ rebuilt by replaying these topics on every session.
 - **verdicts**: `{"verdict":"GUILTY","sealed":"…","pc":N,"pos":"…"}`.
   The public field is `verdict`. The rest is sealed.
 
-## Consistency (v0.4)
+## Transactional execution
 
 One instruction = one Kafka transaction. The Court buffers every record
 the instruction wishes to enter (dossier motions, appeals events,
@@ -217,12 +218,12 @@ together with an attention note in a single transaction; the step lands
 whole or not at all. All readers use `read_committed` isolation.
 Consequences:
 
-- **Exactly-once execution.** Kill the official between any two
-  operations, at any commit boundary; the successor refolds the topics,
+- **Execution recovery.** Stop the process at a commit boundary; the next
+  process refolds the topics,
   reads the last committed attention note, and continues. No duplicated
   proclamation, no double-counted summons, no half-filed record, no
   twice-served notice. The crash-injection suite
-  (`internal/court/crash_test.go`) dismisses the official at *every*
+  (`internal/court/crash_test.go`) stops execution at every
   commit boundary of every test program and demands identical timelines.
 - **Exactly-once messaging between cases.** A `SERVE` lands in the
   respondent's summons topic in the same transaction that advances the
@@ -230,9 +231,7 @@ Consequences:
   officials perish serving it. This is transactional cross-topic
   production through Kafka's exactly-once semantics.
 - **Fencing.** The transactional ID is `the-court.<case>`, so a second
-  official convening on the same case fences the first, who learns of
-  his dismissal by exception. The Court recognizes exactly one clerk
-  per matter.
+  process running the same case fences the first.
 - **A guilty instruction has no effects.** Its pending step is
   discarded unentered; the verdict is entered instead, outside any
   transaction, and is final.
