@@ -33,7 +33,7 @@ func main() {
 }
 
 // Release builds set version with -ldflags "-X main.version=<tag>".
-var version = ""
+var version string
 
 func resolveVersion() string {
 	if version != "" {
@@ -219,10 +219,7 @@ func openLog(ctx context.Context, broker string) (*docket.KafkaLog, int) {
 // screen controls.
 func isTTY(f *os.File) bool {
 	fi, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return fi.Mode()&os.ModeCharDevice != 0
+	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
 // readSource reads at most maxSourceBytes from path. A path of "-" reads

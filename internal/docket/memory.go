@@ -121,7 +121,7 @@ func (m *MemoryLog) Fetch(ctx context.Context, topic string, offset int64, wait 
 		if !ok {
 			return nil, fmt.Errorf("%w: %q", ErrTopicNotFound, topic)
 		}
-		if offset >= 0 && offset < int64(len(recs)) {
+		if offset < int64(len(recs)) {
 			r := cloneRecord(recs[offset])
 			return &r, nil
 		}
@@ -169,8 +169,7 @@ func (m *MemoryLog) Commit(ctx context.Context, c Case, step Step) error {
 		recs := m.topics[a.Topic]
 		m.topics[a.Topic] = append(recs, Record{Offset: int64(len(recs)), Key: cloneBytes(a.Key), Value: cloneBytes(a.Value)})
 	}
-	// The heard set is copied on the way in: the committed attention is
-	// the sealed original, not a view of the Court's working memory.
+	// Copy Heard so committed attention cannot alias the caller.
 	var heard []int64
 	if len(step.Heard) > 0 {
 		heard = append(heard, step.Heard...)
@@ -201,8 +200,7 @@ func (m *MemoryLog) ListCases(ctx context.Context) ([]Case, error) {
 	defer m.mu.Unlock()
 	var out []Case
 	for t := range m.topics {
-		// Statutes also keep a .filing topic; they are court-wide
-		// paperwork, not matters, and do not appear on the docket.
+		// Statute filing topics do not represent cases.
 		if id, ok := strings.CutSuffix(t, ".filing"); ok && strings.HasPrefix(id, "case-") {
 			out = append(out, Case{ID: id})
 			if len(out) > MaxCases {
@@ -277,9 +275,6 @@ func (m *MemoryLog) DeleteCaseTopics(ctx context.Context, c Case) error {
 func (m *MemoryLog) Close() {}
 
 func cloneBytes(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
 	return append([]byte(nil), b...)
 }
 

@@ -2,10 +2,9 @@
 
 Every filed program is a **case** with a 96-bit random number
 (`case-a1b2c3d4e5f60718293a4b5c`).
-A case is a family of twelve single-partition topics. One partition,
-everywhere, always: offsets must be dense integers, because the
-proceedings topic's offsets are the instruction addresses and the law
-is single-threaded.
+A case is a family of twelve single-partition topics. The proceedings topic's
+offsets are instruction addresses, and the state folds require a total order,
+so each topic must keep one partition.
 
 | Topic | Contents | Config |
 |---|---|---|
@@ -53,40 +52,34 @@ Consumer groups, the public record, updated after each transaction:
 
 | Group | Committed offset means |
 |---|---|
-| `the-court.case-X` on `…proceedings` | **the program counter** |
+| `the-court.case-X` on `…proceedings` | program-counter mirror |
 | `the-court.case-X.summons` on `…summons` | how much input has been served |
 
-When the public record and the sealed original disagree (a crash landed
-between the transaction and the mirror), the sealed original prevails,
-which you will agree is very fitting. The transactional ID
-`the-court.case-X` fences officials: one clerk per matter, and the
-dismissed one learns of it by exception.
+When the public record and the sealed original disagree because a crash landed
+between the transaction and the mirror, the sealed original prevails. The
+transactional ID `the-court.case-X` fences officials so only one runs a case.
 
-Consequences, all deliberate:
+Consequences:
 
 - **Suspend** = commit the offset and go home. **Resume** = read it back,
   refold the state topics, continue, on any machine, at any time.
-- **Migration/failover**: the Court holds no state worth keeping. Kill
-  the official mid-loop; appoint another; the case continues at the
-  committed instruction.
+- **Migration/failover**: the Court process holds no durable state. A
+  replacement resumes at the committed instruction.
 - **Replay**: all inputs are in the log, so `trial reenact` resets both
   groups to zero, appends REENACTMENT markers to the state topics
   (deleting nothing), and history repeats. Since v0.8 the ledger topic
   records every draw of the discretion and every reading of the clock,
   and replay re-serves the recorded values the way it re-serves the
   summonses: the reenactment is bit-exact (spec.md §14.4).
-- **Everything is inspectable** with stock Kafka tooling. The dossier is
-  a topic. `kafka-console-consumer` is a debugger.
+- **State is inspectable** with stock Kafka tooling, including
+  `kafka-console-consumer`.
 
-Retention is infinite everywhere. Nothing is ever deleted. This is a
-statement of values. (`trial burn` exists, but it refuses; Max Brod
-also refused.) Two lawful exceptions, both the Bureau's: compaction of
-the records and attention topics purges superseded entries, and a
-`STRIKE` tombstone licenses compaction to forget that key entirely
-after `delete.retention.ms`. The fold cannot tell the difference,
-which is the standard the Bureau holds itself to.
+Case topics use `retention.ms=-1`, and `trial burn` refuses to delete a case.
+Two exceptions are handled by compaction: the records and attention topics may
+purge superseded entries, and a `STRIKE` tombstone permits Kafka to remove that
+key after `delete.retention.ms`. Both states produce the same fold.
 
 Running a case on a broker you provisioned yourself? Read
 [`spec/spec.md` §17](spec.md#17-interacting-with-apache-kafka-gotchas-and-limitations)
-first. Retention, partition count, and compaction policy are not ops
-preferences here; they are the physics of the machine.
+first. The runtime depends on the documented retention, partition-count, and
+compaction settings.

@@ -1,13 +1,12 @@
-# The Advocates: agents before the Court
+# Using the Advocate MCP server
 
-`trial mcp` retains the Advocate: an MCP server on stdio through which
-an LLM agent files cases as durable plans. This walkthrough is the
-v1.0 story end to end, and every step of it is executed verbatim by
-the test suite
+`trial mcp` starts the Advocate, an MCP server on stdio through which
+an LLM agent can file cases as durable plans. The test suite covers this
+workflow end to end
 ([`internal/advocate/advocate_test.go`](../internal/advocate/advocate_test.go),
-`TestAdvocateAgentBus`), so nothing below is aspirational.
+`TestAdvocateAgentBus`).
 
-## Retaining the Advocate
+## Configure the Advocate
 
 Start the courthouse, then register the server with your agent. For
 Claude Code:
@@ -38,37 +37,31 @@ The Advocate offers twelve tools:
 | `trial_statutes` | list the statutes on the books |
 | `trial_test` | depose a program in memory before filing it; no broker touched |
 
-## Why this is not a stretch
+## Durability model
 
-The properties agents need from a "durable plan" are this machine's
-substrate rather than its features:
+The runtime provides these properties for a durable plan:
 
-- **The plan outlives the agent.** A case is topics; the agent's
-  process, context window, and employment status are not load-bearing.
-  Any later agent holding the case number resumes exactly where the
-  Court's committed offset says.
-- **The memory is subpoenaable.** Variables are a compacted topic, the
-  full value trace is the dossier, every input ever received is
-  retained in the summons topic. "Why did the agent do that" is
-  `trial_reenact` plus `trial_observe`, and since v0.8 the ledger
-  makes the replay bit-exact, dice and clocks included.
+- **The plan survives the agent process.** A later agent with the case number
+  resumes from the Court's committed offset.
+- **State is inspectable.** Variables are a compacted topic, the dossier holds
+  the value trace, and the summons topic retains input. For replay,
+  `trial_reenact` resets the case, `trial_proceed` runs it, and
+  `trial_observe` reads output from the offset saved before the reset. Since
+  v0.8 the ledger records random and clock values for bit-exact replay.
 - **`SERVE NOTICE` is the agent-to-agent bus.** A notice lands in the
   respondent's summons topic inside the sender's own transaction:
   exactly-once delivery, sender attribution in the record key, no
   broker-side setup beyond the cases themselves.
-- **Continuances are follow-ups that cannot be dropped.** `ADJOURN FOR
-  2 DAYS.` survives the agent, the machine, and the weekend; whoever
-  convenes next honors the recorded deadline.
-- **Humans in the loop, natively.** A case blocked on `AWAIT SUMMONS`
-  is a workflow awaiting approval; `trial_serve` is the approval
-  button, and so is any Kafka producer in any language.
+- **Continuances persist.** `ADJOURN FOR 2 DAYS.` records a deadline that the
+  next Court process honors.
+- **A case can wait for human input.** A case blocked on `AWAIT SUMMONS` can
+  receive approval through `trial_serve` or another Kafka producer.
 
 ## The worked example: two cases correspond
 
-One agent, two cases, one exactly-once bus. The oracle is a service;
-the petitioner asks it a question. Between tool calls the agent holds
-nothing but two case numbers, which is the point: kill the agent
-anywhere below and a new one continues with the same receipts.
+The oracle is a service and the petitioner asks it a question. Between tool
+calls the agent needs only the two case numbers. A replacement agent can
+continue from the same recorded state.
 
 **1. File the oracle** (`trial_file`):
 
@@ -82,8 +75,8 @@ ARTICLE 1.
     REFER TO ARTICLE 1.
 ```
 
-Result: `{"case": "case-a11e6e4f72c809bd35106a2c", ...}`. The oracle answers any
-petitioner, forever, one at a time.
+Result: `{"case": "case-a11e6e4f72c809bd35106a2c", ...}`. The oracle answers
+petitioners one at a time.
 
 **2. File the petitioner** (`trial_file`):
 
@@ -120,9 +113,8 @@ session's court days run out:
           step is committed; nothing is lost. ..."}
 ```
 
-`session_expired: true` is not an error. It is the durable-plan
-property doing its job: the agent is the scheduler, and every step so
-far is already on file.
+`session_expired: true` is not an error. The agent is the scheduler, and every
+completed step is already on file.
 
 **5. Run the oracle** (`trial_proceed`). It consumes both notices,
 serves `21` upon the petitioner inside the same transaction that
@@ -142,7 +134,7 @@ consumed the question, loops, and blocks awaiting its next customer
  "next_offset": 1}
 ```
 
-**8. Subpoena the oracle's memory** (`trial_status`):
+**8. Inspect the oracle's state** (`trial_status`):
 
 ```json
 {"records": {"petitioner": "case-b52f019c38a764e20d5b1f93", "n": "20"}, ...}
@@ -152,12 +144,11 @@ The oracle's variables show exactly what it was told and by whom. If
 that is not enough, `trial_reenact` replays the whole exchange,
 bit for bit.
 
-## The plan that hires: commencement
+## Creating another case
 
-Since v1.1 a case can open cases of its own (`COMMENCE PROCEEDINGS`,
-spec §11.12), which changes what an agent has to hold. Above, the
-agent filed two cases and wired them together; here it files **one**
-case and the plan does its own hiring
+Since v1.1 a case can open another case (`COMMENCE PROCEEDINGS`, spec §11.12).
+Above, the agent filed two cases and connected them; here it files **one** case
+and the coordinator creates the other
 (`TestAdvocateCommencement` in the same test file):
 
 **1. File the coordinator** (`trial_file`). The worker's entire
@@ -183,8 +174,8 @@ case, introduces itself, poses the question, and blocks awaiting the
 answer (`session_expired: true`). The docket now holds two matters,
 one of which no one filed by hand.
 
-**3. Find the hire.** The clerk's case number is in the coordinator's
-own records (`trial_status`):
+**3. Find the created case.** The clerk's case number is in the coordinator's
+records (`trial_status`):
 
 ```json
 {"records": {"clerk": "case-9c41d78a26e40fb9531c6d02"}, ...}
@@ -197,11 +188,9 @@ and read the result (`trial_observe`):
 {"proclamations": [{"offset": 0, "text": "The clerk reports: 42"}], ...}
 ```
 
-The agent scheduled two cases but only ever knew about one in
-advance; the other it learned of the way it learns everything, by
-reading the record. With `trial proceed --docket` running, steps 2
-and 4 collapse into "wait": a standing official convenes whatever the
-plans commence.
+The agent scheduled two cases but knew only one in advance; it reads the other
+case number from the record. With `trial proceed --docket` running, steps 2 and
+4 reduce to waiting while the docket runner proceeds with filed cases.
 
 ## The dry run
 
@@ -217,5 +206,4 @@ EXPECT PROCLAMATION: 42.
 EXPECT ADJOURNMENT.
 ```
 
-`{"consistent": true, ...}` means the filing may proceed with some
-confidence, which the Court will enjoy correcting.
+`{"consistent": true, ...}` means the draft satisfied the deposition.

@@ -10,7 +10,6 @@ import (
 	"maps"
 	"math/rand"
 	"slices"
-	"sort"
 	"strconv"
 	"time"
 	"unicode/utf8"
@@ -170,19 +169,15 @@ const AttendanceKey = "__attendance__"
 // reconsider rests while it awaits the verdict it exists to intercept.
 const MotionKey = "__motion__"
 
-// motion is the standing motion to reconsider: where the proceedings
-// resume if a verdict is intercepted, where the grounds are filed, and
-// whether the Court has already indulged this case once, which is the
-// number of times the Court indulges a case.
+// motion stores the resume target, optional grounds record, and whether the
+// motion has been spent.
 type motion struct {
 	Target  int64  `json:"target"`
 	Grounds string `json:"grounds,omitempty"`
 	Spent   bool   `json:"spent,omitempty"`
 }
 
-// CourtDay is the length of one day of court time. By standing order it
-// is one second; the Court is efficient in this respect, and only this
-// one.
+// CourtDay is one second of wall-clock time.
 const CourtDay = time.Second
 
 // continuance is the grant on file: which instruction was continued and
@@ -317,9 +312,9 @@ func (c *Court) note(format string, args ...any) {
 	}
 }
 
-// guiltyErr carries a verdict out of the step logic. An unpardonable
-// verdict is one no motion to reconsider intercepts: offenses against
-// the machinery of justice itself, rather than within it.
+// guiltyErr carries a verdict out of step logic. A ledger/proceedings mismatch
+// sets unpardonable so a motion cannot intercept it; unreadable instructions
+// bypass step logic entirely.
 type guiltyErr struct {
 	sealed       string
 	unpardonable bool
@@ -486,7 +481,7 @@ func (c *Court) Recover(ctx context.Context) error {
 	}
 	c.pc = att.PC
 	c.summonsPos = att.Summons
-	c.heard = append([]int64(nil), att.Heard...)
+	c.heard = slices.Clone(att.Heard)
 	c.gazettePos = att.Gazette
 	c.ledgerPos = att.Ledger
 	c.note("The Court's attention rests at instruction %d. Dossier holds %d item(s); %d appeal(s) pending.", c.pc, len(c.stack), len(c.frames))
@@ -593,7 +588,7 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 		// it. Its innocent neighbors in the batch keep theirs.
 		prefixLen := len(c.pending)
 		ledgerLen, ledgerPos, summonsPos, gazettePos := len(c.ledger), c.ledgerPos, c.summonsPos, c.gazettePos
-		heard := append([]int64(nil), c.heard...)
+		heard := slices.Clone(c.heard)
 		next, stepErr := c.step(ctx, instr)
 		if stepErr != nil {
 			if g, ok := errors.AsType[guiltyErr](stepErr); ok {
@@ -782,8 +777,8 @@ func servedValue(text string) law.Value {
 // heardOutOfTurn reports whether the summons at off was already
 // consumed, out of turn, by a selective receive.
 func (c *Court) heardOutOfTurn(off int64) bool {
-	i := sort.Search(len(c.heard), func(i int) bool { return c.heard[i] >= off })
-	return i < len(c.heard) && c.heard[i] == off
+	_, found := slices.BinarySearch(c.heard, off)
+	return found
 }
 
 // advanceSummons moves the cursor past an in-order consumption at off
@@ -811,13 +806,11 @@ func (c *Court) hearOutOfTurn(off int64) {
 		c.advanceSummons(off)
 		return
 	}
-	i := sort.Search(len(c.heard), func(i int) bool { return c.heard[i] >= off })
-	if i < len(c.heard) && c.heard[i] == off {
+	i, found := slices.BinarySearch(c.heard, off)
+	if found {
 		return // the scan does not hear the same voice twice
 	}
-	c.heard = append(c.heard, 0)
-	copy(c.heard[i+1:], c.heard[i:])
-	c.heard[i] = off
+	c.heard = slices.Insert(c.heard, i, off)
 }
 
 // nextSummonsInTurn blocks for the earliest summons not already heard
@@ -1491,11 +1484,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if reg.T != law.KindRegister {
 			return 0, guilty("only a register keeps a roster; %s keeps its own counsel", describe(reg))
 		}
-		keys := make([]string, 0, len(reg.X))
-		for k := range reg.X {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
+		keys := slices.Sorted(maps.Keys(reg.X))
 		items := make([]law.Value, len(keys))
 		for i, k := range keys {
 			items[i] = law.Str(k)
@@ -1517,9 +1506,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		}
 		// A fresh copy: schedules are documents, and the one already in
 		// evidence must not grow behind the Court's back.
-		items := make([]law.Value, len(sched.L)+1)
-		copy(items, sched.L)
-		items[len(sched.L)] = v
+		items := append(slices.Clone(sched.L), v)
 		c.push(law.Schedule(items))
 		return next, nil
 
@@ -1545,8 +1532,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if idx.I < 1 || idx.I > int64(len(sched.L)) {
 			return 0, guilty("the schedule runs to %d item(s); item %d cannot be substituted, not being there", len(sched.L), idx.I)
 		}
-		items := make([]law.Value, len(sched.L))
-		copy(items, sched.L)
+		items := slices.Clone(sched.L)
 		items[idx.I-1] = v
 		c.push(law.Schedule(items))
 		return next, nil

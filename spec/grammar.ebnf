@@ -415,16 +415,14 @@ entry-at         = "THE ENTRY UNDER" , expression , "IN" , factor ;
    key, or a non-register is GUILTY; consult the roster first. *)
 
 roster-of        = "THE ROSTER OF" , factor ;
-(* A schedule of the register's keys, in alphabetical order, because
-   the Court files everything alphabetically eventually. The roster is
-   the register's iterator and its existence test, and it is enough. *)
+(* A schedule of register keys in alphabetical order. It is the register's
+   iterator and existence test. *)
 
 power-of         = "A POWER OF ATTORNEY OVER THE OFFICE OF" , identifier ;
-(* The office as a value: its name, its instruction address, its
-   concerns, and the case that executed the instrument. An office is
-   an offset into the proceedings topic, so a function pointer here is
-   literally a pointer, valid forever because nothing is ever deleted.
-   Conferring an office that does not exist is a rejected filing. *)
+(* The office as a value: its name, instruction address, concerns, and
+   executing case. The address is an offset into append-only proceedings and
+   remains valid while that history is retained. Conferring an unknown office
+   is a rejected filing. *)
 
 call-under       = "THE FINDING UNDER" , factor ,
                    [ "REGARDING" , expression , { "AND" , expression } ] ;

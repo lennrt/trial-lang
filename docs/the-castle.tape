@@ -1,6 +1,5 @@
 # vhs docs/the-castle.tape (from the repository root)
-# Records the-castle deposition playback for the README: the speedrun
-# is a deposition, the deposition is the demo, the demo is the test.
+# Records the deposition playback used in the README demo.
 Output docs/the-castle.gif
 
 Set Shell bash

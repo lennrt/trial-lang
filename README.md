@@ -1,17 +1,17 @@
-![trial-lang — ASCII court records and a path into the Court](docs/hero.png)
+![triallang logo over ASCII court records](docs/hero.png)
 
 # triallang
 
-*A programming language you do not run. You are summoned.*
+*A toy programming language backed by Apache Kafka.*
 
 > [!NOTE]
 > triallang is an independent project. It is not affiliated with, endorsed by,
 > or sponsored by Apache Kafka or the Apache Software Foundation. Its literary
 > style is inspired by the works of Franz Kafka.
 
-triallang is a programming language that writes program state to Apache Kafka.
-Programs are cases. Statements use legal English and end with a period.
-The interpreter is called the Court.
+triallang is a toy programming language that writes program state to Apache
+Kafka. Programs are cases, statements use legal English and end with a period,
+and the interpreter is called the Court.
 
 ```trial
 FORM K-1.
@@ -50,12 +50,10 @@ go build -o trial ./cmd/trial
 
 ## Visual demo
 
-The Orrery rotates a solid, depth-shaded sphere beneath a `TRIAL-LANG`
-wordmark. A meridian lattice moves across the surface to make the rotation
-visible.
-Each framebuffer is part of the filing. The Court commits the frame number
-before it proclaims the frame, so another Court can resume the animation from
-the recorded offset.
+The Orrery is a terminal animation of a rotating, depth-shaded sphere beneath a
+`TRIAL-LANG` wordmark. Each framebuffer is part of the filing. The Court
+commits the frame number before it proclaims the frame, so another Court can
+resume the animation from the recorded offset.
 
 ![The triallang transactional Orrery](docs/the-orrery.gif)
 

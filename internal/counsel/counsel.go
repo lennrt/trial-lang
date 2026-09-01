@@ -93,8 +93,7 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 		if headerBytes > maxHeaderBytes {
 			return nil, fmt.Errorf("headers exceed %d bytes", maxHeaderBytes)
 		}
-		line := string(lineBytes)
-		line = strings.TrimRight(line, "\r\n")
+		line := strings.TrimRight(string(lineBytes), "\r\n")
 		if line == "" {
 			break
 		}
@@ -440,7 +439,7 @@ func utf16ColumnToByteOffset(line string, column int) (int, bool) {
 	return 0, false
 }
 
-// --- the law, as counsel explains it ------------------------------------
+// --- language reference -------------------------------------------------
 
 // hoverText returns reference text for a keyword.
 var hoverText = map[string]string{

@@ -113,24 +113,21 @@ func checkStmt(s Stmt, assignedAt map[string]int) error {
 		}
 		return nil
 	}
-	checkCond := func(c Cond) error {
-		var walk func(c Cond) error
-		walk = func(c Cond) error {
-			switch cn := c.(type) {
-			case Clause:
-				if err := checkExpr(cn.Left, 0); err != nil {
-					return err
-				}
-				return checkExpr(cn.Right, 0)
-			case CondBinary:
-				if err := walk(cn.L); err != nil {
-					return err
-				}
-				return walk(cn.R)
+	var checkCond func(Cond) error
+	checkCond = func(c Cond) error {
+		switch cn := c.(type) {
+		case Clause:
+			if err := checkExpr(cn.Left, 0); err != nil {
+				return err
 			}
-			return nil
+			return checkExpr(cn.Right, 0)
+		case CondBinary:
+			if err := checkCond(cn.L); err != nil {
+				return err
+			}
+			return checkCond(cn.R)
 		}
-		return walk(c)
+		return nil
 	}
 
 	switch st := s.(type) {

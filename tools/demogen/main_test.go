@@ -1,7 +1,7 @@
 package main
 
 import (
-	"strconv"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -24,7 +24,7 @@ func TestSphereFrames(t *testing.T) {
 		if !strings.Contains(got, "TRANSACTIONAL SPHERE") {
 			t.Fatalf("frame %d has no sphere title", frame+1)
 		}
-		if !strings.Contains(got, "FRAME "+twoDigits(frame+1)+"/"+strconv.Itoa(frameCount)) {
+		if !strings.Contains(got, fmt.Sprintf("FRAME %02d/%d", frame+1, frameCount)) {
 			t.Fatalf("frame %d has the wrong frame counter", frame+1)
 		}
 		if _, ok := seen[got]; ok {

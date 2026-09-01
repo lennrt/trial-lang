@@ -2,13 +2,11 @@
 
 *Version 0.7, "Block the Tradesman".*
 
-This is the reference manual for triallang. It is normative where it is
-precise and load-bearing where it is not. The grammar of record is
+This is the normative reference manual for triallang. The grammar is
 [`grammar.ebnf`](grammar.ebnf); the instruction set of record is
 [`bytecode.md`](bytecode.md); the topic conventions are
 [`topics.md`](topics.md). Where this document and the implementation
-disagree, one of them is guilty, and an issue should be filed to
-determine which.
+disagree, file an issue to resolve the discrepancy.
 
 ## Table of contents
 
@@ -34,7 +32,7 @@ determine which.
 
 ## 1. Introduction
 
-triallang is an imperative programming language whose entire machine
+triallang is a toy imperative programming language whose machine
 state (source code, compiled program, program counter, operand stack,
 call stack, variables, standard input, standard output, and exit
 status) resides in Apache Kafka topics. The implementation outside
@@ -46,11 +44,10 @@ A program is called a **case**. Writing a program is **filing** it;
 running it is **the proceedings**; its output is **proclamations**; a
 runtime error is **a verdict**, and there is only one verdict.
 
-The vocabulary is a joke. The semantics are not: every construct below
-is exactly specified, and the execution model is a textbook
-exactly-once Kafka stream processor. Since v0.7 two constructs consult
-the outside world (the clock and the Court's discretion, §10.8); §14.4
-states precisely what that costs.
+The legal vocabulary is intentional. This document specifies the language and
+its Kafka transaction model. Since v0.7 two constructs consult the outside
+world (the clock and the Court's discretion, §10.8); §14.4 describes how those
+values affect replay.
 
 ## 2. Notation
 
@@ -78,7 +75,7 @@ Source text is **UTF-8**, in files with the `.trial` extension.
 - **Keywords and identifiers are ASCII.** Keywords are ASCII
   upper-case; identifiers are ASCII lower-case (§4.4). A defendant with
   an umlaut must adopt a court name: `bürstner` is a rejected filing,
-  `buerstner` is a citizen in good standing.
+  `buerstner` is valid.
 - **String literals and comments carry arbitrary UTF-8**: umlauts,
   kanji, emoji, the block-redaction character, all of it. The lexer
   passes the bytes through untouched:
@@ -102,12 +99,10 @@ Source text is **UTF-8**, in files with the `.trial` extension.
   `"Prozeß"` has length 6; `"⚖️"` (U+2696 U+FE0F) has length 2; a
   ZWJ-joined family emoji has length 7 or more. An excerpt can
   therefore split a grapheme cluster (separating an emoji from its
-  variation selector); it can never split a code point. The Court
-  counts what Unicode says to count, and Unicode says strange things.
+  variation selector); it can never split a code point.
 - **Error positions count bytes.** The line and column in a rejected
   filing (§16.1) are computed in bytes, not code points. After a kanji
-  in a comment, the column number and your editor's column number part
-  ways. Both are correct. Neither will concede.
+  in a comment, the column number and your editor's column number differ.
 
 ## 4. Lexical elements
 
@@ -117,8 +112,7 @@ Source text is **UTF-8**, in files with the `.trial` extension.
 terminator = "." ;
 ```
 
-Statements and declarations end with a period. They are sentences. You
-are being sentenced.
+Statements and declarations end with a period.
 
 ### 4.2 Comments
 
@@ -127,8 +121,7 @@ comment = "OFF THE RECORD" , ":" , { any character except newline } ;
 ```
 
 A comment runs from `OFF THE RECORD:` to the end of the line. Comments
-are lexically discarded and permanently retained in the filing topic
-regardless. Nothing is ever off the record.
+are lexically discarded but remain in the source stored in the filing topic.
 
 ```trial
 LET IT BE RECORDED THAT n IS 3.   OFF THE RECORD: it was 4.
@@ -136,12 +129,12 @@ LET IT BE RECORDED THAT n IS 3.   OFF THE RECORD: it was 4.
 
 ### 4.3 Keywords
 
-Keywords are upper-case, frequently multi-word, and non-negotiable:
+Keywords are upper-case and frequently multi-word:
 `LET IT BE RECORDED THAT`, `APPORTIONED AMONG`, `OR IN THE
 ALTERNATIVE`, `FAILING WHICH`. The full inventory appears in the
 grammar; there is no reserved-word list, because capitalization alone
 distinguishes the law from the accused: `EXCEED` is a statute, `exceed`
-is a perfectly good variable name, and the two never meet.
+is a valid variable name, and the two never meet.
 
 A keyword sequence must match exactly. `LET IT BE WRITTEN THAT` is not
 a statement; it is a rejected filing with a citation.
@@ -182,11 +175,9 @@ finding-literal = "SUSTAINED" | "OVERRULED" ;
   sentence, so `PROCLAIM 12.` proclaims the integer twelve. No IEEE
   float exists anywhere in this language (§10.2).
 - **Strings** support the escapes `\"`, `\\`, `\n`, and `\t`, and no
-  others. A string may not contain a raw newline: a quotation opened
-  must close on the same line, for the record cannot abide an open
-  quotation.
-- **Findings** are the booleans. There are two, which is already
-  generous.
+  others. A string may not contain a raw newline: it must close on the
+  line where it opened.
+- **Findings** are the two boolean values.
 
 ## 5. Constants: defined terms
 
@@ -208,11 +199,11 @@ HEREINAFTER, presumed-guilty SHALL MEAN SUSTAINED.
 Semantics:
 
 - A defined term may mean an integer, a sum, a string, or a finding.
-  It may not mean an expression, a variable, or an exhibit; that would
-  require interpretation, and interpretation is not this office.
+  It may not mean an expression, a variable, or an exhibit; those would
+  require runtime evaluation.
 - Wherever the name appears as an operand, Gregor substitutes the
   literal. Defined terms cost nothing at runtime and leave no trace in
-  the records topic; they are paperwork of the purest kind.
+  the records topic.
 - Defined terms are visible everywhere in their filing, including
   inside offices, and may be declared before the articles or after
   them, among the offices. Declaration position is irrelevant: the
@@ -238,14 +229,12 @@ retrieved by name. There are exactly two scopes:
   only local records; every other name an office mentions refers to
   the case's records (§12).
 
-Retrieving a record that does not exist is a verdict. There is,
-however, a record of your asking.
+Retrieving a record that does not exist is a verdict.
 
 A record may be **struck** (§11.10): the strike enters a tombstone in
 the records topic, the fold forgets the record, and subsequent
-retrieval is the offense it always was. Striking is not scoping; it is
-erasure, or as close to erasure as an append-only log permits, which
-is: not very close, and that is the point.
+retrieval is the offense it always was. Striking is not scoping; it removes the
+record from the folded state, not from the append-only log.
 
 ## 7. Values and the type system
 
@@ -270,8 +259,7 @@ TRANSCRIPT OF` renders any value as a string, and `THE SUM CERTAIN OF`
 reads an integer or a sum back out of one (§10.5). The single
 exception: in the presence of a sum, an integer operand is promoted to
 money (`5` is read as `5.00`) in arithmetic, comparison, and equality
-(§10.2). Money attracts. Nothing else converts on its own. Nothing
-else here does anything on its own.
+(§10.2). Nothing else converts on its own.
 
 ## 8. Exhibits, schedules, and registers
 
@@ -320,8 +308,7 @@ Semantics:
 - **Equality.** `EQUAL` / `DIFFER FROM` compare exhibits entry by
   entry, recursively. The Court checks every page.
 - **Length.** `THE LENGTH OF` an exhibit is its number of entries
-  (§10.5), which is fixed by its declaration and therefore mostly
-  useful for telling exhibits apart, or for rhetoric.
+  (§10.5), which is fixed by its declaration.
 - **Guilt.** Inspecting a non-exhibit, inspecting an entry the exhibit
   does not bear, or entering an entry it does not comprise, is a
   verdict at runtime. Offering an exhibit that was never established,
@@ -369,10 +356,9 @@ Semantics:
 - **Guilt**: indexing or substituting outside the schedule, or
   annexing to, indexing into, or substituting within a non-schedule.
 
-Schedules are the language's arrays; with `ANNEX` onto `AN EMPTY
-SCHEDULE` they are also its builders, and
-[`examples/collation.trial`](../examples/collation.trial) sorts one,
-slowly, as is proper.
+Schedules are the language's arrays; `ANNEX` onto `AN EMPTY SCHEDULE`
+builds one, and [`examples/collation.trial`](../examples/collation.trial)
+sorts one.
 
 ### 8.2 Registers (maps)
 
@@ -412,11 +398,9 @@ Semantics:
 - **An absent entry is a verdict**, the same rule as retrieving an
   absent record (§6) or an absent discovery (§10.12). To ask safely,
   consult the roster first. **Expunging** an absent entry, by
-  contrast, succeeds vacuously: the Court is no stranger to empty
-  gestures.
+  contrast, succeeds without changing the register.
 - **The roster** is a schedule of the register's keys in
-  **alphabetical order** (byte order of the UTF-8), because the Court
-  files everything alphabetically eventually. The roster is the
+  **alphabetical order** (byte order of the UTF-8). The roster is the
   register's only iterator and its only existence test, and it is
   enough: loop it with `THE ITEM AT`, search it with the canon's
   containment fold. Deterministic order is what makes both replayable.
@@ -438,21 +422,20 @@ Four kinds of top-level declaration exist: defined terms (§5), exhibit
 shapes (§8), articles (§13.3), and offices (§12). Their name spaces are
 disjoint: a defined term, an exhibit, and an office may share a name
 without meeting, because no syntactic position accepts more than one of
-them. (The Court does not recommend this. The Court merely permits it.)
+them. This is valid but can be confusing.
 
 Jurisdiction is the visibility rule, and there is exactly one:
 
 - **Articles** are visible to `REFER TO ARTICLE` only in the case in
   chief. An office may not refer to an article; that would exceed its
-  jurisdiction, and jurisdiction is jurisdiction.
+  jurisdiction.
 - **Sections** are visible to `REFER TO SECTION` only within the
   office that contains them.
 - **Records** are global except an office's own concerns (§6, §12).
 - **Defined terms** are visible everywhere in their filing (§5).
 - **Offices and exhibit shapes** are visible everywhere in their
   filing, including before their declaration; a petition may be filed
-  against an office declared further down the page. Paperwork is
-  timeless.
+  against an office declared further down the page.
 
 ## 10. Expressions
 
@@ -517,19 +500,16 @@ penny mantissas with the result a sum:
 
 - `PLUS` and `LESS` are exact.
 - `TIMES` computes the exact product and truncates it to the penny,
-  **toward zero**. The Court does not round in your favor. The Court
-  does not round in anyone's favor. The Court truncates.
+  **toward zero**.
 - `APPORTIONED AMONG` divides at penny scale and truncates toward
-  zero: `10.00 APPORTIONED AMONG 3` is `3.33`, and the missing penny
-  is retained by the Court as a filing fee.
+  zero: `10.00 APPORTIONED AMONG 3` is `3.33`.
 - `NOTWITHSTANDING` yields the remainder, in pennies.
 
 The same promotion applies to magnitude comparisons and to equality
 (§10.3): `5.00 EQUAL 5` is `SUSTAINED`; they are the same money,
 however differently they dress. Sums never involve IEEE floats:
-`0.10 PLUS 0.20 EQUAL 0.30` is `SUSTAINED` in this jurisdiction, on
-every machine, in every timeline. All other arithmetic on
-non-numbers is a verdict.
+`0.10 PLUS 0.20 EQUAL 0.30` is `SUSTAINED` on every supported platform.
+All other arithmetic on non-numbers is a verdict.
 
 ### 10.3 Comparisons
 
@@ -539,9 +519,8 @@ comparator = "EXCEED" | "FALL SHORT OF" | "EQUAL" | "DIFFER FROM" ;
 ```
 
 Comparisons appear only in `SHOULD` conditions (§11.5) and produce
-findings. `EXCEED` and `FALL SHORT OF` apply to integers only;
-magnitude is a property of integers, and of nothing else in this
-courtroom. `EQUAL` and `DIFFER FROM` apply to any two values **of the
+findings. `EXCEED` and `FALL SHORT OF` apply to integers only.
+`EQUAL` and `DIFFER FROM` apply to any two values **of the
 same kind**; comparing values of different kinds is a verdict, not an
 `OVERRULED`. The comparison itself is the offense.
 
@@ -578,8 +557,7 @@ sum-certain = "THE SUM CERTAIN OF" , factor ;
 
 **`THE LENGTH OF f`**: of a string, its length in characters (code
 points, §3); of an exhibit, its number of entries; of a schedule, its
-number of items. Of an integer or a finding, a verdict: they have no
-length; they have, at most, magnitude.
+number of items. Applying it to an integer or finding is a verdict.
 
 ```trial
 PROCLAIM THE LENGTH OF "Josef K.".      OFF THE RECORD: 8
@@ -588,10 +566,9 @@ PROCLAIM THE LENGTH OF "".              OFF THE RECORD: 0
 ```
 
 **`AN EXCERPT OF s FROM i TO j`**: the substring of `s` from
-character `i` to character `j`, **1-indexed, both ends inclusive**.
-Lawyers count from one, and no excerpt omits its last page. The bounds
+character `i` to character `j`, **1-indexed, both ends inclusive**. The bounds
 must satisfy 1 ≤ i ≤ j ≤ length; anything else, including the empty
-excerpt, is a verdict. An excerpt of nothing is not an excerpt.
+excerpt, is a verdict.
 
 ```trial
 LET IT BE RECORDED THAT t IS "Someone must have been telling lies".
@@ -613,9 +590,7 @@ PROCLAIM "the count stands at " PLUS THE TRANSCRIPT OF 42.
 **`THE SUM CERTAIN OF v`**: the integer a value denotes. A string
 must denote the integer exactly and entirely: an optional sign, then
 decimal digits, and nothing else; no whitespace, no commas, no
-prose. An integer passes through unchanged, its sum having already
-been certain. Anything else is a verdict: the Court will not guess
-what you meant, though it has recorded that you meant something.
+prose. An integer passes through unchanged. Anything else is a verdict.
 
 ```trial
 PROCLAIM THE SUM CERTAIN OF "42" PLUS 8.     OFF THE RECORD: 50
@@ -643,9 +618,7 @@ would.
 
 Operands are evaluated left to right, depth first, exactly as filed.
 Each evaluation step is one instruction and therefore one Kafka
-transaction (§14.3); an expression's partial progress is as durable as
-everything else here. There are no unsequenced effects because there
-is nothing unsequenced anywhere in the language.
+transaction (§14.3). The language has no unsequenced effects.
 
 ### 10.8 The case at bar, the discretion, and the date
 
@@ -666,8 +639,8 @@ summons topic thereby becoming a durable work queue that it both feeds
 and drains ([`examples/ouroboros.trial`](../examples/ouroboros.trial)).
 
 **`THE DISCRETION OF THE COURT BETWEEN a AND b`**: an integer between
-`a` and `b`, both inclusive, selected by a process the Court does not
-explain and will not repeat. Both bounds must be integers; `a` > `b`
+`a` and `b`, both inclusive, selected by the runtime's random source. Both
+bounds must be integers; `a` > `b`
 is a verdict (the discretion between them is empty). `BETWEEN 7 AND 7`
 is lawful and returns 7, discretion having narrowed to its logical
 conclusion. The selected value is pushed to the dossier like any other
@@ -683,8 +656,8 @@ LET IT BE RECORDED THAT counsel IS THE DISCRETION OF THE COURT BETWEEN 1 AND 6.
 ```
 
 **`THE DATE OF THESE PRESENTS`**: the current wall-clock moment, as an
-integer count of court days since the epoch (1970, when the paperwork
-began). One court day is one second, by standing order (§11.8), so
+integer count of court days since the epoch (1970). One court day is one second
+(§11.8), so
 this is Unix time in seconds. Like the discretion, the reading is
 entered in the ledger and re-served on reenactment (§14.4). Combined
 with `ADJOURN FOR` it suffices for schedules, deadlines, and the other
@@ -698,8 +671,7 @@ archive-commit = "COMMIT" , expression , "TO THE ARCHIVE AS" ,
 document-from  = "THE DOCUMENT" , factor , "FROM THE ARCHIVE" ;
 ```
 
-The archive (v0.8) is the case's filesystem, built the only way this
-machine builds anything: an append-only topic of immutable documents
+The archive (v0.8) is the case's filesystem: an append-only topic of immutable documents
 (`case.<id>.archive`; a document's offset is its handle) and a
 compacted catalog topic (`case.<id>.catalog`; key = document name,
 value = the offset of the current version).
@@ -715,12 +687,12 @@ offset.
 version. A name never committed is a verdict (the request, however,
 is archived).
 
-One honesty note: the document itself is appended at the clerk's
+Atomicity limit: the document itself is appended at the clerk's
 counter, immediately, so the catalog pointer written inside the
 instruction's transaction can know its offset. An official who
 perishes between the two leaves an uncataloged document: a draft. The
-archive accumulates drafts; the catalog is the truth; replay
-re-commits and converges. And a reenacted case reads the catalog as it
+archive accumulates drafts; the catalog is authoritative; replay
+re-commits and converges. A reenacted case reads the catalog as it
 stands at reading time, not as it stood in the original timeline: the
 archive is a filing cabinet, not a time machine, and the reenactment
 warranty (§14.4) does not extend to it.
@@ -735,18 +707,15 @@ patent-grant = "LET LETTERS PATENT ISSUE FOR" , identifier , "," ,
 practice     = "THE PRACTICE OF" , identifier ;
 ```
 
-The patent system (v0.9), reduced to its essentials: a **public
-disclosure that no one else may use**. The registry is a single
-court-wide topic (`the-patent-office`, one partition, retained
-forever), which settles the classic problem of the field by
-construction: priority is offset order, and **"first to file" is an
-integer comparison**.
+The patent system (v0.9) models a **public disclosure that no one else may
+use**. The registry is a single court-wide topic (`the-patent-office`, one
+partition, retained forever). Priority is offset order, so **"first to file"
+is an integer comparison**.
 
 `LET LETTERS PATENT ISSUE FOR name, DISCLOSING v, FOR A TERM OF n
 DAYS.` files a claim: the disclosure (any value), the holder (the
 case at bar), the grant date (the current court day, read through the
-ledger), and the term. The disclosure is mandatory and public; that is
-the bargain, and the Court keeps its half punctually. The grant rides
+ledger), and the term. The disclosure is mandatory and public. The grant rides
 the instruction's transaction, so letters issue exactly once. If a
 claim on the name is **in force**, the grant is a verdict: *anticipated
 by prior art* if the holder is another case, *double patenting* if it
@@ -762,26 +731,20 @@ was first, and the loser discovers it at practice time.
 - A claim in force, with a live license to the case at bar (§10.10a):
   the disclosure.
 - A claim in force, held by anyone else, unlicensed: a verdict,
-  *infringement*. The disclosure is public; the practice is not; the
-  distinction is the entire patent system.
-- All terms lapsed: the invention is in the **public domain**, as
-  everything eventually is, and the latest disclosure is returned to
-  anyone who asks.
+  *infringement*. The disclosure is public; practice is restricted.
+- All terms lapsed: the invention is in the **public domain**, and the latest
+  disclosure is returned to anyone who asks.
 
 Expiry checks read the clock through the ledger (§14.4), so a
 timeline, once recorded, holds still. Since v2.8, the registry
 instructions' **outcomes ride the ledger too** (kinds `issuance`,
-`practice`, `license`, `assignment`): the registry is court-wide
-shared state that keeps moving after the fact, and the audit's first
-finding (§14.5) was that a reenacted issuance re-scanned the live
-registry, found its own first-timeline claim, and convicted itself of
-double patenting. A reenactment is now told what the office said the
-first time, scans nothing, and appends nothing; a court-wide effect
-happens once, which is the `COMMENCE` doctrine (§11.12) extended to
-the patent office. See
+`practice`, `license`, `assignment`). Without these entries, a reenacted
+issuance could rescan the live registry and find its own first-timeline claim.
+A reenactment instead uses the first outcome, scans nothing, and appends
+nothing. See
 [`examples/letters-patent.trial`](../examples/letters-patent.trial).
 
-### 10.10a Licenses and assignments (the ownership discipline)
+### 10.10a Licenses and assignments
 
 ```
 license-grant  = "GRANT A LICENSE UNDER" , identifier , "TO" ,
@@ -791,10 +754,9 @@ assignment     = "ASSIGN THE LETTERS FOR" , identifier , "TO" ,
                  expression , terminator ;
 ```
 
-Letters patent were always an ownership system wearing a wig:
-court-wide named values with exclusive-use semantics, priority by log
-order, terms as lifetimes, mandatory disclosure as the public type
-signature. Since v2.1 the wig covers the rest of the discipline:
+Letters patent form an ownership system: court-wide named values with
+exclusive-use semantics, priority by log order, terms as lifetimes, and
+mandatory disclosure as the public type signature. Since v2.1 the mapping is:
 
 | The registry | The ownership system it is |
 |---|---|
@@ -804,7 +766,7 @@ signature. Since v2.1 the wig covers the rest of the discipline:
 | `ASSIGN THE LETTERS FOR x TO c` | a move: the old holder's practice becomes use-after-move |
 | No assignment while licenses run | the aliasing rule: nothing moves while it is borrowed |
 | The examiner's static rejection | the borrow checker, for what the filing itself proves |
-| Everything else, at runtime | the dynamic half every real ownership system also has |
+| Everything else, at runtime | dynamic ownership checks |
 
 **`GRANT A LICENSE UNDER name TO c, FOR A TERM OF n DAYS.`** Only the
 holder grants; the licensee must be a matter on file; the term must
@@ -815,7 +777,7 @@ at practice time. A licensee's `THE PRACTICE OF name` yields the
 disclosure while both the license and the letters run; when either
 lapses, the practice is infringement again. Licenses do not stack
 into exclusivity: any number may be outstanding at once, all of them
-read-only, because practice is read-only, because everything here is.
+read-only, because practice is read-only.
 
 **`ASSIGN THE LETTERS FOR name TO c.`** The letters move. Only the
 holder assigns; the assignee must be a matter on file and someone
@@ -836,9 +798,7 @@ filing**, not a runtime verdict. Assignments inside conditional arms
 mark nothing (they may never run), jumps land only on block heads so
 each block is judged alone, and everything that depends on the
 court-wide registry (who actually holds what, whose license actually
-runs) remains a runtime verdict settled by the log. Every ownership
-system negotiates this same boundary between what the text proves
-and what the world decides; this one files paperwork about it.
+runs) remains a runtime verdict settled by the log.
 
 See [`examples/the-examiner.trial`](../examples/the-examiner.trial).
 
@@ -861,11 +821,9 @@ strings:
 - `"GUILTY"`: a verdict is on file. Final, by definition.
 - `"IN GOOD STANDING"`: the matter is on file and undecided. The
   Court does not distinguish running, blocked, adjourned, or never
-  convened; all are merely *not over*, and the Court has been clear
-  that nothing is over until it is GUILTY.
+  convened; all are *not over*.
 - `"NO MATTER ON FILE"`: no case by that number. Unlike `SERVE
-  NOTICE` (§11.11), the inquiry itself is lawful; asking after the
-  nonexistent is most of what courts are for.
+  NOTICE` (§11.11), the inquiry itself is valid.
 
 Every reading is entered in the **ledger** (§14.4) in the same atomic
 step, like a draw of the discretion: the world changes, but a
@@ -891,13 +849,11 @@ record in the respondent's records topic, folded exactly as the
 respondent's own Court would fold it (last writing wins, strikes are
 honored, entries before the respondent's latest reenactment are
 disregarded). The factor must evaluate to a case number (a string).
-Discovery is read-only; there is no instrument for writing another
-case's records, and there will not be — if you want to change a
-respondent's mind, serve notice (§11.11) and let it change its own.
+Discovery is read-only; there is no instrument for writing another case's
+records. Use service (§11.11) to ask that case to change its own state.
 
 Absence is a verdict, in both forms: a respondent with no matter on
-file, or a matter with no such record, is GUILTY (*"There is,
-however, now a record of your asking."*). This is deliberately the
+file, or a matter with no such record, is GUILTY. This is deliberately the
 same rule as retrieving an absent record of your own (§6), and
 deliberately unlike `THE STANDING OF`, which exists precisely so you
 may ask about existence safely first. Standing says whether the ward
@@ -907,14 +863,11 @@ Every successful reading is entered in the **ledger** (§14.4) in the
 same atomic step: the respondent's records keep changing after the
 world moves on, and a reenactment is told what they said the first
 time. A struck record is undiscoverable (the fold forgets it; the
-respondent's log, of course, does not, but discovery reads the fold,
-not the log — the log is available to `kafka-console-consumer` and to
-subpoena).
+respondent's log does not, but discovery reads the fold, not the log. The log
+remains available to `kafka-console-consumer`.
 
-With commencement (§11.12), standing (§10.11), the timed summons
-(§11.4a), and discovery, the supervision toolkit is complete:
-spawn a ward, wait with a deadline, ask whether it lives, and read
-what it knows
+Together with commencement (§11.12), standing (§10.11), and the timed summons
+(§11.4a), discovery supports supervising another case
 ([`examples/investigations-of-a-dog.trial`](../examples/investigations-of-a-dog.trial)).
 
 ## 11. Statements
@@ -974,7 +927,7 @@ proclamation = "PROCLAIM" , expression , terminator ;
 Appends the value's display form to the proclamations topic. Strings
 appear verbatim; integers in decimal; findings by name; exhibits as
 `AN EXHIBIT OF e (entry: value; …)` with entries in alphabetical
-order, because the Court files everything alphabetically eventually.
+order.
 
 ### 11.4 Summons (input)
 
@@ -1011,8 +964,7 @@ AWAIT SUMMONS FOR AT MOST 3 DAYS, FILED UNDER reply.
     FAILING WHICH, REFER TO ARTICLE 9.
 ```
 
-The receive with a deadline: the artist waits publicly, and there is a
-limit to it. Whichever comes first governs. If a summons is served
+Whichever comes first governs. If a summons is served
 within the term (or is already waiting), it is consumed and filed
 under the identifier exactly as §11.4, and the proceedings continue
 past the arm. If the term lapses unserved, nothing is filed and the
@@ -1038,12 +990,10 @@ proceedings turn to the `FAILING WHICH` arm.
   continuance, which re-waits on reenactment: a continuance's outcome
   cannot be changed by the topic's later contents, and the timed
   await's can.)
-- With this, the actor toolkit is complete on both ends: supervisors
-  that act when a ward goes silent (`THE STANDING OF`, §10.11, tells
-  you *whether* it lives; the timed await frees you from waiting
-  forever to find out), and request/reply that cannot hang.
+- The timed form supports bounded request/reply and supervisors that act when
+  another case stops responding.
 
-### 11.4b Selective summons (the voice of Josephine)
+### 11.4b Selective summons
 
 ```
 selective-summons = "AWAIT SUMMONS FROM" , expression ,
@@ -1060,8 +1010,8 @@ AWAIT SUMMONS FROM josephine FOR AT MOST 3 DAYS, FILED UNDER song.
     FAILING WHICH, PROCLAIM "the folk did not attend".
 ```
 
-The selective receive: the Court attends one voice among the folk.
-The expression after `FROM` must evaluate to a string, a case number;
+The selective receive waits for one sender. The expression after `FROM` must
+evaluate to a string, a case number;
 anything else names nobody and is a verdict. Every notice served by a
 case bears that case's seal (the record key, §11.11); the Court scans
 the summons topic from its cursor and consumes the first record
@@ -1084,24 +1034,17 @@ remembers which voices it has already heard.
   arm, same term rules, same durable grant (the named voice is filed
   with the deadline under `__attendance__`, so both survive the
   official), and the outcome **is** entered in the ledger, for
-  §11.4a's reason exactly: the folk keep squeaking after the term
-  lapses, and a song that arrived too late must stay too late in
-  every reenactment.
+  §11.4a's reason: the topic may receive records after the term lapses, and a
+  late record must stay late in every reenactment.
 - **Who has a voice.** Notices from cases bear their case number as
   the seal. Summonses appended by `trial serve` or by a foreign
   producer with no key bear no seal, and no `FROM` names them: the
-  public is not a party. (A foreign producer that sets a record key
-  is thereby impersonating a case, which the Court, having read this
-  far into the novel, declines to prevent.)
-- **Awaiting a case with no matter on file is lawful**, as asking
-  after one is (§10.11), and blocks until the deadline, or forever:
-  you may wait for a singer who never sings. Whether the song, when
-  it comes, differs from ordinary squeaking is not for the Court to
-  say.
-- With `SERVE NOTICE` as send, this sharpens request/reply to its
-  usual shape: serve several wards, then collect each reply by name,
-  in the order you want rather than the order the folk chose to
-  answer in.
+  public is not a party. A foreign producer that sets a case-number record key
+  can impersonate that case; the runtime does not authenticate keys.
+- **Awaiting a case with no matter on file is valid**, as asking after one is
+  (§10.11), and blocks until the deadline or forever.
+- With `SERVE NOTICE` as send, a case can contact several cases and collect
+  their replies by sender rather than arrival order.
 
 ### 11.5 Conditional
 
@@ -1179,14 +1122,13 @@ adjournment = "ADJOURN INDEFINITELY" , terminator
             | "ADJOURN FOR" , expression , ( "DAY" | "DAYS" ) , terminator ;
 ```
 
-**`ADJOURN INDEFINITELY.`** The offset is committed, the official goes
-home, and the case is suspended and resumable forever (§15). This is
-the only ending you may request.
+**`ADJOURN INDEFINITELY.`** The offset is committed, the official exits,
+and the case is suspended and resumable (§15). This is the only requested
+ending.
 
 **`ADJOURN FOR n DAYS.`** A *continuance*: the same motion with a
-resumption date attached. One court day is one second of wall-clock
-time, by standing order; the Court is efficient in this respect, and
-only this one. Semantics:
+resumption date attached. One court day is one second of wall-clock time.
+Semantics:
 
 - The term expression must yield an integer ≥ 0. A negative term is a
   verdict: the Court does not adjourn into the past; that is what
@@ -1202,12 +1144,10 @@ only this one. Semantics:
   from the beginning again.
 - Waiting consumes no broker resources beyond the retained grant
   record: no open transaction, no held connection state that matters.
-  A case may lawfully be continued for years (§17.7 was already
-  designed around waits of that length).
+  The protocol supports long waits; see §17.7.
 - `trial status` reports a continuance in effect, with its date.
-- During a reenactment the continuance is granted and waited afresh,
-  full term. A faithful reenactment includes the waiting; the Court
-  has never understood why this surprises anyone.
+- During a reenactment the continuance is granted and waited afresh for its
+  full term.
 
 ```trial
 PROCLAIM "The court will take a brief recess.".
@@ -1228,11 +1168,9 @@ SHOULD ledger FALL SHORT OF 0,
 
 Evaluates the expression, renders it as its transcript, and delivers a
 verdict whose sealed particulars read `held in contempt:` followed by
-the rendering. This is the assertion facility, the panic facility, and
-the abort facility; the Court sees no reason to distinguish them. Like
-every verdict it is final (§15), and like every guilty instruction it
-has no effects, only consequences: output already proclaimed stands,
-and nothing further lands.
+the rendering. This is the assertion, panic, and abort facility. Like every
+verdict it is final (§15), and like every guilty instruction it has no pending
+effects: output already proclaimed stands, and nothing further lands.
 
 ### 11.10 Strike (deletion)
 
@@ -1247,19 +1185,14 @@ STRIKE witness FROM THE RECORD.
 
 Removes the record from the case's records by entering a
 **tombstone** (a record bearing the name and nothing else) in the
-records topic. This is a genuine Kafka tombstone: the fold forgets the
-record immediately, every future session's fold forgets it identically,
-and log compaction is thereby licensed to forget the key entirely, on
-the Bureau's schedule (§17.4). The log, of course, retains the
-striking.
+records topic. This is a Kafka tombstone: the fold forgets the record
+immediately, every future session's fold forgets it identically, and log
+compaction may remove the key entirely (§17.4). The log retains the striking.
 
-- Striking a record that does not exist is a verdict; it has
-  nonetheless been noted that you tried.
-- Striking a defined term is a rejected filing; definitions outlive
-  their authors.
-- An office may not strike one of its own concerns (rejected at
-  compile time; the concerns were assigned). It may strike any case
-  record, offices being famously careless with other people's files.
+- Striking a record that does not exist is a verdict.
+- Striking a defined term is a rejected filing.
+- An office may not strike one of its own concerns (rejected at compile time;
+  the concerns were assigned). It may strike any case record.
 - After a strike, the name may be recorded anew; the new record and
   the struck one are strangers.
 
@@ -1298,19 +1231,16 @@ topic, where the respondent receives it through `AWAIT SUMMONS`
   strings, findings thereby becoming the strings `"SUSTAINED"` or
   `"OVERRULED"`. Serialize exhibits deliberately if the recipient must
   reconstruct them; the Court transmits paperwork, not meaning.
-- **Self-service is lawful.** A case may serve notice upon `THE CASE
-  AT BAR`; the Court finds self-service consistent with the general
-  procedure. This turns the case's own summons topic into a durable
+- **Self-service is valid.** A case may serve notice upon `THE CASE AT BAR`.
+  This turns the case's own summons topic into a durable
   queue and is the cheapest way to build one
   ([`examples/ouroboros.trial`](../examples/ouroboros.trial)).
 - **Guilt.** A respondent that is not a string, or a case number with
   no matter on file with this court, is a verdict: service could not
   be effected. The notice is returned; the record of the attempt is
   retained.
-- Serving a case does not wake it. The notice waits in the summons
-  topic until the respondent's own proceedings reach an `AWAIT
-  SUMMONS`, if they ever do. Service is not process; the Court has
-  been very clear about this.
+- Serving a case does not wake it. The notice waits in the summons topic until
+  the respondent's own proceedings reach an `AWAIT SUMMONS`, if they do.
 
 ### 11.12 Commencement (spawning a case)
 
@@ -1338,7 +1268,7 @@ respondent of a `SERVE NOTICE`. Semantics:
 - **The child starts with nothing.** No records, no stack, no summons,
   and no knowledge of its parent. A parent that wishes to be written
   to must introduce itself: `SERVE NOTICE OF THE CASE AT BAR UPON
-  junior.` Every accusation begins alone.
+  junior.`
 - **Commencement is not process.** The new case is filed, not
   convened; its proceedings begin when some official runs `trial
   proceed` against it (or an agent calls `trial_proceed`). The docket
@@ -1359,9 +1289,8 @@ respondent of a `SERVE NOTICE`. Semantics:
   rejects (a syntax error, a missing statute, a form other than K-1),
   is a verdict for the commencing case, and nothing is opened.
 
-With `SERVE NOTICE` as send, `AWAIT SUMMONS` as receive, and
-`COMMENCE PROCEEDINGS` as spawn, cases are actors in the standard
-sense, and the broker is the mailroom
+With `SERVE NOTICE` as send, `AWAIT SUMMONS` as receive, and `COMMENCE
+PROCEEDINGS` as spawn, cases implement an actor-style model
 ([`examples/joinder.trial`](../examples/joinder.trial)).
 
 ### 11.12a The judgment (sentencing the commenced)
@@ -1407,8 +1336,7 @@ sentencing case's number. Semantics:
   condemned looks up; there is nothing left to intercept.
 - **Once, in every timeline.** The entry rides the ledger (§14.4)
   like every court-wide effect: a reenacted parent is told the
-  judgment was entered and enters nothing, so the condemned dies
-  exactly once, which is the usual allotment.
+  judgment was entered and enters nothing, so the verdict is entered once.
 - **The audit is not alarmed.** The outside verdict carries no
   instruction address of the condemned's own; the audit (§14.5)
   treats it like all guilt it cannot re-derive: on file, final,
@@ -1418,7 +1346,7 @@ The condemned's standing (§10.11) reads `GUILTY` from the moment the
 sentencing step commits, whether or not the condemned has taken
 another step ([`examples/the-judgment.trial`](../examples/the-judgment.trial)).
 
-### 11.13 The motion to reconsider (verdict interception)
+### 11.13 The motion to reconsider
 
 ```
 motion = "FILE A MOTION TO RECONSIDER" , "," ,
@@ -1430,53 +1358,40 @@ motion = "FILE A MOTION TO RECONSIDER" , "," ,
 FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE 9, THE GROUNDS FILED UNDER grounds.
 ```
 
-The only mercy in the building, priced accordingly. Executing the
-statement places a **motion to reconsider** on file, durably: it
-survives the official, the machine, and the years, like everything
-else. While the motion is on file, a verdict that would issue (§16.2)
-is instead intercepted, and the Court, **exactly once per case**,
-reconsiders:
+Executing the statement places a durable **motion to reconsider** on file.
+While the motion is on file, it intercepts one verdict that would otherwise
+issue (§16.2), **once per case**:
 
 - **The guilty instruction has no effects.** Its pending step is
   discarded unentered, exactly as it would have been had the verdict
   stood (§14.3). Ledger readings it took before its guilt emerged are
   likewise untaken; a reading that was never committed never happened.
-- **The filing fee is everything you have.** The dossier is impounded
+- **The dossier and appeals are cleared.** The dossier is impounded
   (the operand stack is emptied, by one impoundment event in the
   dossier topic; the values remain in the log, as evidence of what you
   could once afford) and every pending appeal is dismissed with it
-  (the call stack is emptied). The records survive; the Court is not
-  a barbarian.
+  (the call stack is emptied). The records survive.
 - **The grounds are filed.** If the motion named a record, the
   verdict's sealed particulars are filed under it as a string: the
-  one lawful way to read the particulars from inside the language.
-  Before the motion, every party learns why it was convicted only
-  from `--counsel`; the movant paid the fee and may know.
+  one way to read the particulars from inside the language. Without the
+  motion, particulars are available only through `--counsel`.
 - **The proceedings resume** at the named article, in the case in
   chief. The grant, the impoundment, the dismissal, the grounds, and
   the seek are one atomic step (§14.3).
 
-The motion is then **spent**. A second verdict is final, and a second
-`FILE A MOTION TO RECONSIDER` after the grant is itself a verdict:
-the Court has reconsidered once, which is the number of times the
-Court reconsiders. Re-filing *before* any grant is lawful and
-supersedes the earlier motion; paperwork may always be replaced by
-more paperwork.
+The motion is then **spent**. A second verdict is final, and filing another
+motion after the grant is a verdict. Re-filing before a grant replaces the
+earlier motion.
 
-Limits, all deliberate:
+Limits:
 
-- A motion refers to an ARTICLE and is therefore a creature of the
-  case in chief; filing one inside an office is a rejected filing
-  (an office does not move the Court, being itself merely a place
-  the Court goes).
-- **Unpardonable offenses.** A tampered timeline (a ledger that
-  disagrees with the proceedings, §14.4) is not intercepted: offenses
-  against the machinery of justice are outside the Court's mercy,
-  which is otherwise so abundant. Likewise an instruction record the
-  Court itself cannot read.
+- A motion refers to an ARTICLE and belongs to the case in chief; filing one
+  inside an office is rejected.
+- A ledger that disagrees with the proceedings (§14.4) and an unreadable
+  instruction record are not intercepted.
 - The grant replays bit-exactly: it is a deterministic fold over the
   same records, so a reenactment reconsiders at the same instruction
-  and files the same grounds, with the entire history watching.
+  and files the same grounds.
 
 `trial status` reports a motion on file, and whether it has been
 spent ([`examples/reconsideration.trial`](../examples/reconsideration.trial)).
@@ -1524,12 +1439,10 @@ atomically with the step, so:
   (Contrast discovery, §10.12, which reads mutable state and must be
   ledgered.)
 
-A case that awaits the gazette and is never satisfied blocks the way
-apparent acquittal blocks: no broker resources held, resumable
-forever, waiting for an edition that may never come. The novel
-regards this as the expected outcome
+A case that awaits the gazette and is never satisfied blocks without holding
+broker resources and remains resumable
 ([`examples/an-imperial-message.trial`](../examples/an-imperial-message.trial)
-arranges, against all precedent, for the message to arrive).
+demonstrates a message that arrives).
 
 ## 12. Offices
 
@@ -1559,20 +1472,18 @@ implicit bare `REMAND.`; the office simply stops corresponding.
 
 Two call forms exist: the petition statement (§11.7), which discards
 any remanded value, and the finding expression (§10.6), which requires
-one. Arguments are evaluated left to right and bound to the concerns
-in declaration order; arity is checked at compile time, and a
-petition presenting the wrong number of matters is malformed, and the
-office is offended.
+one. Arguments are evaluated left to right and bound to the concerns in
+declaration order; arity is checked at compile time, and a petition with the
+wrong number of arguments is malformed.
 
 A `LET IT BE RECORDED` naming a concern amends the concern, in the
 current frame only; the caller's records are untouched. Concerns are
 passed by value, exhibits included (§8).
 
-Offices are fully recursive; the call stack is the appeals topic, and
-its depth is bounded only by the broker's disk, which is to say by
-the Bureau's budget. Since v2.6 offices are also higher-order, by
-instrument: see §12.5. Closures remain unavailable; an office knows
-its concerns and the case records, and nothing else follows it home.
+Offices are recursive; the call stack is the appeals topic, and its practical
+depth is bounded by broker storage. Since v2.6 offices are also higher-order by
+instrument; see §12.5. Closures remain unavailable: an office can access its
+concerns and the case records.
 
 ### 12.5 Powers of attorney (offices as values)
 
@@ -1592,15 +1503,12 @@ PETITION UNDER counsel WITH 4.
 ```
 
 A **power of attorney** is the office as a value: the right to
-petition it, wherever the instrument travels within the case. The
-Kafka reading is exact: an office is an offset into the proceedings
-topic, so a function pointer here is literally a pointer, and it
-stays valid forever, because the proceedings are append-only and
-nothing is ever deleted (§3).
+petition it, wherever the instrument travels within the case. An office is an
+offset into the proceedings topic, so the stored value is a function pointer.
+It remains valid while the append-only proceedings history is retained (§3).
 
 - **The instrument records** the office's name, its instruction
-  address, its concerns, and the case that *executed* it (executing
-  an instrument is signing it; the pun is doing the legal work).
+  address, its concerns, and the case that *executed* it.
   Display: `A POWER OF ATTORNEY OVER THE OFFICE OF f (n concern(s),
   executed in the matter of case-x)`. Two powers are `EQUAL` when
   they confer the same office of the same case.
@@ -1618,7 +1526,7 @@ nothing is ever deleted (§3).
   transcript is a description of authority, not authority. Delegation
   between cases remains what it always was, a notice served upon a
   case that answers petitions.
-- **The canon pays its v1.9 debt**: `statutes-of-delegation` ships
+- **The canon includes higher-order operations**: `statutes-of-delegation` ships
   `applied-to-each` (map), `selected-by` (filter), and `folded-with`
   (fold), each an office taking a power of attorney as its first
   concern.
@@ -1657,18 +1565,16 @@ shapes, and further defined terms, in whatever order they arrive.
   case's existing proceedings and appended after them (`trial amend`).
   A case that has run out of instructions (§15, *apparent acquittal*)
   resumes against the new evidence the next time the Court convenes.
-  A K-2 may not establish offices (the building is full), may not
-  incorporate statutes (incorporation is performed at the opening of
-  the case), and its referrals reach only its own articles; its
-  defined terms and exhibit shapes are likewise its own (§5). The
-  `trial hearing` REPL is nothing but this mechanism in a loop.
+  A K-2 may not establish offices or incorporate statutes (incorporation is
+  performed at the opening of the case), and its referrals reach only its own
+  articles; its defined terms and exhibit shapes are likewise its own (§5).
+  The `trial hearing` REPL is this mechanism in a loop.
 - **Form S-1** (v0.9) is a *statute*: a library. A statute contains
   offices, exhibit shapes, and defined terms, and **no articles**; a
   statute legislates, it does not litigate. Statutes are published
   with `trial enact`, which appends the source to the court-wide topic
-  `statute-<name>.filing` behind an enactment marker. Re-enacting
-  appends a new version; nothing is replaced, because nothing is ever
-  replaced.
+  `statute-<name>.filing` behind an enactment marker. Re-enacting appends a new
+  version and retains prior versions.
 
 ### 13.2a Incorporation by reference
 
@@ -1708,21 +1614,17 @@ canon in dependency order. Every canon office confines its working
 state to its own concerns, so the statutes are reentrant and leave no
 records behind in the incorporating case.
 
-The package registry is a broker. Dependency resolution is `seek()`.
-There is no `node_modules`, only the law.
-
 ### 13.3 Articles
 
 `ARTICLE n.` is a label. Article numbers must be unique within a
 filing; they need not be consecutive, ascending, or reasonable.
-Execution begins at the first article in filing order and falls
-through from each article to the next. Articles compile away into
-proceedings-topic offsets and are not mourned.
+Execution begins at the first article in filing order and falls through from
+each article to the next. Articles compile into proceedings-topic offsets.
 
 ## 14. The execution model
 
-This is the load-bearing section. The machine is Kafka; the language
-semantics are defined in terms of topics.
+The machine is Kafka, and the language semantics are defined in terms of
+topics.
 
 ### 14.1 The machine state
 
@@ -1743,18 +1645,16 @@ A case `case-x` is the following family of single-partition topics
 
 Values travel between topics as JSON ([`bytecode.md`](bytecode.md)).
 The interpreter's in-memory stack, frames, and variable table are a
-cache, rebuilt at the start of every session by refolding the topics.
-The current stack is merely an opinion derived from the record.
+cache rebuilt at the start of every session by refolding the topics.
 
 ### 14.2 The instruction cycle
 
 The Court fetches the instruction at the committed program counter,
 executes it against the cached state, and enters the instruction's
 complete effect (every record it appends, plus the advance of the
-Court's attention) as one Kafka transaction. A jump is a `seek()`.
-This is why a single case executes a couple of hundred instructions
-per second at best (§17.7), and why nothing short of the broker's
-destruction can make it lose count.
+Court's attention) as one Kafka transaction. A jump is a `seek()`. The
+transaction-per-instruction design limits a case to a few hundred instructions
+per second in the recorded benchmark (§17.7).
 
 ### 14.3 Exactly-once execution
 
@@ -1783,11 +1683,9 @@ Consequences, each of which is a tested invariant:
 #### 14.3a The expedited docket
 
 `trial proceed --expedited n` (v2.7) relaxes the grain, not the
-guarantee: the official executes up to *n* instructions per committed
-step, one transaction carrying all their effects and one attention
-note at the end. Since the commit is the only observable, the
-timelines are identical, and the parity suite runs the same programs
-at several batch sizes and demands it:
+guarantee: the official executes up to *n* instructions per committed step,
+with one transaction carrying their effects and one attention note at the end.
+The parity suite checks that several batch sizes produce the same timelines:
 
 - **Uncommitted work that perishes with its official re-executes
   deterministically.** A crash mid-batch loses nothing durable and
@@ -1805,29 +1703,24 @@ at several batch sizes and demands it:
 - **Guilt mid-batch enters the innocent prefix first**, then proceeds
   as ever: a guilty instruction has no effects, and its neighbors keep
   theirs. Motions to reconsider intercept identically.
-- **The price is auditability grain**: between commits, the Court's
-  position is its own secret, `trial status` and `trial watch` see the
-  docket at the pace of the batch, and a dismissal costs up to a
-  batch of (deterministic, exactly-once) re-execution. The default
-  remains one instruction, one transaction; expedition is requested,
-  like everything here, in writing.
+- **Auditability is coarser**: between commits, `trial status` and `trial watch`
+  see the docket only at batch boundaries, and a dismissal costs up to one
+  batch of deterministic re-execution. The default remains one instruction per
+  transaction.
 
 ### 14.4 Suspension, migration, replay, and the ledger
 
-Because the machine state is entirely in topics: suspending a program
-is committing an offset and exiting; resuming is reading it back, from
-any machine, on any operating system, in any decade; and replaying a
-program (`trial reenact`) is resetting the folds and the attention to
-zero. Every input the case ever received is still in the summons
-topic, so the replay re-serves history exactly.
+Because the machine state is in topics, suspending commits an offset and exits,
+resuming reads it back on another compatible machine, and replaying (`trial
+reenact`) resets the folds and attention to zero. Retained input in the summons
+topic is then served again.
 
 The nondeterministic doors, **`THE DISCRETION OF THE COURT`** (a
 random source), **`THE DATE OF THESE PRESENTS`** (the wall clock,
 also consulted by letters patent, §10.10), the case number assigned
 by **`COMMENCE PROCEEDINGS`** (§11.12, v1.1), and the answer given by
-**`THE STANDING OF`** (§10.11, v1.3), are closed by the **ledger**
-(v0.8), which is how every serious workflow engine versions its side
-effects and is the honesty debt v0.7 left open. The mechanism:
+**`THE STANDING OF`** (§10.11, v1.3), are recorded by the **ledger** (v0.8).
+The mechanism:
 
 - Every draw and every clock reading is entered in the case's ledger
   topic (`case.<id>.ledger`) **in the same atomic step that uses it**,
@@ -1849,30 +1742,25 @@ effects and is the honesty debt v0.7 left open. The mechanism:
 Since v2.8 the registry instructions (§10.10, §10.10a) route their
 outcomes through the ledger as well (kinds `issuance`, `practice`,
 `license`, `assignment`), beside the clock reading they already made:
-the registry keeps moving after the fact, and a reenactment must
-practice what was practiced the first time, not what the office would
-say today. The audit found this one the hard way (§14.5).
+the registry keeps moving after the fact, and a reenactment must use the
+original outcome rather than the current registry state (§14.5).
 
 Two residues of nondeterminism remain, both documented where they
 live: `ADJOURN FOR` waits out real wall-clock time whenever the
 timeline reaches it (§11.8: the deadline is recorded; the waiting is
 not, and cannot be), and the archive's catalog (§10.9) is read as it
 stands rather than as it stood, though a case's catalog is written
-only by the case itself, whose writes replay. The case's own machine
-state replays exactly; the world's, as usual, does not.
+only by the case itself, whose writes replay. The case's machine state replays;
+external state does not.
 
 Everything else remains closed: no environment variables, no
 filesystem beyond the archive, no network beyond the broker, no I/O
 beyond the topics.
 
-### 14.5 The audit (the warden of the tomb)
+### 14.5 Audit
 
-`trial audit <case>` replays a case **in chambers, against a copy,
-disturbing nothing**, and reports whether the record is consistent
-with itself. The warden guards the tomb against its own occupant: the
-record's proudest claim is that it can always be replayed, and the
-audit is that claim, performed, on demand, with the receipts
-compared.
+`trial audit <case>` replays a case against an in-memory copy without changing
+the stored case, then reports whether the replay matches the record.
 
 The mechanism:
 
@@ -1881,7 +1769,7 @@ The mechanism:
   the registry, and the docket's other filings (so `SERVE NOTICE` can
   verify its respondents and licenses their grantees). The
   **outputs** (dossier, appeals, records, proclamations, verdict) are
-  not copied; the replay must earn them again from zero.
+  not copied; the replay regenerates them from zero.
 - The copy is replayed at the default grain (one instruction, one
   transaction; batch boundaries are a subset of instruction
   boundaries, so a case run `--expedited` audits at finer grain than
@@ -1896,7 +1784,7 @@ The mechanism:
   A replay that would wait for input the record does not hold has
   diverged, and the audit reports it rather than waiting: everything
   the original ever received was copied in before the replay began.
-- Then the comparison: the **proclamations** (which on a case
+- The comparison covers the **proclamations** (which on a case
   reenacted k times must be exactly k+1 repetitions of the audited
   timeline), the **final records**, and the **verdict**. A verdict
   the replay reaches must read exactly as the original, to the
@@ -1905,13 +1793,10 @@ The mechanism:
   dossier, a mixed joinder); guilt that read the moving world (the
   registry, the clock) records nothing, because **a guilty
   instruction has no effects**, and its verdict is *final* rather
-  than *reproducible*, which the audit reports as a note and not a
-  defect. Finality is not a defect.
-- In chambers the calendar on the wall is consulted but not obeyed:
-  a continuance granted by a past timeline was honored once, at full
-  length, and the replay deems the remainder served (`Chambers`
-  mode). The waits have no effects, only duration, and chambers have
-  no patience.
+  than *reproducible*, which the audit reports as a note rather than a
+  mismatch.
+- In `Chambers` mode, a previously honored continuance does not wait again.
+  The wait has no effects beyond duration.
 
 Nothing is written to the real court, not even the opening of an
 empty topic. What the audit can find: a proclamation entered by hand
@@ -1920,14 +1805,12 @@ cannot reach the recorded attention, a verdict that does not agree
 with its reenactment, reenactments performed while the case was still
 running. What the audit cannot find: a tampered verdict whose guilt
 rested on the moving world (final, not reproducible, and said so),
-and a respondent whose case file was burned after service, which the
-audit reports as an inconsistency because it is one: burning a case
-disturbs the audits of every case that ever served it. The tomb keeps
-its own counsel; the warden merely checks the stone.
+and a respondent whose case file was burned after service. Burning that case
+removes state needed to audit every case that served it, so the audit reports
+an inconsistency.
 
-**The whole courthouse** (v2.9, "The Burrow"). `trial audit --docket`
-runs the warden over every matter on file and adds the survey of what
-the paperwork accumulates by design and cannot mention on its own:
+**Docket audit** (v2.9, "The Burrow"). `trial audit --docket` audits every
+case on file and reports additional docket-wide state:
 
 - **Drafts in the archive**: archive records at offsets no catalog
   entry, current or superseded, has ever pointed at. A document
@@ -1938,25 +1821,17 @@ the paperwork accumulates by design and cannot mention on its own:
 - **The unconvened and uncommenced**: matters no session has convened
   and no ledger records commencing. A `COMMENCE` whose official
   perished between counter and commitment leaves the same residue as
-  a case filed and simply not yet run; from inside the burrow the two
-  are indistinguishable, and the survey reports the ambiguity rather
-  than resolving it.
+  a case filed and not yet run. The two are indistinguishable, so the survey
+  reports the ambiguity rather than resolving it.
 - **Spent motions**: every case whose one motion to reconsider has
-  been granted, which is the list of everyone the Court will not
-  indulge again.
+  been granted and cannot be granted again.
 
-None of these are inconsistencies; they are what the paperwork looks
-like after people have used it. The survey deletes nothing and writes
-nothing. But the most beautiful thing about the burrow is the
-stillness.
+None of these are inconsistencies. The survey deletes and writes nothing.
 
-### 14.6 The appeal (four versions of the legend)
+### 14.6 Appeal
 
-The legend of Prometheus comes down in four versions, and each ends
-differently. `trial appeal <case>` files a further version: a fresh
-case number whose topics begin as a copy of the original's and whose
-future is its own. The original is not touched; nothing is ever
-deleted; the docket simply holds two versions of the legend now.
+`trial appeal <case>` files a new case whose topics begin as a copy of the
+original and can then diverge. It does not change the original.
 
 Two moments to take it at:
 
@@ -1980,53 +1855,39 @@ Two moments to take it at:
   convicted. An appeal taken past the end of the record is the
   record.
 
-In either mode the filing, the proceedings, and the summons topic
-travel whole from the original: the text of the legend and the input
-served upon it do not change between tellings; what may change is the
-telling. The attention is seated by one empty committed step (a case
-never convened forks into a case never convened). The appeal audits
-clean by construction, both modes, because a copied prefix of a valid
-history is a valid history.
+In either mode the filing, proceedings, and summons topic are copied from the
+original. One empty committed step sets the attention; a case never convened
+forks into a case never convened. Both modes audit clean because a copied prefix
+of a valid history is valid.
 
 What does not travel: letters patent. The registry is court-wide and
 its holder is a case number, and the appeal has a new one; the
-appeal's practice of the original's invention is infringement, which
-is not a bug in the appeal but a fact about patents. Use an
-assignment, like everybody else. Publications likewise stand in the
+appeal's practice of the original's invention is infringement. Use an
+assignment to transfer it. Publications likewise stand in the
 gazette under the original's seal; the appeal re-reads them (its
 gazette cursor travels) but did not say them.
 
-### 14.7 The profiler (the top, uncaught)
+### 14.7 Profiler
 
-The philosopher believed that to understand any detail, the spinning
-of a top for instance, was to understand everything; but a top in the
-hand is a stopped top. `trial profile <case>` resolves his problem
-the only way it resolves: the spinning and the record of the spinning
-are the same thing here, so the profile is a replay in chambers
-(§14.5's copy, with a meter attached) and nothing is stopped, least
-of all the case.
+`trial profile <case>` replays an in-memory copy as in §14.5 and counts the
+instructions it executes. The stored case keeps running independently.
 
-The meter hears the address of every instruction the replay fetches
-for execution, across every timeline the record holds. Counts are of
-**executions**: a continuance or timed await visits its instruction
-twice (the grant and the wait), and both visits count; a guilty
-instruction executed, however it ended, and counts once, heard during
-the audit's re-derivation phase. The report is every executed address
-with its seal (opcode) and source position, hottest first, plus the
-committed-step and timeline totals, plus the audit's verdict on the
-record, since a profile of a record that disagrees with itself is a
-profile of the disagreement. Instructions the history never reached
-do not appear; the proceedings hold much that never happens.
+The profiler records the address of every instruction executed across each
+timeline. Counts are executions: a continuance or timed await visits its
+instruction twice (grant and wait), and both visits count; a guilty instruction
+also counts once during audit re-derivation. The report lists executed
+addresses with opcode and source position, sorted by count, followed by
+committed-step totals, timeline totals, and the audit result. Instructions the
+history never reached do not appear.
 
 ## 15. Termination
 
-There is no exit 0. A case ends in exactly one of three ways:
+A case reaches one of three terminal or suspended states:
 
 1. **`ADJOURN INDEFINITELY.`**: the offset is committed, the official
-   goes home, and the case is suspended and resumable forever. This is
-   the only ending you may request. (`ADJOURN FOR n DAYS`, §11.8, is
-   not an ending at all: the case resumes by itself, which is the
-   opposite of an ending.)
+   exits, and the case is suspended and resumable. This is the only ending a
+   program may request. `ADJOURN FOR n DAYS` (§11.8) instead resumes after its
+   deadline.
 2. **Apparent acquittal**: execution reaches the end of the
    proceedings topic. Nothing happens: the Court blocks, awaiting
    proceedings that may never come. The case is not finished; it is
@@ -2036,10 +1897,9 @@ There is no exit 0. A case ends in exactly one of three ways:
    executed on purpose, the Court declining to distinguish. One record
    on the verdicts topic, reading `GUILTY`. Particulars are sealed
    (available to `--counsel`). The verdict is final: the case will not
-   convene again, though its full reenactment remains available, as it
-   always does. (While a motion to reconsider is on file, the first
-   verdict that would issue is intercepted instead, once per case and
-   at a price; §11.13. The second is final.)
+   convene again, though its full reenactment remains available. While a motion
+   to reconsider is on file, it may intercept one verdict (§11.13); the next
+   verdict is final.
 
 ## 16. Errors
 
@@ -2052,8 +1912,7 @@ grounds for rejection:
 
 - a statement that does not end with a period;
 - a form other than K-1 or K-2;
-- a filing with no articles (a filing with no proceedings is a
-  confession);
+- a filing with no articles;
 - duplicate article numbers, section numbers, office names, exhibit
   names, exhibit entries, or defined terms;
 - a referral to an article or section that does not exist, or across
@@ -2065,13 +1924,12 @@ grounds for rejection:
 - recording over, entering into, summoning onto, or striking a
   defined term; defining a term twice; an office concern named after
   a defined term;
-- an office established in a supplemental filing (the building is
-  full);
+- an office established in a supplemental filing;
 - a K-2's referral to an article of the original filing;
 - a continuance in units other than DAYS (there are no other units of
   court time).
 
-There are no warnings. The Court does not advise.
+There are no warnings.
 
 ### 16.2 Verdicts (runtime errors)
 
@@ -2082,7 +1940,7 @@ offenses:
 |---|---|
 | retrieving a record that does not exist | §6 |
 | striking a record that does not exist | §11.10 |
-| popping an empty dossier | (unreachable from lawful filings; the Court remains prepared) |
+| popping an empty dossier | (unreachable from valid filings) |
 | arithmetic on non-integers; joinder of unlike kinds | §10.2 |
 | apportionment among zero parties; the remainder of zero | §10.2 |
 | magnitude comparison (`EXCEED`, `FALL SHORT OF`) of non-integers | §10.3 |
@@ -2104,22 +1962,18 @@ offenses:
 | an item or substitution outside the schedule, or located by a non-integer | §8.1 |
 | annexing to, indexing into, or substituting within a non-schedule | §8.1 |
 | a second motion to reconsider, after the first was granted | §11.13 |
-| a ledger that disagrees with the proceedings (a tampered timeline) | §14.4; unpardonable, §11.13 |
+| a ledger that disagrees with the proceedings (a tampered timeline) | §14.4; not intercepted, §11.13 |
 
-A verdict is final and atomic: the guilty instruction's pending
-effects are discarded unentered (§14.3), the verdict lands, and the
-case never convenes again. The one exception is bought in advance,
-costs everything in evidence, and is honored once: the motion to
-reconsider (§11.13).
+A verdict is final and atomic: the guilty instruction's pending effects are
+discarded (§14.3), the verdict lands, and the case never convenes again. A
+previously filed motion to reconsider (§11.13) may intercept one verdict.
 
 ## 17. Interacting with Apache Kafka: gotchas and limitations
 
-The broker is the machine. Its configuration is therefore not ops
-trivia; it is the physics of your program. `trial summon` provisions a
-broker with the correct physics; on any other cluster, read this
-section first. Everything below is a property of the current
-implementation, documented so that it surprises you here rather than
-in production, where you should not be.
+The runtime depends on specific broker settings. `trial summon` provisions the
+expected settings; read this section before using another cluster. These are
+requirements and limitations of the current implementation, which is not
+presented as a production runtime.
 
 ### 17.1 Retention is load-bearing
 
@@ -2127,18 +1981,16 @@ Every case topic must have `retention.ms=-1` (and no size-based
 retention). If the broker expires a segment of the proceedings topic,
 it has deleted part of your **program text**; a segment of the dossier
 or appeals topics, part of your **stack**. The case does not degrade;
-it dies, unrecoverably, and worse, quietly. Managed Kafka services
-with mandatory retention ceilings or tiered-storage defaults are
-hostile territory; check before filing anything you intend to keep,
-which is everything, nothing being ever deleted.
+it becomes unrecoverable without necessarily reporting the cause. A Kafka
+service with mandatory retention ceilings is incompatible with long-lived
+cases; check its policy before filing.
 
 ### 17.2 Do not add partitions
 
 One partition per topic, everywhere, always. The proceedings topic's
 record offsets are the instruction addresses; a second partition would
-make offsets non-dense and every compiled jump wrong. The state topics
-are folds, and folds require total order. Repartitioning a case is not
-a migration; it is a lobotomy.
+make the address scheme invalid. The state topics are folds and require total
+order. Do not repartition a case.
 
 ### 17.3 Transactional markers make offsets non-dense (in state topics)
 
@@ -2178,7 +2030,7 @@ the consumer group `the-court.<case>` afterward (the public record).
 Two consequences:
 
 - When they disagree (a crash landed between the two), the sealed
-  original prevails, which you will agree is very fitting.
+  original prevails.
 - Broker setting `offsets.retention.minutes` (default 7 days) expires
   committed group offsets of idle groups. A case suspended for a month
   may return to find its public record expunged. It does not care: the
@@ -2195,45 +2047,35 @@ about 1 MiB: a string, or a deeply nested exhibit (a long parcel
 chain, §18, is *one value*), can exceed it. This is an infrastructure
 error rather than a verdict (the case is innocent): the proceedings
 halt mid-instruction, uncommitted, and resume cleanly only if the
-broker's limit is raised. The Court's position is that a filing of
-more than a megabyte per motion should be broken into smaller motions,
-a position it shares with every court.
+broker's limit is raised. Break larger values into smaller records or raise the
+broker limit deliberately.
 
 ### 17.7 Throughput, latency, and what this machine is for
 
 Measured (v1.5, `BenchmarkStepsMemory`, one case, in-memory Log,
 Ryzen 7 9800X3D): the interpreter itself executes about **640,000
-steps per second** (≈1.6 µs per committed instruction). That is the
-ceiling with the broker removed, and it exists to prove the broker is
-the cost: against Apache Kafka one instruction = one broker
-round-trip plus one transaction commit. Measured against a live
+steps per second** (≈1.6 µs per committed instruction). Against Apache Kafka,
+one instruction adds a broker round trip and transaction commit. Measured on a
+live
 single-node KRaft broker on the same host (`BenchmarkStepsKafka`, CI,
 2-vCPU runner): about **170 steps per second** (≈5.8 ms per
-committed instruction) — the transaction commit is ~3,700× the cost
-of the interpretation, which is the whole architecture in one ratio.
-A broker across a real network adds its round trips on top; plan on
-**tens to low hundreds of instructions per second** and you will not
-be disappointed, or rather you will be disappointed at the correct
-rate. The smallness is the design point, not a bug: *the Court
-processes filings at the pace the Court processes filings.* Do not run hot loops; run ten thousand
-independent, slow, unkillable workflows. Cases are independent topic
-families, officials are stateless and horizontally scalable (one per
-case, enforced by fencing), and total throughput scales the way Kafka
-scales. `AWAIT SUMMONS` blocks *outside* any transaction, so a case
+committed instruction), about 3,700 times the measured interpretation cost.
+A broker across a network adds its round trips; expect tens to low hundreds of
+instructions per second per case under similar conditions. The runtime is not
+suited to hot loops. Cases use independent topic families, and officials are
+stateless and can scale across cases (one per case, enforced by fencing).
+`AWAIT SUMMONS` blocks *outside* any transaction, so a case
 waiting for input holds no broker resources hostage and cannot hit
 transaction timeouts, however long the wait; a continuance (§11.8)
-waits the same way. The wait can be years. The design assumes it will
-be.
+waits the same way and may wait for long periods.
 
 When a case must nonetheless hurry, the expedited docket (§14.3a)
 amortizes the commit: `--expedited 100` carries about a hundred
 instructions per transaction (`BenchmarkStepsMemoryExpedited` measures
-~98, the flushes at awaits and registries taking their cut), so
+about 98 because awaits and registry operations flush early), so
 against the live broker the ~5.8 ms commit is split across the batch
-and throughput approaches the batch size times the doctrine's figure.
-The interpretation itself was always cheap; the expedited docket
-simply lets more of it ride each round trip, at the price §14.3a
-states.
+and throughput can increase toward the batch size times the single-step figure.
+The tradeoffs are listed in §14.3a.
 
 ### 17.8 Interop: other programs may (carefully) touch the case
 
@@ -2246,22 +2088,21 @@ stdin. Rules of engagement:
   arrive as an integer (§11.4). Records appended by a running case's
   `SERVE NOTICE` (§11.11) additionally carry the server's case number
   as the record key; leave the key null in your own producers, or set
-  it to something that is not a case number, so operators can tell
-  machine correspondence from human meddling.
+  it to something that is not a case number, so operators can distinguish
+  case-to-case notices from external input.
 - **Proclamations, records, dossier, appeals, filing, verdicts**:
   read freely (with `read_committed`, or you will see aborted
   half-instructions); write never. A single foreign record in a state
   topic corrupts the fold.
 - **Proceedings**: read freely; write only via `trial amend`, which
-  compiles against the current end of the topic. A hand-appended
-  instruction with a wrong target does not get an error; it gets a
-  timeline.
+  compiles against the current end of the topic. A hand-appended instruction
+  with a wrong target corrupts execution.
 - Do not create topics matching `case-*` yourself, and disable
   `auto.create.topics.enable` where possible: a typo'd
   `kafka-console-consumer` against a nonexistent case topic can
-  auto-create it with the broker's default (finite) retention and
-  (unit) partitions, physics this language cannot survive (§17.1,
-  §17.2). With auto-creation disabled, `SERVE NOTICE` upon a
+  auto-create it with the broker's default retention and partition settings,
+  which may be incompatible (§17.1, §17.2). With auto-creation disabled,
+  `SERVE NOTICE` upon a
   nonexistent case also fails cleanly (a verdict) instead of
   half-creating a phantom respondent.
 
@@ -2282,14 +2123,12 @@ therefore pure ASCII; your consumers may rely on that.
 whatever machine the official happens to be running on. The Court does
 not require synchronized clocks, but a continuance granted by an
 official whose clock is wrong is wrong by the same amount, and a
-successor on a differently-wrong machine honors the recorded absolute
-deadline against its own clock. Run NTP. The Court declines to; the
-Court is the reference frame.
+successor on a differently-wrong machine honors the recorded absolute deadline
+against its own clock. Run NTP on Court hosts.
 
 ## 18. Turing completeness
 
-triallang is Turing-complete, and became so the day exhibits were
-admitted into evidence.
+Under the usual unbounded-memory model, triallang is Turing-complete.
 
 The finite-control requirements are met by `SHOULD` and `REFER TO`.
 The unbounded-storage requirement is met by nested exhibits: a
@@ -2299,32 +2138,21 @@ two-entry exhibit is a cons cell,
 THE EXHIBIT OF parcel, COMPRISING contents AND remainder.
 ```
 
-and a chain of parcels is a stack of unbounded depth
+and a chain of parcels models a stack of unbounded depth
 ([`examples/unbounded.trial`](../examples/unbounded.trial) builds and
 drains one). Two such stacks simulate a Turing machine's tape with its
-head between them; the standard two-stack construction carries the
-rest of the proof, and the Court carries the standard construction
-without complaint, one broker round-trip at a time.
+head between them; the standard two-stack construction supplies the rest of the
+proof.
 
-The construction is not merely sketched; it is on the docket.
 [`examples/the-harrow.trial`](../examples/the-harrow.trial) implements
 a complete Turing machine (the two-state busy beaver) on a two-stack
 exhibit tape, and the test suite verifies its known behavior: it halts
-after 6 transitions with 4 marks on the tape. Substitute any
-transition table you like; the tape does not care, and the broker
-retains every cell the machine ever wrote.
+after 6 transitions with 4 marks on the tape.
 
-(Before exhibits the language plausibly was *not* Turing-complete:
+Before exhibits the language plausibly was *not* Turing-complete:
 integers are 64-bit and one call stack of finite frames buys a
 pushdown automaton, not a tape. Strings can now be measured, excerpted,
-and joined; `AN EXCERPT OF` makes a string an addressable tape of its
-own, so the language is Turing-complete twice over, which is the
-amount of proof appropriate to this Court.)
-
-A remark usually offered here as a joke and defensible as a thesis:
-the append-only log is itself the tape. Kafka retains every cell the
-machine ever wrote; the consumer offset is the head; the language
-merely arranges that the head advances lawfully.
+and joined; `AN EXCERPT OF` also makes a string an addressable tape.
 
 ## 19. Limits and non-features
 
@@ -2340,23 +2168,19 @@ merely arranges that the head advances lawfully.
   `SERVE NOTICE` (§11.11), and may open one another by `COMMENCE
   PROCEEDINGS` (§11.12). Partitions-as-threads within a case remains
   post-1.0 discourse; it breaks PC-as-offset determinism.
-- No office values, closures, or higher-order paperwork.
+- No closures. Office values exist as powers of attorney but cannot be
+  exercised outside the case that executed them (§12.5).
 - No environment variables, no filesystem except the archive (§10.9,
   which is a pair of topics), no network beyond the broker. The clock
   and the random source are admitted through exactly two named doors
   (§10.8), and everything that comes through them is entered in the
   ledger (§14.4), so even the dice replay exactly; nothing else from
   the outside world is admitted at all.
-- Almost no error handling. There is no try/catch and no appeal;
-  there is exactly one `FILE A MOTION TO RECONSIDER` grant per case
-  (§11.13), and it costs everything in evidence. Validate before
-  acting (`SHOULD` is evaluated without risk), or budget your one
-  mercy, or accept the verdict. The narrowness is a design decision,
-  documented here so it cannot be mistaken for an oversight.
+- Error handling is limited. There is no try/catch; one filed `FILE A MOTION TO
+  RECONSIDER` may intercept a verdict per case (§11.13), clearing the dossier
+  and appeals. Validate with `SHOULD` before an operation that may fail.
 - No condition grouping parentheses (§11.5); no short-circuit
   evaluation. The Court reads everything.
 - Identifiers are ASCII (§3). Strings are where the Unicode lives.
-- Nothing is ever deleted. `retention.ms=-1` is a statement of values.
-  `STRIKE` (§11.10) removes a record from the *fold*; the log retains
-  the striking, and compaction's eventual forgetting of the key is the
-  Bureau's business, not yours.
+- Case topics use `retention.ms=-1`. `STRIKE` (§11.10) removes a record from the
+  *fold*; the log retains the striking until compaction may remove the key.

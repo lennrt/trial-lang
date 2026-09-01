@@ -30,15 +30,13 @@ func (d *dismissedLog) Commit(ctx context.Context, c docket.Case, step docket.St
 	return d.Log.Commit(ctx, c, step)
 }
 
-// crashEverywhere runs src once to count its commits, then reruns the
-// whole case once per possible crash point: official #1 is dismissed
-// at commit k, official #2 resumes and finishes. The proclamations
-// must be identical in every timeline.
-func crashEverywhere(t *testing.T, src string, summonses ...string) {
+// crashEverywhereUsing runs a case once to count its commits, then reruns it
+// once per possible crash point. Every timeline must proclaim the same result.
+func crashEverywhereUsing(t *testing.T, convene func(*testing.T) (*docket.MemoryLog, docket.Case)) {
 	t.Helper()
 
 	// The reference timeline: no dismissals.
-	refLog, refCase := convene(t, src, summonses...)
+	refLog, refCase := convene(t)
 	refCounter := &dismissedLog{Log: refLog, dismissAt: -1}
 	ct := &Court{Log: refCounter, Case: refCase}
 	if _, err := ct.Proceed(context.Background()); err != nil {
@@ -52,7 +50,7 @@ func crashEverywhere(t *testing.T, src string, summonses ...string) {
 
 	for k := 1; k <= total; k++ {
 		t.Run(fmt.Sprintf("dismissed-at-commit-%d", k), func(t *testing.T) {
-			log, c := convene(t, src, summonses...)
+			log, c := convene(t)
 			first := &Court{Log: &dismissedLog{Log: log, dismissAt: k}, Case: c}
 			if _, err := first.Proceed(context.Background()); !errors.Is(err, errDismissed) {
 				t.Fatalf("official #1 should have been dismissed, got: %v", err)
@@ -67,6 +65,14 @@ func crashEverywhere(t *testing.T, src string, summonses ...string) {
 			}
 		})
 	}
+}
+
+// crashEverywhere applies the crash-boundary check to an ordinary case.
+func crashEverywhere(t *testing.T, src string, summonses ...string) {
+	t.Helper()
+	crashEverywhereUsing(t, func(t *testing.T) (*docket.MemoryLog, docket.Case) {
+		return convene(t, src, summonses...)
+	})
 }
 
 func TestCrashAnywhereCounting(t *testing.T) {

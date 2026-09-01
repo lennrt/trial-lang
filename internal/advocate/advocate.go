@@ -649,11 +649,10 @@ func validateToolFields(name string, raw json.RawMessage) error {
 	}
 	var allowed []string
 	switch name {
-	case "trial_file", "trial_amend", "trial_enact":
+	case "trial_amend":
 		allowed = []string{"case", "source"}
-		if name != "trial_amend" {
-			allowed = []string{"source"}
-		}
+	case "trial_file", "trial_enact":
+		allowed = []string{"source"}
 	case "trial_proceed":
 		allowed = []string{"case", "for_at_most_court_days"}
 	case "trial_serve":
@@ -665,7 +664,6 @@ func validateToolFields(name string, raw json.RawMessage) error {
 	case "trial_docket":
 		allowed = []string{"from_offset", "limit"}
 	case "trial_statutes":
-		allowed = []string{}
 	case "trial_test":
 		allowed = []string{"program_source", "deposition_source"}
 	default:

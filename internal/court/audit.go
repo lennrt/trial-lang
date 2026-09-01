@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/lennrt/trial-lang/internal/docket"
 	"github.com/lennrt/trial-lang/internal/law"
@@ -148,12 +149,9 @@ func copyTopic(ctx context.Context, from, to docket.Log, topic string) error {
 	return nil
 }
 
-// chambersCopy assembles the in-memory court every replay-in-chambers
-// runs against: the case's inputs (filing, proceedings, summonses,
-// ledger), the court-wide registry and gazette, and the rest of the
-// docket's filings, enough for service to find its respondents and
-// licenses their grantees. The outputs are not copied; whoever
-// replays must earn them again.
+// chambersCopy assembles the in-memory court used for replay from the case's
+// inputs, court-wide registry and gazette, and other case filings. Outputs are
+// not copied; replay regenerates them.
 func chambersCopy(ctx context.Context, log docket.Log, c docket.Case) (*docket.MemoryLog, error) {
 	mem := docket.NewMemoryLog()
 	if err := mem.CreateCaseTopics(ctx, c); err != nil {
@@ -218,15 +216,7 @@ func attentionArrived(step docket.Step, att docket.Attention) bool {
 		step.Ledger != att.Ledger || step.Gazette != att.Gazette {
 		return false
 	}
-	if len(step.Heard) != len(att.Heard) {
-		return false
-	}
-	for i := range step.Heard {
-		if step.Heard[i] != att.Heard[i] {
-			return false
-		}
-	}
-	return true
+	return slices.Equal(step.Heard, att.Heard)
 }
 
 // Audit replays a case in chambers, against an in-memory copy of its
@@ -240,10 +230,8 @@ func Audit(ctx context.Context, log docket.Log, c docket.Case) (*AuditReport, er
 	return auditMetered(ctx, log, c, nil)
 }
 
-// auditMetered is the audit with a listener attached: the profiler
-// (v3.1) hears every instruction address the replay executes. The
-// meter changes nothing; it only listens, which around here counts as
-// restraint.
+// auditMetered runs an audit and reports each executed instruction address to
+// the optional meter.
 func auditMetered(ctx context.Context, log docket.Log, c docket.Case, meter func(pc int64)) (*AuditReport, error) {
 	report := &AuditReport{Case: c.ID, Timelines: 1}
 

@@ -1,6 +1,4 @@
 #!/bin/sh
-# The clerk who reads every filing before it reaches the docket.
-#
 # It checks the exact staged Go blobs without rewriting or re-staging the
 # working tree, then runs `go vet` and blocks the commit if either check fails.
 # Install once with `make hooks` (points core.hooksPath at .githooks); skip it

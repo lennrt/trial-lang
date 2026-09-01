@@ -22,9 +22,7 @@ const (
 )
 
 type point3 struct {
-	x float64
-	y float64
-	z float64
+	x, y, z float64
 }
 
 var wordmarkGlyphs = map[byte][5]string{
@@ -95,8 +93,7 @@ func renderFrame(frame int) string {
 	lines := []string{
 		"+" + strings.Repeat("-", panelWidth) + "+",
 		panelLine(" TRIAL-LANG // TRANSACTIONAL SPHERE"),
-		panelLine(" FRAME " + twoDigits(frame+1) + "/" + strconv.Itoa(frameCount) +
-			"  |  OFFSET " + fourDigits(frame+1) + "  |  STATE COMMITTED  |  REPLAY EXACT"),
+		panelLine(fmt.Sprintf(" FRAME %02d/%d  |  OFFSET %04d  |  STATE COMMITTED  |  REPLAY EXACT", frame+1, frameCount, frame+1)),
 		panelLine(""),
 	}
 	for _, line := range wordmark {
@@ -183,9 +180,7 @@ func rotate(point point3, xAngle, yAngle, zAngle float64) point3 {
 	return point
 }
 
-func dot(a, b point3) float64 {
-	return a.x*b.x + a.y*b.y + a.z*b.z
-}
+func dot(a, b point3) float64 { return a.x*b.x + a.y*b.y + a.z*b.z }
 
 func normalize(point point3) point3 {
 	length := math.Sqrt(dot(point, point))
@@ -215,18 +210,6 @@ func panelLine(text string) string {
 		panic("demo panel line exceeds its fixed width")
 	}
 	return "|" + text + strings.Repeat(" ", panelWidth-len(text)) + "|"
-}
-
-func twoDigits(value int) string {
-	if value < 10 {
-		return "0" + strconv.Itoa(value)
-	}
-	return strconv.Itoa(value)
-}
-
-func fourDigits(value int) string {
-	text := strconv.Itoa(value)
-	return strings.Repeat("0", 4-len(text)) + text
 }
 
 func trialSource(frames []string) string {

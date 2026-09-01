@@ -271,9 +271,8 @@ func (p *parser) parseArticle() (Article, error) {
 	return art, nil
 }
 
-// parseExhibitDecl reads THE EXHIBIT OF name, COMPRISING a AND b.
-// An exhibit declaration is pure paperwork: it establishes a shape
-// and emits nothing. The Court's favorite kind of statement.
+// parseExhibitDecl reads an exhibit declaration, which establishes a shape and
+// emits no instructions.
 func (p *parser) parseExhibitDecl() (ExhibitDecl, error) {
 	line := p.peek().line
 	if err := p.expectWords("THE", "EXHIBIT", "OF"); err != nil {
@@ -1158,7 +1157,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 
 // parseCondition reads a full condition: clauses joined by AND ALSO and
 // OR IN THE ALTERNATIVE. AND ALSO binds tighter, as conjunction does;
-// both associate to the left, as everything here does eventually.
+// both operators associate to the left.
 func (p *parser) parseCondition() (Cond, error) {
 	left, err := p.parseConjunction()
 	if err != nil {

@@ -57,10 +57,8 @@ type Result struct {
 
 func (r *Result) OK() bool { return len(r.Contradictions) == 0 }
 
-// Parse reads a deposition. The format is line-oriented; statements
-// are sentences and end with periods, as everywhere in this
-// jurisdiction. Values are quoted strings (with the usual escapes) or
-// bare text taken as written.
+// Parse reads a deposition. The format is line-oriented: statements end in
+// periods, and values are quoted strings or bare text.
 func Parse(src string) (*Deposition, error) {
 	if len(src) > maxDepositionBytes {
 		return nil, fmt.Errorf("deposition exceeds the %d-byte limit", maxDepositionBytes)
@@ -154,10 +152,8 @@ func Parse(src string) (*Deposition, error) {
 	return d, nil
 }
 
-// value reads a payload: a quoted string with the usual escapes, or
-// bare text as written. Quote when the value ends in a period, begins
-// with a quotation mark, or wears significant whitespace; the parser
-// will not guess, and the Court will not either.
+// value reads a quoted string with the usual escapes, or bare text as written.
+// Quote values with significant whitespace or syntax characters.
 func value(s string, line int) (string, error) {
 	s = strings.TrimSpace(s)
 	if !strings.HasPrefix(s, `"`) {
@@ -246,8 +242,7 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 		return res
 	}
 
-	// The law first: a witness that incorporates statutes needs them
-	// enacted with the court in chambers before it can be filed.
+	// Enact incorporated statutes before filing the program.
 	if len(d.Enacts) != len(d.EnactSources) {
 		contradict("the deposition names %d statute(s) to enact and %d source(s) were provided; the runner must resolve ENACT files (see LoadEnactments)", len(d.Enacts), len(d.EnactSources))
 		return res
@@ -287,10 +282,8 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 	dctx, cancel := context.WithTimeout(ctx, time.Duration(d.AllowDays)*court.CourtDay)
 	defer cancel()
 
-	// The witness may commence further cases (§11.12); someone must
-	// convene them, or the deposition of an actor system would hang. A
-	// junior official serves everyone but the witness, in chambers,
-	// and is dismissed when the witness steps down.
+	// Serve any cases commenced by the program, or actor-system depositions
+	// would block. The program's own case is proceeded below.
 	jctx, dismissJunior := context.WithCancel(dctx)
 	juniorGone := make(chan error, 1)
 	go func() {

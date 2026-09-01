@@ -217,18 +217,11 @@ func lex(src string) ([]token, error) {
 // "THE RECORD" and a colon, with any amount of horizontal whitespace.
 func commentFollows(rest string) bool {
 	for _, want := range []string{"THE", "RECORD"} {
-		k := 0
-		for k < len(rest) && (rest[k] == ' ' || rest[k] == '\t') {
-			k++
-		}
-		if !strings.HasPrefix(rest[k:], want) {
+		rest = strings.TrimLeft(rest, " \t")
+		if !strings.HasPrefix(rest, want) {
 			return false
 		}
-		rest = rest[k+len(want):]
+		rest = rest[len(want):]
 	}
-	k := 0
-	for k < len(rest) && (rest[k] == ' ' || rest[k] == '\t') {
-		k++
-	}
-	return k < len(rest) && rest[k] == ':'
+	return strings.HasPrefix(strings.TrimLeft(rest, " \t"), ":")
 }

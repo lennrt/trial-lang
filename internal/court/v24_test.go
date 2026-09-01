@@ -9,8 +9,6 @@ package court
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -49,34 +47,9 @@ func conveneSealed(t *testing.T, src string, served ...sealed) (*docket.MemoryLo
 // boundary and every timeline must say exactly the same things.
 func crashEverywhereSealed(t *testing.T, src string, served ...sealed) {
 	t.Helper()
-	refLog, refCase := conveneSealed(t, src, served...)
-	refCounter := &dismissedLog{Log: refLog, dismissAt: -1}
-	ct := &Court{Log: refCounter, Case: refCase}
-	if _, err := ct.Proceed(context.Background()); err != nil {
-		t.Fatalf("reference run failed: %v", err)
-	}
-	want := strings.Join(proclamations(t, refLog, refCase), "\n")
-	total := refCounter.commits
-	if total < 2 {
-		t.Fatalf("test program too small to interrupt (%d commits)", total)
-	}
-	for k := 1; k <= total; k++ {
-		t.Run(fmt.Sprintf("dismissed-at-commit-%d", k), func(t *testing.T) {
-			log, c := conveneSealed(t, src, served...)
-			first := &Court{Log: &dismissedLog{Log: log, dismissAt: k}, Case: c}
-			if _, err := first.Proceed(context.Background()); !errors.Is(err, errDismissed) {
-				t.Fatalf("official #1 should have been dismissed, got: %v", err)
-			}
-			second := &Court{Log: log, Case: c}
-			if _, err := second.Proceed(context.Background()); err != nil {
-				t.Fatalf("official #2 could not resume: %v", err)
-			}
-			got := strings.Join(proclamations(t, log, c), "\n")
-			if got != want {
-				t.Fatalf("the timelines disagree.\nwant:\n%s\ngot:\n%s", want, got)
-			}
-		})
-	}
+	crashEverywhereUsing(t, func(t *testing.T) (*docket.MemoryLog, docket.Case) {
+		return conveneSealed(t, src, served...)
+	})
 }
 
 // TestSelectiveReceiveHearsTheNamedVoice: the song is consumed out of

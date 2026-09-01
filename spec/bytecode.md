@@ -3,13 +3,12 @@
 Gregor compiles a `.trial` filing into **proceedings**: a sequence of JSON
 records, one instruction per record, appended to the case's proceedings
 topic. **The offset a record lands at is its address.** Every `REFER` and
-`PETITION` was compiled against those addresses, which is why the topic
-must be written exactly once, in order, to a fresh topic. It is, because
-every filing opens a new case.
+`PETITION` is compiled against those addresses, so instructions must be written
+once, in order, to the fresh topic opened for each case.
 
-The program counter is the committed offset of consumer group
-`the-court.<case>` on this topic. `kafka-consumer-groups.sh --describe`
-is a debugger.
+The attention record is the authoritative program counter. Consumer group
+`the-court.<case>` mirrors it on this topic, so
+`kafka-consumer-groups.sh --describe` can inspect the public offset.
 
 ## Instruction record
 
@@ -99,13 +98,13 @@ executing case, and the concerns as strings).
 | `ASSIGN` | c → | ASSIGN THE LETTERS FOR `name`: pop the assignee (a case number). Only the holder assigns; the assignee must be a matter on file and someone else; refused while licenses are outstanding (nothing moves while it is borrowed). Appends `{"kind":"assignment","name","holder","to","granted"}`; the old holder's later practice is infringement (use after assignment) |
 | `COMMENCE` | s → s′ | COMMENCE PROCEEDINGS UPON s: parse, compile, and file the source string as a new case at the clerk's counter (its case number must exist before it can be recorded), enter the assigned number in the ledger inside this step's transaction, push the number; a reenactment re-serves the recorded number and opens nothing; non-string source, or a source the compiler rejects: GUILTY, and nothing is opened |
 | `STANDING` | s → s′ | THE STANDING OF s: pop a case number; push `GUILTY` (a verdict is on file), `IN GOOD STANDING` (on file, undecided), or `NO MATTER ON FILE`; the reading is entered in the ledger in this step, so a reenactment re-serves it; non-string: GUILTY |
-| `MOTION` | — | FILE A MOTION TO RECONSIDER: place the motion on file (records topic, reserved key `__motion__`, value `{"target":N,"grounds":"name"}`), durably, within this step's transaction. While on file and unspent, the first verdict that would issue is intercepted instead of delivered, as one atomic step: an `IMPOUND` event in the dossier topic (empties the stack fold), an `IMPOUND` event in the appeals topic (empties the call-stack fold), the motion rewritten spent, the sealed particulars filed under `grounds` (if named), and the committed attention seeking to `target`. Filing again after the grant: GUILTY. Tampered-timeline verdicts are unpardonable and are not intercepted |
+| `MOTION` | — | FILE A MOTION TO RECONSIDER: place the motion on file (records topic, reserved key `__motion__`, value `{"target":N,"grounds":"name"}`), durably, within this step's transaction. While on file and unspent, the first verdict that would issue is intercepted instead of delivered, as one atomic step: an `IMPOUND` event in the dossier topic (empties the stack fold), an `IMPOUND` event in the appeals topic (empties the call-stack fold), the motion rewritten spent, the sealed particulars filed under `grounds` (if named), and the committed attention seeking to `target`. Filing again after the grant: GUILTY. A ledger/proceedings mismatch and an unreadable instruction record are not intercepted |
 | `DISCOVERY` | s → v | THE RECORD `name` IN THE MATTER OF s: pop a case number; fold the respondent's records topic as its own Court would (last writing per key since its latest reenactment marker, tombstones honored) and push the record `name`; the reading is entered in the ledger in this step, so a reenactment re-serves it. Non-string, no such matter, or no such record: GUILTY |
 | `PUBLISH` | v → | PUBLISH v IN THE GAZETTE: append `v.Display()` to `the-gazette` (key = the publishing case's number) inside this step's transaction; exactly-once publication |
 | `AWAIT-GAZETTE` | → v | AWAIT THE GAZETTE: block at this case's gazette cursor (carried in the attention note), consume the next edition, push it (integers arrive as integers); the cursor advances with the step, so consumption is exactly-once per case, and reenactment (cursor to zero) re-reads the same immutable editions with no ledger entry |
 | `AWAIT-FOR` | n → [v] | AWAIT SUMMONS FOR AT MOST n DAYS: the receive with a deadline; the two-step grant protocol of `CONTINUANCE` (reserved key `__attendance__`), except the wait ends at whichever comes first, the summons or the date. Served: consume the summons, push it, fall through. Expired: push nothing, refer to `target` (the FAILING WHICH arm). The outcome (a finding) is entered in the **ledger** in the deciding step, so a record that arrived after expiry stays too late in every reenactment. The honored grant is withdrawn by tombstone in the same step. Non-integer or negative term: GUILTY |
 | `AWAIT-FROM` | c → v | AWAIT SUMMONS FROM c: pop a case number; scan the summons topic from the cursor and consume the first record whose key is that case's seal, **out of turn**: the offset joins the heard set in the attention note, the records passed over stay unconsumed for a plain `AWAIT` (which steps over heard offsets; when the cursor catches one up, it is dropped from the set). The scan is a deterministic fold over an append-only topic, so no ledger entry: reenactment re-hears the same voice by construction. Blocks until the voice arrives. Non-string: GUILTY |
-| `AWAIT-FROM-FOR` | c, n → [v] | AWAIT SUMMONS FROM c FOR AT MOST n DAYS: `AWAIT-FROM` under `AWAIT-FOR`'s grant protocol. Step 1 pops the term and the voice and files both in the grant (`__attendance__`, `{"pc","until_unix_ms","days","from"}`), without advancing. Step 2 waits for the named seal or the date, whichever first; the outcome is entered in the **ledger** (the folk keep squeaking after the term lapses; a late song stays late in every reenactment). Served: consume out of turn as `AWAIT-FROM`. Expired: refer to `target`. Non-string voice, non-integer or negative term: GUILTY, at grant time |
+| `AWAIT-FROM-FOR` | c, n → [v] | AWAIT SUMMONS FROM c FOR AT MOST n DAYS: `AWAIT-FROM` under `AWAIT-FOR`'s grant protocol. Step 1 pops the term and the voice and files both in the grant (`__attendance__`, `{"pc","until_unix_ms","days","from"}`), without advancing. Step 2 waits for the named seal or the date, whichever first; the outcome is entered in the **ledger**, so a late record stays late in every reenactment. Served: consume out of turn as `AWAIT-FROM`. Expired: refer to `target`. Non-string voice, non-integer or negative term: GUILTY, at grant time |
 
 ## The continuance protocol
 
@@ -128,8 +127,7 @@ continuance from an earlier visit) and is treated as no grant. Since
 v1.6 an honored grant is also withdrawn explicitly: the advancing step
 carries a tombstone for the key, so a grant record can never outlive
 its own instruction and be mistaken for fresh on a later visit to the
-same offset. The key is compacted, so the Bureau keeps at most the
-latest, which is the only one that can matter.
+same offset. The key is compacted, so only the latest value needs to remain.
 
 `AWAIT-FOR` follows the same protocol under its own key
 (`__attendance__`), with one difference in step 2: the waiting official
@@ -157,7 +155,7 @@ the grant), so both survive the official together.
 5. `LET IT BE ENTERED IN k THAT f IS e` compiles to: `RETRIEVE k`,
    ⟨e⟩, `ENTER f`, `FILE k`. A copy is retrieved, corrected, and
    filed over the original. Exhibit declarations compile to nothing;
-   they are checked and discarded, the Court's favorite disposition.
+   they are checked and discarded.
 6. `SERVE NOTICE OF v UPON w` compiles to ⟨v⟩, ⟨w⟩, `SERVE`: the notice
    is evaluated before the respondent.
 7. `ANNEX e TO s` compiles to `RETRIEVE s`, ⟨e⟩, `ANNEX`, `FILE s`;
@@ -198,8 +196,7 @@ rebuilt by replaying these topics on every session.
   the Court's own paperwork (see the continuance protocol) and never
   reaches the program. A record with a **null value** is a tombstone
   (`STRIKE`): the fold deletes the key, and log compaction may
-  eventually forget it entirely, at the Bureau's discretion. Both states
-  fold identically.
+  eventually forget it entirely. Both states fold identically.
 - **attention** (compacted, key `attention`): the sealed original of the
   program counter, `{"pc":N,"summons":M,"ledger":L,"gazette":G,
   "heard":[…]}`, one note per executed instruction, written *inside*
@@ -211,7 +208,7 @@ rebuilt by replaying these topics on every session.
 - **verdicts**: `{"verdict":"GUILTY","sealed":"…","pc":N,"pos":"…"}`.
   The public field is `verdict`. The rest is sealed.
 
-## Consistency (v0.4, "The Cathedral")
+## Consistency (v0.4)
 
 One instruction = one Kafka transaction. The Court buffers every record
 the instruction wishes to enter (dossier motions, appeals events,
@@ -231,7 +228,7 @@ Consequences:
   respondent's summons topic in the same transaction that advances the
   server's PC, so a notice is served exactly once no matter how many
   officials perish serving it. This is transactional cross-topic
-  production, the thing Kafka EOS exists for, wearing a robe.
+  production through Kafka's exactly-once semantics.
 - **Fencing.** The transactional ID is `the-court.<case>`, so a second
   official convening on the same case fences the first, who learns of
   his dismissal by exception. The Court recognizes exactly one clerk
@@ -241,8 +238,7 @@ Consequences:
   transaction, and is final.
 - The consumer group `the-court.<case>` is still updated after each
   transaction as the public record; the attention topic is the sealed
-  original, and when they disagree the sealed original prevails, which
-  you will agree is very fitting.
+  original, and when they disagree the sealed original prevails.
 - Transactional commit markers occupy invisible offsets in the state
   topics; readers therefore treat "fetch at offset" as "first committed
   record at or after," and full reads terminate against a quiescent

@@ -86,24 +86,22 @@ func (c Case) Appeals() string       { return c.topic("appeals") }       // call
 func (c Case) Records() string       { return c.topic("records") }       // variables (compacted)
 func (c Case) Summons() string       { return c.topic("summons") }       // stdin
 func (c Case) Proclamations() string { return c.topic("proclamations") } // stdout
-func (c Case) Verdicts() string      { return c.topic("verdicts") }      // you will not be told why
+func (c Case) Verdicts() string      { return c.topic("verdicts") }      // verdict records
 func (c Case) Ledger() string        { return c.topic("ledger") }        // every draw of the discretion, every reading of the clock
 func (c Case) Archive() string       { return c.topic("archive") }       // documents, immutable; the offset is the handle
 func (c Case) Catalog() string       { return c.topic("catalog") }       // document name -> current archive offset (compacted)
 func (c Case) AttentionTopic() string {
-	return c.topic("attention") // the sealed original of the program counter
+	return c.topic("attention") // authoritative program counter
 }
 
 // Group is the consumer group whose committed offset on the proceedings
-// topic IS the program counter. Inspect it with any Kafka tooling; the
-// Court's attention is a matter of public record.
+// topic mirrors the program counter for standard Kafka tooling.
 func (c Case) Group() string { return "the-court." + c.ID }
 
 // SummonsGroup tracks how much of the summons topic has been served.
 func (c Case) SummonsGroup() string { return "the-court." + c.ID + ".summons" }
 
-// StatuteTopic names the filing topic of an enacted statute. Statutes
-// are court-wide paperwork; they belong to no case and answer to all.
+// StatuteTopic names the filing topic of an enacted statute.
 func StatuteTopic(name string) string { return "statute-" + name + ".filing" }
 
 // AllTopics lists every topic in the case file.
@@ -139,10 +137,8 @@ type Step struct {
 	Summons int64
 	Ledger  int64
 	Gazette int64
-	// Heard lists summons offsets consumed out of turn (AWAIT SUMMONS
-	// FROM), all strictly past Summons, sorted ascending. The records
-	// passed over stay where they are; the attention merely remembers
-	// which voices it has already heard.
+	// Heard lists summons offsets consumed out of turn (AWAIT SUMMONS FROM).
+	// They are strictly past Summons and sorted ascending.
 	Heard []int64
 }
 
@@ -159,9 +155,7 @@ type Attention struct {
 // Log stores execution state. Every topic has exactly one partition.
 // Implementations must copy retained input and returned byte slices.
 type Log interface {
-	// Append writes one record and returns its offset. Used for the
-	// clerk's paperwork (filings, markers, verdicts, summonses):
-	// everything outside an execution step.
+	// Append writes one record outside an execution step and returns its offset.
 	Append(ctx context.Context, topic string, key, value []byte) (int64, error)
 
 	// AppendBatch writes all records atomically and returns their offsets in
@@ -172,50 +166,38 @@ type Log interface {
 	// instead of returning more than MaxReadRecords or MaxReadBytes.
 	ReadAll(ctx context.Context, topic string) ([]Record, error)
 
-	// End reports the offset the topic's next record would land at.
-	// Observers (trial watch) use it to measure how far behind the
-	// Court's attention has fallen; the Court itself never asks, since
-	// the Court is never behind, merely unhurried.
+	// End reports the topic's next offset.
 	End(ctx context.Context, topic string) (int64, error)
 
 	// Fetch returns the first visible record at or after the given offset.
 	// (Kafka transaction markers and compaction can leave invisible gaps.) If
-	// no such record exists yet and wait is true, Fetch blocks until one does;
-	// this blocking is apparent acquittal: the case is not finished, merely
-	// not currently being processed. If wait is false, returns nil.
+	// no such record exists yet and wait is true, Fetch blocks until one does.
+	// If wait is false, it returns nil.
 	Fetch(ctx context.Context, topic string, offset int64, wait bool) (*Record, error)
 
 	// Commit applies one execution step atomically: all appends land
 	// and the attention advances, or none of it happened. On Kafka
-	// this is a transaction; the attention topic holds the sealed
-	// original of the program counter, and the consumer group
-	// the-court.<case> is updated afterward as the public record.
-	// When the two disagree, the sealed original prevails, which you
-	// will agree is very fitting.
+	// this is a transaction; the attention topic is authoritative, and the
+	// consumer group the-court.<case> is updated afterward as a mirror.
 	Commit(ctx context.Context, c Case, step Step) error
 
 	// Attention reads back where the case stands.
 	Attention(ctx context.Context, c Case) (Attention, error)
 
-	// CreateCaseTopics opens a case file: all topics, single partition,
-	// infinite retention. The records topic is compacted (the Bureau
-	// purges redundant entries at its own discretion).
+	// CreateCaseTopics opens all single-partition case topics with infinite
+	// retention. Records, attention, and catalog topics are compacted.
 	CreateCaseTopics(ctx context.Context, c Case) error
 
-	// DeleteCaseTopics burns the case file. The Log does not ask
-	// whether you are sure; the CLI already refused once.
+	// DeleteCaseTopics permanently deletes the case topics.
 	DeleteCaseTopics(ctx context.Context, c Case) error
 
 	// ListCases returns at most MaxCases cases or ErrResourceLimit.
 	ListCases(ctx context.Context) ([]Case, error)
 
-	// EnsureTopic opens a plain, single-partition, retained-forever
-	// topic if it does not already exist. Used for the shared paperwork
-	// that belongs to no case: statute filings.
+	// EnsureTopic opens a retained, single-partition topic if it does not exist.
 	EnsureTopic(ctx context.Context, topic string) error
 
-	// ListStatutes enumerates every statute enacted with this court,
-	// by name.
+	// ListStatutes returns enacted statute names.
 	ListStatutes(ctx context.Context) ([]string, error)
 
 	// Close releases resources. It is safe to call more than once. Callers

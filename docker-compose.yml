@@ -1,5 +1,4 @@
-# The courthouse: one Apache Kafka broker, KRaft mode, no ZooKeeper.
-# Even the joke has standards.
+# One Apache Kafka broker in KRaft mode, with no ZooKeeper.
 #
 #   trial summon   ->  docker compose up -d
 #   trial dismiss  ->  docker compose down   (the archive volume survives)

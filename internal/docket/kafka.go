@@ -171,15 +171,9 @@ func (k *KafkaLog) AppendBatch(ctx context.Context, appends []StepAppend) ([]int
 	return offsets, nil
 }
 
-// endOffset reports the next offset the topic would assign. A topic
-// created moments ago may not have reached every broker view yet
-// (freshly opened case files are the common case here), so a missing
-// topic or partition is retried before it is believed; the price is
-// that asking after a genuinely nonexistent case takes some seconds
-// to come back empty-handed, which is if anything on theme. Three
-// seconds proved too little faith on a loaded CI runner
-// (TestE2E_MigrationBetweenOfficials, July 2026); ten is the current
-// doctrine.
+// endOffset reports the next offset the topic would assign. New topics may
+// take time to reach every broker view, so missing topics and partitions are
+// retried for ten seconds. Three seconds was insufficient on loaded CI.
 func (k *KafkaLog) endOffset(ctx context.Context, topic string) (int64, error) {
 	deadline := time.Now().Add(10 * time.Second)
 	for {
@@ -213,8 +207,7 @@ func (k *KafkaLog) endOffset(ctx context.Context, topic string) (int64, error) {
 // ReadAll reads a committed snapshot of the topic. Transactional
 // commit markers may occupy the tail offsets invisibly, so "have we
 // reached the end" cannot be answered by offsets alone; after the fast
-// path, an empty short poll against an unchanged high watermark is
-// taken as the end. The Court reviews the file at its own pace.
+// path, an empty short poll against an unchanged high watermark is the end.
 func (k *KafkaLog) ReadAll(ctx context.Context, topic string) ([]Record, error) {
 	end, err := k.endOffset(ctx, topic)
 	if err != nil {
@@ -318,9 +311,7 @@ func (k *KafkaLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 	defer cur.mu.Unlock()
 
 	if cur.next != offset {
-		// A referral: the Court's attention moves. SetOffsets purges
-		// what was buffered; the at-or-after check below distrusts it
-		// anyway, as is proper.
+		// SetOffsets purges buffered records when the requested offset moves.
 		cur.client.SetOffsets(map[string]map[int32]kgo.EpochOffset{
 			topic: {0: {Offset: offset, Epoch: -1}},
 		})
@@ -376,9 +367,8 @@ func (k *KafkaLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 	}
 }
 
-// attentionNote is the sealed original of the program counter, one
-// record per executed instruction, in the same transaction as the
-// instruction's effects.
+// attentionNote records the authoritative execution cursors in the same
+// transaction as an instruction's effects.
 type attentionNote struct {
 	PC      int64   `json:"pc"`
 	Summons int64   `json:"summons"`
@@ -387,10 +377,8 @@ type attentionNote struct {
 	Heard   []int64 `json:"heard,omitempty"`
 }
 
-// official returns the transactional producer for a case. The
-// transactional ID is per-case, so a second official convening on the
-// same case fences the first; the Court recognizes exactly one clerk
-// per matter, and the old one learns of his dismissal by exception.
+// official returns the transactional producer for a case. The per-case
+// transactional ID ensures a second producer fences the first.
 func (k *KafkaLog) official(c Case) (*kgo.Client, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -442,11 +430,8 @@ func (k *KafkaLog) Commit(ctx context.Context, c Case, step Step) error {
 		return &AmbiguousCommitError{Err: err}
 	}
 
-	// The public record: the consumer group offsets that anyone with
-	// stock Kafka tooling may inspect. Committed after the fact and
-	// without ceremony; the attention topic remains the sealed
-	// original, and when they disagree the sealed original prevails,
-	// which you will agree is very fitting.
+	// Mirror the authoritative attention in consumer offsets for standard
+	// Kafka tooling. A mirror failure cannot roll back the committed step.
 	offs := make(kadm.Offsets)
 	offs.AddOffset(c.Proceedings(), 0, step.PC, -1)
 	if responses, err := k.adm.CommitOffsets(ctx, c.Group(), offs); err != nil {
@@ -465,9 +450,7 @@ func (k *KafkaLog) Commit(ctx context.Context, c Case, step Step) error {
 }
 
 func (k *KafkaLog) Attention(ctx context.Context, c Case) (Attention, error) {
-	// The attention topic is compacted down to (eventually) one record;
-	// reading it whole and keeping the last note is correct regardless
-	// of how diligently the Bureau has been purging.
+	// Compaction may retain older notes, so use the last visible record.
 	recs, err := k.ReadAll(ctx, c.AttentionTopic())
 	if err != nil {
 		return Attention{}, err
@@ -494,14 +477,14 @@ func (k *KafkaLog) CreateCaseTopics(ctx context.Context, c Case) error {
 		}
 	}
 	retainForever := map[string]*string{
-		"retention.ms": new("-1"), // nothing is ever deleted
+		"retention.ms": new("-1"), // required for replay
 	}
 	compacted := map[string]*string{
-		"cleanup.policy": new("compact"), // purged at the Bureau's discretion
+		"cleanup.policy": new("compact"), // superseded values may be compacted
 		"retention.ms":   new("-1"),
 	}
 	var plain, compact []string
-	for _, t := range c.AllTopics() {
+	for _, t := range allTopics {
 		if t == c.Records() || t == c.AttentionTopic() || t == c.Catalog() {
 			compact = append(compact, t)
 		} else {

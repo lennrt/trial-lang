@@ -4,7 +4,8 @@ package law
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"maps"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -125,14 +126,9 @@ func Schedule(items []Value) Value { return Value{T: KindSchedule, L: cloneValue
 // register is an exhibit of nothing in particular.
 func Register(entries map[string]Value) Value { return Value{T: KindRegister, X: cloneValues(entries)} }
 
-// Power is a power of attorney over an office: the right to petition
-// it, as a value. An office is an offset into the proceedings topic,
-// so a function pointer here is literally a pointer, and it stays
-// valid forever because the proceedings are append-only. The
-// instrument records the office's name (S), its instruction address
-// (I), its concerns (L, as strings), and the case that executed it
-// (Of): a power is enforceable only in the case whose proceedings the
-// address points into.
+// Power stores an office name, proceedings offset, concerns, and executing
+// case. It is enforceable only in the case whose proceedings contain that
+// offset.
 func Power(name string, target int64, caseID string, params []string) Value {
 	l := make([]Value, len(params))
 	for i, p := range params {
@@ -171,10 +167,9 @@ func cloneValueSlice(values []Value) []Value {
 	return cloned
 }
 
-// Sum is a fixed-point decimal: the mantissa counts pennies. Sum(1250)
-// is 12.50. No IEEE float is ever consulted; floats round differently
-// on different machines, and a court that cannot repeat itself exactly
-// is no court at all.
+// Sum is a fixed-point decimal: the mantissa counts pennies. Sum(1250) is
+// 12.50. It does not use IEEE floating point, preserving deterministic results
+// across platforms.
 func Sum(mantissa int64) Value { return Value{T: KindSum, I: mantissa} }
 
 // ParseSum reads a decimal literal of exactly two decimal places
@@ -227,19 +222,18 @@ func (v Value) Display() string {
 			return "SUSTAINED"
 		}
 		return "OVERRULED"
-	case KindExhibit:
-		names := make([]string, 0, len(v.X))
-		for n := range v.X {
-			names = append(names, n)
-		}
-		sort.Strings(names)
+	case KindExhibit, KindRegister:
 		var sb strings.Builder
-		fmt.Fprintf(&sb, "AN EXHIBIT OF %s (", v.Of)
-		for i, n := range names {
+		if v.T == KindExhibit {
+			fmt.Fprintf(&sb, "AN EXHIBIT OF %s (", v.Of)
+		} else {
+			sb.WriteString("A REGISTER (")
+		}
+		for i, name := range slices.Sorted(maps.Keys(v.X)) {
 			if i > 0 {
 				sb.WriteString("; ")
 			}
-			fmt.Fprintf(&sb, "%s: %s", n, v.X[n].Display())
+			fmt.Fprintf(&sb, "%s: %s", name, v.X[name].Display())
 		}
 		sb.WriteString(")")
 		return sb.String()
@@ -251,22 +245,6 @@ func (v Value) Display() string {
 				sb.WriteString("; ")
 			}
 			sb.WriteString(item.Display())
-		}
-		sb.WriteString(")")
-		return sb.String()
-	case KindRegister:
-		keys := make([]string, 0, len(v.X))
-		for k := range v.X {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		var sb strings.Builder
-		sb.WriteString("A REGISTER (")
-		for i, k := range keys {
-			if i > 0 {
-				sb.WriteString("; ")
-			}
-			fmt.Fprintf(&sb, "%s: %s", k, v.X[k].Display())
 		}
 		sb.WriteString(")")
 		return sb.String()
@@ -295,38 +273,10 @@ func (v Value) Equal(o Value) bool {
 		return v.S == o.S
 	case KindFinding:
 		return v.B == o.B
-	case KindExhibit:
-		if v.Of != o.Of || len(v.X) != len(o.X) {
-			return false
-		}
-		for n, ve := range v.X {
-			oe, ok := o.X[n]
-			if !ok || !ve.Equal(oe) {
-				return false
-			}
-		}
-		return true
+	case KindExhibit, KindRegister:
+		return (v.T != KindExhibit || v.Of == o.Of) && maps.EqualFunc(v.X, o.X, Value.Equal)
 	case KindSchedule:
-		if len(v.L) != len(o.L) {
-			return false
-		}
-		for i, item := range v.L {
-			if !item.Equal(o.L[i]) {
-				return false
-			}
-		}
-		return true
-	case KindRegister:
-		if len(v.X) != len(o.X) {
-			return false
-		}
-		for k, ve := range v.X {
-			oe, ok := o.X[k]
-			if !ok || !ve.Equal(oe) {
-				return false
-			}
-		}
-		return true
+		return slices.EqualFunc(v.L, o.L, Value.Equal)
 	case KindPower:
 		// Two powers are the same instrument when they confer the same
 		// office of the same case; the concerns follow from that.
