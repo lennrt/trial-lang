@@ -1,3 +1,5 @@
+![triallang logo over ASCII court records](docs/hero.png)
+
 # triallang
 
 *A toy programming language backed by Apache Kafka.*
