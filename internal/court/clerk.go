@@ -240,9 +240,7 @@ func Amend(ctx context.Context, log docket.Log, c docket.Case, src string) (int,
 		return 0, errors.New("a verdict has been reached in this case; the file accepts no further evidence. The verdict is final")
 	}
 
-	// The case must exist (a supplement to nothing is a confession),
-	// though its proceedings may lawfully be empty (a matter filed and
-	// never charged with anything, as in a hearing just opened).
+	// The case must exist, although its proceedings may be empty.
 	filed, err := log.ReadAll(ctx, c.Filing())
 	if err != nil {
 		return 0, err

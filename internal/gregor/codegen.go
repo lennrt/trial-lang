@@ -7,22 +7,9 @@ import (
 	"github.com/lennrt/trial-lang/internal/law"
 )
 
-// Compile transforms a parsed case file into proceedings: a flat list
-// of instructions whose index in the list becomes, verbatim, its offset
-// in the proceedings topic. Articles and sections dissolve into
-// offsets; the labels do not survive the transformation, and are not
-// mourned.
-//
-// Layout: the case in chief first, then (only if offices follow) an
-// implicit ADJOURN (so control cannot wander into an office uninvited),
-// then each office, each ending with an implicit bare REMAND.
-// CompileAt compiles a filing whose instructions will be laid down
-// starting at the given proceedings-topic offset, as a supplemental
-// filing is (new evidence having come to light). Every referral and
-// petition target is shifted to its eventual address; the supplement
-// may refer only to its own articles; the original filing's articles
-// are beyond the reach of supplemental referral, and its offices are
-// not accepting supplemental petitions at this time.
+// CompileAt compiles a filing for placement at base, shifting its referral and
+// petition targets accordingly. A supplemental filing may refer only to its
+// own articles.
 func CompileAt(prog *Program, base int64) ([]law.Instr, error) {
 	instrs, err := Compile(prog)
 	if err != nil {
@@ -37,6 +24,10 @@ func CompileAt(prog *Program, base int64) ([]law.Instr, error) {
 	return instrs, nil
 }
 
+// Compile transforms a parsed case file into a flat list of proceedings. Each
+// instruction's index becomes its offset; article and section labels do not
+// survive compilation. The layout is the case body, an implicit ADJOURN when
+// offices follow, then each office ending in an implicit REMAND.
 func Compile(prog *Program) ([]law.Instr, error) {
 	// The examiner reads the filing before anything is laid down: use
 	// after assignment, where the filing itself makes it visible, is
@@ -200,6 +191,20 @@ func (c *codegen) emit(i law.Instr) int64 {
 	return int64(len(c.instrs) - 1)
 }
 
+// genStoredUpdate retrieves a stored collection, evaluates the update
+// operands in order, applies op, and files the result under the same name.
+func (c *codegen) genStoredUpdate(name string, line int, op string, sc scope, operands ...Expr) error {
+	c.emit(law.Instr{Op: law.OpRetrieve, Name: name, Pos: pos(line)})
+	for _, operand := range operands {
+		if err := c.genExpr(operand, sc); err != nil {
+			return err
+		}
+	}
+	c.emit(law.Instr{Op: op, Pos: pos(line)})
+	c.emit(law.Instr{Op: law.OpFile, Name: name, Pos: pos(line)})
+	return nil
+}
+
 func (c *codegen) genStmt(s Stmt, sc scope) error {
 	switch st := s.(type) {
 	case Recording:
@@ -361,8 +366,8 @@ func (c *codegen) genStmt(s Stmt, sc scope) error {
 		return nil
 
 	case Serve:
-		// The notice first, then the respondent: the Court reads what you
-		// are serving before it asks upon whom.
+		// Evaluate the notice before the respondent; SERVE consumes them in
+		// stack order.
 		if err := c.genExpr(st.Value, sc); err != nil {
 			return err
 		}
@@ -373,9 +378,8 @@ func (c *codegen) genStmt(s Stmt, sc scope) error {
 		return nil
 
 	case Judgment:
-		// The grounds first, then the condemned: the Court reads the
-		// sentence before it reads the name, which is the only mercy in
-		// this instruction.
+		// Evaluate the grounds before the target; JUDGMENT consumes them in
+		// stack order.
 		if err := c.genExpr(st.Grounds, sc); err != nil {
 			return err
 		}
@@ -390,56 +394,26 @@ func (c *codegen) genStmt(s Stmt, sc scope) error {
 		if _, isConst := c.constants[st.Name]; isConst {
 			return reject(st.Line, 1, "the term %q was defined HEREINAFTER; nothing may be annexed to a definition", st.Name)
 		}
-		c.emit(law.Instr{Op: law.OpRetrieve, Name: st.Name, Pos: pos(st.Line)})
-		if err := c.genExpr(st.Expr, sc); err != nil {
-			return err
-		}
-		c.emit(law.Instr{Op: law.OpAnnex, Pos: pos(st.Line)})
-		c.emit(law.Instr{Op: law.OpFile, Name: st.Name, Pos: pos(st.Line)})
-		return nil
+		return c.genStoredUpdate(st.Name, st.Line, law.OpAnnex, sc, st.Expr)
 
 	case Inscribe:
 		// Retrieve a copy of the register, inscribe it, file it back.
 		if _, isConst := c.constants[st.Name]; isConst {
 			return reject(st.Line, 1, "the term %q was defined HEREINAFTER; nothing may be inscribed in a definition", st.Name)
 		}
-		c.emit(law.Instr{Op: law.OpRetrieve, Name: st.Name, Pos: pos(st.Line)})
-		if err := c.genExpr(st.Key, sc); err != nil {
-			return err
-		}
-		if err := c.genExpr(st.Value, sc); err != nil {
-			return err
-		}
-		c.emit(law.Instr{Op: law.OpInscribe, Pos: pos(st.Line)})
-		c.emit(law.Instr{Op: law.OpFile, Name: st.Name, Pos: pos(st.Line)})
-		return nil
+		return c.genStoredUpdate(st.Name, st.Line, law.OpInscribe, sc, st.Key, st.Value)
 
 	case Expunge:
 		if _, isConst := c.constants[st.Name]; isConst {
 			return reject(st.Line, 1, "the term %q was defined HEREINAFTER; nothing may be expunged from a definition", st.Name)
 		}
-		c.emit(law.Instr{Op: law.OpRetrieve, Name: st.Name, Pos: pos(st.Line)})
-		if err := c.genExpr(st.Key, sc); err != nil {
-			return err
-		}
-		c.emit(law.Instr{Op: law.OpExpunge, Pos: pos(st.Line)})
-		c.emit(law.Instr{Op: law.OpFile, Name: st.Name, Pos: pos(st.Line)})
-		return nil
+		return c.genStoredUpdate(st.Name, st.Line, law.OpExpunge, sc, st.Key)
 
 	case Substitute:
 		if _, isConst := c.constants[st.Name]; isConst {
 			return reject(st.Line, 1, "the term %q was defined HEREINAFTER; nothing in a definition may be substituted", st.Name)
 		}
-		c.emit(law.Instr{Op: law.OpRetrieve, Name: st.Name, Pos: pos(st.Line)})
-		if err := c.genExpr(st.Index, sc); err != nil {
-			return err
-		}
-		if err := c.genExpr(st.Expr, sc); err != nil {
-			return err
-		}
-		c.emit(law.Instr{Op: law.OpSubstitute, Pos: pos(st.Line)})
-		c.emit(law.Instr{Op: law.OpFile, Name: st.Name, Pos: pos(st.Line)})
-		return nil
+		return c.genStoredUpdate(st.Name, st.Line, law.OpSubstitute, sc, st.Index, st.Expr)
 
 	case Contempt:
 		if err := c.genExpr(st.Expr, sc); err != nil {
@@ -449,8 +423,8 @@ func (c *codegen) genStmt(s Stmt, sc scope) error {
 		return nil
 
 	case ArchiveCommit:
-		// The document first, then its name: the Court reads what you are
-		// committing before it asks what to call it.
+		// Evaluate the document before its name; ARCHIVE consumes them in
+		// stack order.
 		if err := c.genExpr(st.Value, sc); err != nil {
 			return err
 		}

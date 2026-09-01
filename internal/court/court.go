@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"math/rand"
+	"math/rand/v2"
 	"slices"
 	"strconv"
 	"time"
@@ -228,21 +228,13 @@ type Court struct {
 	// production, where apparent acquittal blocks; false in tests).
 	WaitForProceedings bool
 
-	// Expedite is the batch size of the expedited docket (v2.7): the
-	// official executes up to this many instructions per committed
-	// step, one transaction carrying all their effects. Zero or one is
-	// the standing doctrine, one instruction, one transaction. The
-	// commit is the only observable, so the timelines are identical
-	// either way; the price is auditability grain, and it is paid only
-	// on request.
+	// Expedite is the maximum number of instructions in a committed step.
+	// Zero or one commits each instruction separately. Batching preserves
+	// commit-visible behavior but reduces audit granularity.
 	Expedite int
 
-	// Chambers: the session is a replay conducted in chambers (the
-	// audit, v2.8), where the calendar on the wall is consulted but
-	// not obeyed. A continuance granted by a past timeline was
-	// honored once, at full length; the replay deems the remainder
-	// served. Nothing else changes: the waits have no effects, only
-	// duration, and chambers have no patience.
+	// Chambers marks an audit replay. It uses recorded continuances without
+	// waiting out their elapsed duration again.
 	Chambers bool
 
 	// Observer, if set, receives a line whenever something worth a
@@ -457,9 +449,8 @@ func (c *Court) Recover(ctx context.Context) error {
 		c.globals[string(r.Key)] = v
 	}
 
-	// The ledger: every draw and every clock reading, every timeline,
-	// in order. Reenactment does not reset this fold; re-reading it is
-	// the entire point of keeping it.
+	// Fold the recorded draws and clock readings. Reenactment reuses them
+	// instead of resetting the ledger.
 	recs, err = c.Log.ReadAll(ctx, c.Case.Ledger())
 	if err != nil {
 		return err
@@ -1249,11 +1240,8 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpAwait:
-		// Input is served upon the case when the Court is ready. The
-		// consumption advances with the step, atomically: a summons is
-		// answered exactly once, however many officials perish in the
-		// answering. Records already heard out of turn (AWAIT SUMMONS
-		// FROM) are stepped over; they were answered in their day.
+		// Summons consumption advances atomically with the step. Records
+		// already heard out of turn by AWAIT SUMMONS FROM are skipped.
 		rec, err := c.nextSummonsInTurn(ctx)
 		if err != nil {
 			return 0, err
@@ -1465,8 +1453,7 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if key.T != law.KindString {
 			return 0, guilty("entries are expunged by name, which is a string; %s is not a name", describe(key))
 		}
-		// Expunging what is not there succeeds vacuously; the Court is
-		// no stranger to empty gestures. Either way, a fresh copy.
+		// Removing an absent entry succeeds. Always return a fresh copy.
 		entries := make(map[string]law.Value, len(reg.X))
 		for k, v := range reg.X {
 			if k != key.S {
@@ -1984,20 +1971,16 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		if lo.I > hi.I {
 			return 0, guilty("the discretion between %d and %d is empty; the Court cannot select from bounds that exclude each other", lo.I, hi.I)
 		}
-		// Width as uint64 wraps correctly even across the full int64
-		// range (where it comes out 0, meaning 2^64); the signed addition
-		// below wraps by definition, which for once is the right answer.
-		// The draw is entered in the ledger in the same step it is used,
-		// so a reenactment receives the recorded number and the timeline
-		// stays bit-exact. The Court's discretion is arbitrary, not
-		// capricious: it will not give two answers to one question.
+		// A zero width represents the full uint64 range. Other widths use
+		// a bounded draw to avoid modulo bias. The result is recorded in
+		// the ledger so reenactments reuse it.
 		v, err := c.consult("discretion", func() law.Value {
 			w := uint64(hi.I) - uint64(lo.I) + 1
 			var draw uint64
 			if w == 0 {
 				draw = rand.Uint64()
 			} else {
-				draw = rand.Uint64() % w
+				draw = rand.Uint64N(w)
 			}
 			return law.Int(lo.I + int64(draw))
 		})
@@ -2341,10 +2324,8 @@ func arithmetic(op string, l, r law.Value) (law.Value, error) {
 	if op == law.OpCombine && l.T == law.KindString && r.T == law.KindString {
 		return law.Str(l.S + r.S), nil // joinder
 	}
-	// Money arithmetic: integers are promoted to sums in the presence of
-	// a sum, and every result is computed to the penny and truncated
-	// toward zero. The Court does not round in your favor. The Court
-	// does not round in anyone's favor. The Court truncates.
+	// Fixed-point arithmetic promotes integers when combined with sums and
+	// truncates results toward zero.
 	if lm, rm, ok := law.Amounts(l, r); ok {
 		switch op {
 		case law.OpCombine:

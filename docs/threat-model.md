@@ -1,8 +1,8 @@
 # Threat model
 
-Revision reviewed: `8ef682bed98c4b171f4247642434b85022c6e381`
+Revision reviewed: `314c52e3ff5bb7e07c1dde430666820c8b228f41`
 
-Review date: 2026-08-29
+Review date: 2026-08-31
 
 Status: design review only. This is not a security certification.
 
@@ -95,7 +95,9 @@ Residual risks:
 | MCP or LSP message | 16 MiB |
 | MCP source | 4 MiB |
 | Open LSP documents | 128 documents, 4 MiB each |
-| Deposition items | 1,000 per item class |
+| Deposition, program, or enacted source | 4 MiB each |
+| Enactments per deposition | 100 |
+| Summonses, proclamations, or record expectations | 1,000 each |
 | Deposition duration | 600 court days |
 | Docket workers | 1,024 |
 

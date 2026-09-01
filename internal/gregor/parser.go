@@ -434,8 +434,7 @@ func (p *parser) parseStatement() (Stmt, error) {
 	case "LET":
 		p.next()
 		// LET LETTERS PATENT ISSUE FOR name, DISCLOSING expr, FOR A TERM
-		// OF expr DAYS. The disclosure is mandatory and public; that is
-		// the bargain, and the Court keeps its half punctually.
+		// OF expr DAYS. The disclosure is mandatory and public.
 		if p.atWord("LETTERS") {
 			if err := p.expectWords("LETTERS", "PATENT", "ISSUE", "FOR"); err != nil {
 				return nil, err
@@ -1516,14 +1515,18 @@ func (p *parser) parseFactor() (Expr, error) {
 				}
 				return CaseAtBar{Line: t.line}, nil
 			}
-			if p.atWord("ITEM") {
-				// THE ITEM AT i IN s: one item of a schedule, 1-indexed.
-				// Lawyers count from one here too.
+			if item := p.atWord("ITEM"); item || p.atWord("ENTRY") {
+				// THE ITEM AT i IN s and THE ENTRY UNDER k IN r share the same
+				// expression and collection parsing.
 				p.next()
-				if err := p.expectWords("AT"); err != nil {
+				preposition := "UNDER"
+				if item {
+					preposition = "AT"
+				}
+				if err := p.expectWords(preposition); err != nil {
 					return nil, err
 				}
-				idx, err := p.parseExpression()
+				selector, err := p.parseExpression()
 				if err != nil {
 					return nil, err
 				}
@@ -1534,27 +1537,10 @@ func (p *parser) parseFactor() (Expr, error) {
 				if err != nil {
 					return nil, err
 				}
-				return ItemAt{Index: idx, Of: of, Line: t.line}, nil
-			}
-			if p.atWord("ENTRY") {
-				// THE ENTRY UNDER k IN r: one entry of a register, by its
-				// key. An absent entry is a verdict; ask the roster first.
-				p.next()
-				if err := p.expectWords("UNDER"); err != nil {
-					return nil, err
+				if item {
+					return ItemAt{Index: selector, Of: of, Line: t.line}, nil
 				}
-				key, err := p.parseExpression()
-				if err != nil {
-					return nil, err
-				}
-				if err := p.expectWords("IN"); err != nil {
-					return nil, err
-				}
-				of, err := p.parseFactor()
-				if err != nil {
-					return nil, err
-				}
-				return EntryAt{Key: key, Of: of, Line: t.line}, nil
+				return EntryAt{Key: selector, Of: of, Line: t.line}, nil
 			}
 			if p.atWord("ROSTER") {
 				// THE ROSTER OF r: a schedule of the register's keys, in

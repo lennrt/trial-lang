@@ -88,19 +88,14 @@ const (
 	KindPower    = "poa"
 )
 
-// SumScale is how many decimal places a sum certain carries: exactly
-// two. The Court computes to the penny and no further; anything finer
-// is speculation, and speculation is not evidence.
+// SumScale is the number of minor units in one whole sum unit.
 const (
 	SumScale    = 100
 	maxSumWhole = int64(1<<63-1) / SumScale
 )
 
-// Value is anything that may be entered into evidence: a 64-bit
-// integer, a string, a finding (SUSTAINED / OVERRULED), an exhibit
-// (a bundle of named entries, i.e. a struct), a schedule (an ordered
-// list of values, as annexed to any competent contract), or a sum
-// (a fixed-point decimal, stated to the penny).
+// Value is a runtime value: integer, string, finding, exhibit, schedule, sum,
+// register, or power of attorney.
 type Value struct {
 	T  string           `json:"t"`
 	I  int64            `json:"i,omitempty"` // INT: the integer; SUM: the mantissa, in pennies
@@ -119,11 +114,8 @@ func Exhibit(of string, entries map[string]Value) Value {
 }
 func Schedule(items []Value) Value { return Value{T: KindSchedule, L: cloneValueSlice(items)} }
 
-// Register is the third collection: string keys to values, value
-// semantics, no order beyond the alphabetical one the roster imposes.
-// The records topic has been a compacted map since v0.2; this is the
-// same idea, admitted as a value. Entries reuse the X field; a
-// register is an exhibit of nothing in particular.
+// Register is an unordered string-to-value map with value semantics. Entries
+// reuse the X field.
 func Register(entries map[string]Value) Value { return Value{T: KindRegister, X: cloneValues(entries)} }
 
 // Power stores an office name, proceedings offset, concerns, and executing
@@ -172,9 +164,8 @@ func cloneValueSlice(values []Value) []Value {
 // across platforms.
 func Sum(mantissa int64) Value { return Value{T: KindSum, I: mantissa} }
 
-// ParseSum reads a decimal literal of exactly two decimal places
-// ("12.50", "-0.05") into a mantissa. It refuses anything else; sums
-// are stated to the penny or not at all.
+// ParseSum reads a decimal literal with exactly two decimal places (for
+// example, "12.50" or "-0.05") into a mantissa.
 func ParseSum(s string) (int64, bool) {
 	whole, frac, ok := strings.Cut(s, ".")
 	if !ok || len(frac) != 2 || frac[0] < '0' || frac[0] > '9' || frac[1] < '0' || frac[1] > '9' {

@@ -231,8 +231,8 @@ const (
 
 // Cond is a condition: a single comparison clause, or clauses joined by
 // the connectives. AND ALSO binds tighter than OR IN THE ALTERNATIVE;
-// both are left-associative. Every clause is heard; the Court reads
-// everything, whether or not the outcome is already decided.
+// both are left-associative. Every clause is evaluated; there is no
+// short-circuiting.
 type Cond interface{ cond() }
 
 type Clause struct { // expr [FAIL TO] comparator expr

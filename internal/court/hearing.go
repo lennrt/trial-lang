@@ -8,15 +8,8 @@ import (
 	"github.com/lennrt/trial-lang/internal/docket"
 )
 
-// Hearing is an audience with the Court: statements are entered one
-// submission at a time, each as a supplemental filing appended to a
-// live case, and the Court proceeds against the new evidence at once.
-// It is a REPL in which the read is a filing, the eval is a Kafka
-// transaction per instruction, and the print is a topic. The loop is
-// the only part that behaves normally.
-//
-// A hearing ends when you leave, or when a verdict is reached. One of
-// these is voluntary.
+// Hearing accepts statements one submission at a time. Each submission is a
+// supplemental filing appended to a live case and executed immediately.
 type Hearing struct {
 	Log  docket.Log
 	Case docket.Case
@@ -63,9 +56,8 @@ func (h *Hearing) Submit(ctx context.Context, input string) (proclaimed []string
 	if strings.Contains(input, "ARTICLE") {
 		src.WriteString(input)
 	} else {
-		// A bare submission is wrapped in an article of its own. The
-		// numbering restarts with every supplement; the Court does not
-		// require the numbers to be reasonable, only present.
+		// Wrap a bare submission in its own article. Article numbers only
+		// need to be present; they need not continue an earlier supplement.
 		fmt.Fprintf(&src, "ARTICLE %d.\n%s\n", h.session, input)
 	}
 	if _, err := Amend(ctx, h.Log, h.Case, src.String()); err != nil {

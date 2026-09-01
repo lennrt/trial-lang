@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/lennrt/trial-lang/internal/docket"
@@ -102,8 +103,7 @@ func (l *auditLog) Fetch(ctx context.Context, topic string, offset int64, wait b
 	return nil, errAuditRest
 }
 
-// metered reports a fetched proceedings record to the meter: one
-// fetch, one execution attempt, guilt included.
+// metered reports each fetched proceedings record to the execution meter.
 func (l *auditLog) metered(topic string, rec *docket.Record) {
 	if l.meter != nil && rec != nil && topic == l.c.Proceedings() {
 		l.meter(rec.Offset)
@@ -133,9 +133,7 @@ func (l *auditLog) Commit(ctx context.Context, c docket.Case, step docket.Step) 
 	return nil
 }
 
-// copyTopic reads every record of a topic from the real court and
-// enters it, key and value intact, into the copy. The copy's offsets
-// come out dense and identical, which is the entire point.
+// copyTopic copies every record, preserving keys, values, and dense offsets.
 func copyTopic(ctx context.Context, from, to docket.Log, topic string) error {
 	recs, err := from.ReadAll(ctx, topic)
 	if err != nil {
@@ -528,9 +526,10 @@ func rederiveVerdict(ctx context.Context, mem *docket.MemoryLog, c docket.Case, 
 
 // recordsDiffer compares two folded records maps and describes the
 // first disagreement, or returns "" when the books balance.
-func recordsDiffer(real, copy map[string]law.Value) string {
-	for name, rv := range real {
-		cv, ok := copy[name]
+func recordsDiffer(actual, replayed map[string]law.Value) string {
+	for _, name := range slices.Sorted(maps.Keys(actual)) {
+		rv := actual[name]
+		cv, ok := replayed[name]
 		if !ok {
 			return fmt.Sprintf("the record holds %s and the reenactment does not", name)
 		}
@@ -540,8 +539,8 @@ func recordsDiffer(real, copy map[string]law.Value) string {
 			return fmt.Sprintf("%s reads %s in the record and %s in the reenactment", name, rv.Display(), cv.Display())
 		}
 	}
-	for name := range copy {
-		if _, ok := real[name]; !ok {
+	for _, name := range slices.Sorted(maps.Keys(replayed)) {
+		if _, ok := actual[name]; !ok {
 			return fmt.Sprintf("the reenactment produced %s, of which the record knows nothing", name)
 		}
 	}

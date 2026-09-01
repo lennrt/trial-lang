@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -64,6 +65,7 @@ func Parse(src string) (*Deposition, error) {
 		return nil, fmt.Errorf("deposition exceeds the %d-byte limit", maxDepositionBytes)
 	}
 	d := &Deposition{AllowDays: 15}
+	named := false
 	for i, raw := range strings.Split(src, "\n") {
 		line := strings.TrimSpace(raw)
 		n := i + 1
@@ -74,9 +76,20 @@ func Parse(src string) (*Deposition, error) {
 			return nil, fmt.Errorf("line %d: a statement must end with a period; depositions are testimony, and testimony is sentences", n)
 		}
 		line = strings.TrimSuffix(line, ".")
+		if !named && !strings.HasPrefix(line, "DEPOSITION OF:") {
+			return nil, fmt.Errorf("line %d: a deposition must begin by naming the deposed: DEPOSITION OF: <file.trial>", n)
+		}
 		switch {
 		case strings.HasPrefix(line, "DEPOSITION OF:"):
-			d.Program = strings.TrimSpace(strings.TrimPrefix(line, "DEPOSITION OF:"))
+			if named {
+				return nil, fmt.Errorf("line %d: a deposition may name the deposed only once", n)
+			}
+			program := strings.TrimSpace(strings.TrimPrefix(line, "DEPOSITION OF:"))
+			if program == "" {
+				return nil, fmt.Errorf("line %d: DEPOSITION OF must name a file", n)
+			}
+			d.Program = program
+			named = true
 		case strings.HasPrefix(line, "ENACT:"):
 			if len(d.Enacts) >= maxEnactments {
 				return nil, fmt.Errorf("line %d: a deposition may enact at most %d statutes", n, maxEnactments)
@@ -137,8 +150,12 @@ func Parse(src string) (*Deposition, error) {
 			}
 			d.Citing = v
 		case strings.HasPrefix(line, "ALLOW "):
-			var days int64
-			if _, err := fmt.Sscanf(line, "ALLOW %d COURT DAYS", &days); err != nil || days <= 0 || days > maxAllowDays {
+			fields := strings.Fields(line)
+			if len(fields) != 4 || fields[0] != "ALLOW" || fields[2] != "COURT" || fields[3] != "DAYS" {
+				return nil, fmt.Errorf("line %d: ALLOW must be between 1 and %d COURT DAYS", n, maxAllowDays)
+			}
+			days, err := strconv.ParseInt(fields[1], 10, 64)
+			if err != nil || days <= 0 || days > maxAllowDays {
 				return nil, fmt.Errorf("line %d: ALLOW must be between 1 and %d COURT DAYS", n, maxAllowDays)
 			}
 			d.AllowDays = days
@@ -146,7 +163,7 @@ func Parse(src string) (*Deposition, error) {
 			return nil, fmt.Errorf("line %d: %q is not testimony this court recognizes", n, line)
 		}
 	}
-	if d.Program == "" {
+	if !named {
 		return nil, errors.New("a deposition must begin by naming the deposed: DEPOSITION OF: <file.trial>")
 	}
 	return d, nil

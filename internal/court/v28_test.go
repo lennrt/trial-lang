@@ -13,7 +13,15 @@ import (
 	"testing"
 
 	"github.com/lennrt/trial-lang/internal/docket"
+	"github.com/lennrt/trial-lang/internal/law"
 )
+
+func TestRecordsDifferReportsFirstName(t *testing.T) {
+	actual := map[string]law.Value{"z-last": law.Int(1), "a-first": law.Int(2)}
+	if got, want := recordsDiffer(actual, nil), "the record holds a-first and the reenactment does not"; got != want {
+		t.Fatalf("recordsDiffer() = %q, want %q", got, want)
+	}
+}
 
 // TestPatentReenactsExactly: the audit's first find. A reenacted
 // issuance must not rediscover its own claim on the registry and

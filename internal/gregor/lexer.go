@@ -108,10 +108,8 @@ func lex(src string) ([]token, error) {
 			}
 			word := src[i:j]
 			advance(j - i)
-			// OFF THE RECORD: the comment. Detected here, at the only
-			// place it can begin, and struck to end of line, though
-			// nothing is ever truly off the record; the filing topic
-			// retains the original.
+			// OFF THE RECORD starts a line comment. The original source is
+			// still retained in the filing topic.
 			if word == "OFF" && commentFollows(src[i:]) {
 				for i < n && src[i] != '\n' {
 					advance(1)

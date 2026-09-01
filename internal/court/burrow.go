@@ -33,8 +33,7 @@ func (b *Burrow) Consistent() bool {
 	return true
 }
 
-// SurveyBurrow audits every matter on the docket and surveys the
-// walls. Nothing is written to the court; the stillness is the point.
+// SurveyBurrow audits every case on the docket without writing to the log.
 func SurveyBurrow(ctx context.Context, log docket.Log) (*Burrow, error) {
 	cases, err := log.ListCases(ctx)
 	if err != nil {
@@ -42,9 +41,7 @@ func SurveyBurrow(ctx context.Context, log docket.Log) (*Burrow, error) {
 	}
 	b := &Burrow{Drafts: map[string][]int64{}}
 
-	// The commenced set: every case some ledger records opening. A
-	// commencement rides the parent's ledger (v1.1), so the set is
-	// exact, which is more than can be said for most facts here.
+	// Commencements are recorded in the parent case's ledger.
 	commenced := map[string]bool{}
 	for _, c := range cases {
 		recs, err := log.ReadAll(ctx, c.Ledger())

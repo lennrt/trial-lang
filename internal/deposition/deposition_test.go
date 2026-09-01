@@ -133,9 +133,15 @@ ARTICLE 1.
 
 func TestDepositionParseErrors(t *testing.T) {
 	for _, bad := range []string{
-		"SERVE: 3.",                              // no DEPOSITION OF
-		"DEPOSITION OF: x.trial.\nEXPECT MERCY.", // unknown testimony
-		"DEPOSITION OF: x.trial.\nSERVE: 3",      // no period
+		"SERVE: 3.",                          // no DEPOSITION OF
+		"SERVE: 3.\nDEPOSITION OF: x.trial.", // DEPOSITION OF is not first
+		"DEPOSITION OF: .",                   // empty program
+		"DEPOSITION OF: x.trial.\nDEPOSITION OF: y.trial.",   // duplicate DEPOSITION OF
+		"DEPOSITION OF: x.trial.\nEXPECT MERCY.",             // unknown testimony
+		"DEPOSITION OF: x.trial.\nSERVE: 3",                  // no period
+		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAYS EXTRA.", // trailing ALLOW text
+		"DEPOSITION OF: x.trial.\nALLOW one COURT DAYS.",     // invalid ALLOW value
+		"DEPOSITION OF: x.trial.\nALLOW 1 COURT DAY.",        // invalid ALLOW unit
 	} {
 		if _, err := Parse(bad); err == nil {
 			t.Fatalf("expected %q to be rejected", bad)
