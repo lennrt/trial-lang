@@ -10,9 +10,9 @@ Set Width 1120
 Set Height 720
 Set Padding 20
 Set Framerate 30
-Set PlaybackSpeed 1
+Set PlaybackSpeed 2
 Set TypingSpeed 20ms
 
-Type "TRIAL_RECOVERY_DELAY=2 ./docs/the-recovery-demo.sh"
+Type "TRIAL_RECOVERY_DELAY=1 ./docs/the-recovery-demo.sh"
 Enter
-Sleep 58s
+Sleep 105s

@@ -281,7 +281,32 @@ printf '\nVerified: both committed lines appear exactly once.\n'
 pause
 
 prompt "trial audit $case_id"
-"$trial_bin" audit "$case_id"
+audit_log="$temp_dir/audit.log"
+"$trial_bin" audit "$case_id" >"$audit_log" 2>&1 &
+audit_runner=$!
+active_pid="$audit_runner"
+audit_deadline=$((SECONDS + 70))
+spinner=('|' '/' '-' '\\')
+spinner_index=0
+while kill -0 "$audit_runner" 2>/dev/null; do
+  if ((SECONDS >= audit_deadline)); then
+    fail "the audit did not finish within 70 seconds"
+  fi
+  printf '\r  Replaying committed topics %s' "${spinner[spinner_index % ${#spinner[@]}]}"
+  spinner_index=$((spinner_index + 1))
+  sleep 1
+done
+printf '\r%*s\r' 36 ''
+if wait "$audit_runner"; then
+  audit_status=0
+else
+  audit_status=$?
+fi
+active_pid=""
+cat "$audit_log"
+if [[ "$audit_status" -ne 0 ]]; then
+  fail "the audit exited with status $audit_status"
+fi
 pause
 
 printf '\nDemo complete. Cleanup now attempts to remove the case and stop any broker started here.\n'
