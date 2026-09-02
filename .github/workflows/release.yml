@@ -24,7 +24,7 @@ jobs:
   release:
     name: Build and publish
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     environment: release
     permissions:
       contents: write
@@ -55,6 +55,8 @@ jobs:
           }
       - name: Verify release revision
         run: make verify
+      - name: Scan release revision
+        run: make vuln
       - name: Collect dependency licenses
         run: >-
           go run github.com/google/go-licenses/v2@v2.0.1 save ./cmd/trial

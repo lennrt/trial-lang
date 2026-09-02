@@ -2,7 +2,8 @@
 
 ## Supported versions
 
-Security fixes target the current `main` branch.
+Security fixes target the latest v0.1.x release and the current `main` branch.
+Development snapshots from before v0.1.0 are not supported.
 
 ## Report a vulnerability
 
@@ -24,5 +25,4 @@ gitleaks git --redact --no-banner
 ```
 
 The Security workflow also runs CodeQL, dependency review, SBOM generation, and
-OpenSSF Scorecard. Some GitHub checks require repository features that may not
-be enabled for a private repository.
+OpenSSF Scorecard.

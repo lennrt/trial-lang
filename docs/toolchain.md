@@ -7,7 +7,7 @@
 | Go | 1.27.0 |
 | golangci-lint | v2.13.2 |
 | goimports module | `golang.org/x/tools@v0.49.0` |
-| govulncheck | v1.1.4 |
+| govulncheck | v1.7.0 |
 | actionlint | v1.7.12 |
 | go-licenses | v2.0.1 |
 | Gitleaks | v8.30.1 |
