@@ -1,11 +1,8 @@
 package court
 
-// v1.4 "The Judgment": the motion to reconsider, the only mercy in the
-// building. A verdict that would issue while a motion is on file is
-// intercepted, exactly once per case: the dossier is impounded as the
-// filing fee, the appeals are dismissed with it, the grounds are filed
-// where the movant asked, and the proceedings resume at the named
-// article. The second offense is final, as everything here eventually is.
+// A pending motion intercepts one verdict per case. It clears the dossier and
+// call stack, records the grounds, and resumes at the named article. A second
+// verdict is final.
 
 import (
 	"context"

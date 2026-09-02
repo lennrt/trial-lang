@@ -1,8 +1,7 @@
 package court
 
-// v0.8 "Titorelli, the Painter": the machine explains itself and pays
-// its honesty debts. The ledger makes reenactment bit-exact; sums are
-// computed to the penny; the archive files documents in the log.
+// The ledger makes reenactment bit-exact, sums are computed to the penny, and
+// the archive files documents in the log.
 
 import (
 	"context"

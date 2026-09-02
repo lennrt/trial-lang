@@ -1,7 +1,6 @@
 package court
 
-// v2.9 "The Burrow": the whole-courthouse audit, and the survey of
-// the walls. The creature listens; these tests are what it hears.
+// The Burrow surveys court-wide state for the docket audit.
 
 import (
 	"context"

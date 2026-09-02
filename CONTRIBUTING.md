@@ -38,6 +38,10 @@ TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court \
 docker compose down
 ```
 
+CI also builds the CLI and runs
+[`scripts/kafka-cli-smoke.sh`](scripts/kafka-cli-smoke.sh) through `file`,
+`proceed`, `status`, `audit`, and `burn` against Kafka.
+
 The test must fail if Kafka is required but unavailable. Do not replace a
 required test with a skip.
 

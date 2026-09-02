@@ -135,7 +135,7 @@ func (n *boundedNarration) add(line string) {
 // protocol responses to Out.
 func (s *Server) Serve(ctx context.Context) error {
 	if s.Version == "" {
-		s.Version = "1.0.0"
+		s.Version = "(devel)"
 	}
 	enc := json.NewEncoder(s.Out)
 	sc := bufio.NewScanner(s.In)

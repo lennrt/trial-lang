@@ -1,7 +1,7 @@
 package court
 
-// v0.9 "The Statutes": libraries are filed, not downloaded; and
-// letters patent, in which "first to file" is an offset comparison.
+// Statutes are filed libraries. Letters patent use log offsets to decide who
+// filed first.
 
 import (
 	"context"

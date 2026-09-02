@@ -1,8 +1,8 @@
 package court
 
-// v0.7 "Block the Tradesman": cross-case service of notice, THE CASE AT
-// BAR, continuances (durable timers), the Court's discretion (recorded
-// randomness), and THE DATE OF THESE PRESENTS.
+// Cross-case service tests cover THE CASE AT BAR, continuances (durable
+// timers), the Court's discretion (recorded randomness), and THE DATE OF THESE
+// PRESENTS.
 
 import (
 	"context"

@@ -1,10 +1,7 @@
 package court
 
-// v2.7 "A Country Doctor": the expedited docket. Up to n instructions
-// per committed step, one transaction carrying all their effects. The
-// commit is the only observable, so every program must say exactly the
-// same things expedited as it says at the standing doctrine; these
-// tests hold it to that.
+// The expedited docket runs up to n instructions in one transaction. These
+// tests verify that batching preserves observable behavior.
 
 import (
 	"context"

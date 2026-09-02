@@ -1,7 +1,6 @@
 package court
 
-// v2.4 "Josephine the Singer, or the Mouse Folk": the selective
-// receive. AWAIT SUMMONS FROM c consumes the first summons bearing the
+// AWAIT SUMMONS FROM c consumes the first summons bearing the
 // named case's seal, out of turn; every record passed over stays in
 // the topic, unconsumed, and a plain AWAIT SUMMONS receives them in
 // their original order. The attention carries the offsets heard out of
@@ -313,7 +312,7 @@ ARTICLE 1.
 	)
 }
 
-// TestTimedSelectiveInSupplementShiftsItsTarget: the v1.6 bug class,
+// TestTimedSelectiveInSupplementShiftsItsTarget covers the control-flow bug class:
 // pinned for the new opcode. A timed selective await filed in a Form
 // K-2 supplement compiles at an offset base; its expiry arm must land
 // in the supplement, not at the same-numbered instruction of the

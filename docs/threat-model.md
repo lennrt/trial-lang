@@ -135,6 +135,9 @@ docker compose up -d
 TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court -run '^(TestE2E|TestDifferential)' -count=1 -v
 ```
 
+The Kafka CI job also runs the compiled CLI through
+[`scripts/kafka-cli-smoke.sh`](../scripts/kafka-cli-smoke.sh).
+
 Stop the broker after the tests:
 
 ```console

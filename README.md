@@ -29,6 +29,16 @@ need Kafka for the quickstart.
 
 Prerequisite: Go 1.27.0.
 
+Install the v0.1.0 release:
+
+```console
+go install github.com/lennrt/trial-lang/cmd/trial@v0.1.0
+trial version
+```
+
+[Prebuilt archives and checksums](https://github.com/lennrt/trial-lang/releases/tag/v0.1.0)
+are available for Linux, macOS, and Windows on AMD64 and ARM64.
+
 Run one brokerless example:
 
 ```console
@@ -41,7 +51,7 @@ Run the complete brokerless example suite:
 go run ./cmd/trial test examples
 ```
 
-Build the CLI:
+Or build the CLI from this checkout:
 
 ```console
 go build -o trial ./cmd/trial
@@ -144,6 +154,18 @@ Use these files as the normative language references:
 The examples under [examples](examples) show the supported syntax. Start with
 `hello`, `countdown`, and `the-procession`.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    S[".trial source"] --> P["Parser and compiler"]
+    P --> B["Bytecode"]
+    B --> C["Court"]
+    C --> T["Kafka transaction<br/>instruction effects + next program counter"]
+    T --> K[("Case topics")]
+    K -. "restart: refold committed records" .-> C
+```
+
 ## Runtime model
 
 A Kafka-backed case stores its source, bytecode, variables, stacks, input,
@@ -201,6 +223,10 @@ TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court \
   -run '^(TestE2E|TestDifferential)' -count=1 -v
 docker compose down
 ```
+
+CI also builds the CLI and runs
+[`scripts/kafka-cli-smoke.sh`](scripts/kafka-cli-smoke.sh) through `file`,
+`proceed`, `status`, `audit`, and `burn` against Kafka.
 
 The CI, security, and release workflows do not run on a schedule. See
 [testing](docs/testing.md), [toolchain](docs/toolchain.md), and

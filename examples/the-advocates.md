@@ -44,8 +44,8 @@ Kafka stores the case state:
 - Variables are in a compacted topic, the dossier holds
   the value trace, and the summons topic retains input. For replay,
   `trial_reenact` resets the case, `trial_proceed` runs it, and
-  `trial_observe` reads output from the offset saved before the reset. Since
-  v0.8, the ledger also records random and clock values.
+  `trial_observe` reads output from the offset saved before the reset. The
+  ledger also records random and clock values.
 - `SERVE NOTICE` writes to the recipient's summons topic in the sender's
   transaction. The record key identifies the sender.
 - `ADJOURN FOR 2 DAYS.` records a deadline that the

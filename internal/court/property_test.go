@@ -1,11 +1,8 @@
 package court
 
-// The differential property of v1.5: any accepted filing must execute
-// identically whatever happens to the officials serving it. The curated
-// crash tests pin known-delicate constructs; this file extends the same
-// two guarantees (crash-injection equality and reenactment equality) to
-// generated programs, so the coverage is no longer limited to the
-// programs someone thought to write.
+// Any accepted filing must execute identically across injected crashes. The
+// curated crash tests cover known edge cases; this file extends crash and
+// reenactment equality to generated programs.
 
 import (
 	"context"

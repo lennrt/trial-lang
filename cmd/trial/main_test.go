@@ -61,6 +61,17 @@ func TestParseFirstArgDoesNotMistakeFlagValueForTerminator(t *testing.T) {
 	}
 }
 
+func TestAdvocateServerUsesCommandVersion(t *testing.T) {
+	previous := version
+	version = "v0.1.0"
+	t.Cleanup(func() { version = previous })
+
+	srv := newAdvocateServer(docket.NewMemoryLog(), strings.NewReader(""), io.Discard)
+	if srv.Version != "v0.1.0" {
+		t.Fatalf("MCP server version = %q, want v0.1.0", srv.Version)
+	}
+}
+
 func TestAppendSummonsIsAtomic(t *testing.T) {
 	log := docket.NewMemoryLog()
 	c := docket.Case{ID: "case-000000000000000000000001"}

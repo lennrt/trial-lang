@@ -1,10 +1,8 @@
 package court
 
-// v1.7 "Investigations of a Dog": discovery. THE RECORD name IN THE
-// MATTER OF c reads another case's record through the ledger, the
-// same trick as THE STANDING OF, so replay stays bit-exact while the
-// respondent moves on. Absence, of the case or of the record, is a
-// verdict; standing exists so you may ask safely first.
+// THE RECORD name IN THE MATTER OF c reads another case's record through the
+// ledger, as THE STANDING OF does, so replay stays bit-exact while the
+// respondent moves on. A missing case or record produces a verdict.
 
 import (
 	"context"

@@ -1,9 +1,7 @@
 package court
 
-// v2.5 "Eleven Sons": registers, the third collection. String keys to
-// values, value semantics, deep equality, and a roster instead of an
-// iterator: the keys, in alphabetical order, because the Court files
-// everything alphabetically eventually.
+// Registers map string keys to values with value semantics and deep equality.
+// A roster returns the keys in alphabetical order.
 
 import (
 	"strings"

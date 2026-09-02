@@ -66,10 +66,9 @@ Runtime behavior:
   replacement resumes at the committed instruction.
 - **Replay**: all inputs are in the log, so `trial reenact` resets both
   groups to zero, appends REENACTMENT markers to the state topics
-  (deleting nothing), and history repeats. Since v0.8 the ledger topic
-  records every draw of the discretion and every reading of the clock,
-  and replay re-serves the recorded values the way it re-serves the
-  summonses (spec.md §14.4).
+  (deleting nothing), and history repeats. The ledger topic records every draw
+  of the discretion and every reading of the clock. Replay re-serves the
+  recorded values the way it re-serves summonses (spec.md §14.4).
 - **State is inspectable** with stock Kafka tooling, including
   `kafka-console-consumer`.
 

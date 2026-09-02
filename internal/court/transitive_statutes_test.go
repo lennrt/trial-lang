@@ -1,7 +1,5 @@
 package court
 
-// v1.9 "The Great Wall of China": the standard statutes, and the
-// language feature the canon demanded: transitive incorporation.
 // Statutes may incorporate statutes; a case that incorporates the top
 // of the pile receives the whole pile, each statute spliced exactly
 // once, however many roads lead to it.

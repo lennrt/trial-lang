@@ -1,9 +1,8 @@
 package court
 
-// v3.2 "The Judgment": the sentence from the bed. A case that
-// commenced a child may enter judgment against it; the verdict lands
-// in the child's file within the parent's step, and the child learns
-// of it at its next step, as is customary.
+// A parent case may enter judgment against a child it commenced. The verdict is
+// written to the child's file within the parent's step and takes effect when
+// the child next runs.
 
 import (
 	"context"

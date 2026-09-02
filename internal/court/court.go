@@ -86,8 +86,8 @@ type ledgerEvent struct {
 	Value law.Value `json:"value"`
 }
 
-// patentEvent is a claim, license, or assignment. An empty Kind is a claim for
-// compatibility with records written before v2.1.
+// patentEvent is a claim, license, or assignment. An empty Kind is the legacy
+// encoding of a claim.
 type patentEvent struct {
 	Kind       string     `json:"kind,omitempty"` // "": a claim; "license"; "assignment"
 	Name       string     `json:"name"`

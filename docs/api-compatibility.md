@@ -1,6 +1,8 @@
 # Go API compatibility
 
-Snapshot date: 2026-08-29
+Release baseline: v0.1.0
+
+Snapshot date: 2026-09-01
 
 Module: `github.com/lennrt/trial-lang`
 

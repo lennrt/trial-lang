@@ -35,12 +35,12 @@ These behaviors affect storage, security, configuration, and wire boundaries.
 The change does not alter triallang bytecode tags or stored JSON tags.
 
 It does change the meaning of stored program-counter and bytecode-address
-numbers from physical Kafka offsets to visible instruction positions. Released
-cases written with nontransactional proceedings remain compatible because
-their physical and logical numbers are equal. Cases amended by an interim
-Unreleased build that combined transactional paperwork with physical-offset
-program counters must be refiled; the stored numbers do not contain enough
-information for a reliable automatic migration.
+numbers from physical Kafka offsets to visible instruction positions.
+Development snapshots written with nontransactional proceedings remain
+compatible because their physical and logical numbers are equal. Snapshots
+amended during the transition to transactional paperwork must be refiled; their
+stored physical-offset program counters do not contain enough information for
+a reliable automatic migration.
 
 The internal `docket.Log` interface gains `AppendBatch` and
 `FetchProceeding`. The latter resolves a logical instruction number separately

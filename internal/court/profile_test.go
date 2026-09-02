@@ -1,7 +1,6 @@
 package court
 
-// v3.1 "The Top": the profiler. The philosopher chased the spinning
-// tops; the log was never spinning to begin with.
+// The profiler counts executed instruction addresses without changing the log.
 
 import (
 	"context"

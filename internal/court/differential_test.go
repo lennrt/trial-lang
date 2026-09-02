@@ -1,9 +1,8 @@
 package court
 
-// The differential harness of v1.5: any accepted filing must execute
-// identically on the in-memory Log and on Apache Kafka. The in-memory
-// log is the reference semantics; Kafka is the production physics; the
-// language is only honest if no program can tell them apart.
+// Any accepted filing must execute identically on the in-memory Log and Apache
+// Kafka. The in-memory log provides the reference semantics; the Kafka adapter
+// must produce the same observable result.
 //
 // Gated on TRIAL_E2E_BROKER like the rest of the live suite:
 //
@@ -68,10 +67,9 @@ ARTICLE 1.
     PROCLAIM "after".
     ADJOURN INDEFINITELY.
 `},
-		// The selective receive (v2.4): a self-served notice bears the
-		// case's own seal, so the case can pick its own voice out from
-		// under the operator's squeaks; the squeaks keep their order.
-		// This leans on the heard set surviving the attention note.
+		// A selective receive identifies a self-served notice by the case's
+		// own seal. Other notices keep their order, and the heard set survives
+		// in the attention note.
 		{src: `FORM K-1.
 IN THE MATTER OF: josephine-differential.
 ARTICLE 1.

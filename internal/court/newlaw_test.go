@@ -1,9 +1,8 @@
 package court
 
-// Tests for the statutes enacted in v0.6 "In the Penal Colony":
-// defined terms, connectives, lengths, excerpts, transcripts, sums
-// certain, contempt, and the striking of records. Each construct is
-// tested for what it does and, separately, for what it is guilty of.
+// These tests cover defined terms, connectives, lengths, excerpts, transcripts,
+// sums certain, contempt, and striking records. Each construct has positive and
+// rejection coverage.
 
 import (
 	"context"

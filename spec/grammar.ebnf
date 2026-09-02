@@ -36,9 +36,9 @@ statute-name     = identifier ;
 (* K-1 and S-1; not K-2. The statute's latest enactment is fetched at
    filing time and its offices, exhibit shapes, and defined terms are
    spliced into the case, pinned by construction: the case keeps what
-   it incorporated no matter what the legislature does later. Since
-   v1.9 a statute may incorporate statutes, and incorporation is
-   transitive: what a statute stands on is spliced before it, each
+   it incorporated no matter what the legislature does later. A statute
+   may incorporate statutes, and incorporation is transitive: what a
+   statute stands on is spliced before it, each
    statute exactly once however many roads lead to it, every pin on
    file. *)
 

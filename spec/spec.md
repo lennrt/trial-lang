@@ -1,6 +1,6 @@
 # The triallang Language Specification
 
-*Version 0.7, "Block the Tradesman".*
+*Applies to triallang v0.1.0.*
 
 This is the normative reference manual for triallang. The grammar is
 [`grammar.ebnf`](grammar.ebnf); the instruction set of record is
@@ -45,8 +45,8 @@ running it is **the proceedings**; its output is **proclamations**; a
 runtime error is **a verdict**, and there is only one verdict.
 
 The legal vocabulary is intentional. This document specifies the language and
-its Kafka transaction model. Since v0.7 two constructs consult the outside
-world (the clock and the Court's discretion, §10.8); §14.4 describes how those
+its Kafka transaction model. Two constructs consult the outside world: the
+clock and the Court's discretion (§10.8). Section 14.4 describes how those
 values affect replay.
 
 ## 2. Notation
@@ -165,7 +165,7 @@ finding-literal = "SUSTAINED" | "OVERRULED" ;
 - **Integers** are 64-bit two's complement. Overflow wraps silently, as
   is customary in matters of accounting. An integer literal that does
   not fit is a rejected filing.
-- **Sums** (v0.8) are fixed-point decimals with **exactly two** figures
+- **Sums** are fixed-point decimals with **exactly two** figures
   after the point: `12.50`, `-0.05`. One figure or three is a rejected
   filing; sums are stated to the penny, by standing order. Their penny
   mantissa is a signed 64-bit integer, so a literal outside
@@ -362,10 +362,9 @@ sorts one.
 
 ### 8.2 Registers (maps)
 
-A register is the third collection: names to values. The records
-topic has been a compacted map since v0.2; a register is the same
-idea, admitted as a value. Like schedules, registers require no
-establishment.
+A register is the third collection: names to values. The records topic is a
+compacted map; a register admits the same idea as a value. Like schedules,
+registers require no establishment.
 
 ```
 register-literal = "A REGISTER COMPRISING" , expression , "UNDER" , expression ,
@@ -494,7 +493,7 @@ PROCLAIM "guilt" PLUS "y".
 could not be located. The remainder of zero is likewise a verdict;
 nothing remains, zero notwithstanding.
 
-**Money arithmetic** (v0.8). When either operand is a sum, the other,
+**Money arithmetic.** When either operand is a sum, the other,
 if an integer, is promoted to money, and the operation is performed on
 penny mantissas with the result a sum:
 
@@ -622,7 +621,7 @@ transaction (§14.3). The language has no unsequenced effects.
 
 ### 10.8 The case at bar, the discretion, and the date
 
-Three forms new in v0.7:
+The following three forms expose the case identity, randomness, and clock:
 
 ```
 case-at-bar      = "THE CASE AT BAR" ;
@@ -645,9 +644,9 @@ is a verdict (the discretion between them is empty). `BETWEEN 7 AND 7`
 is lawful and returns 7, discretion having narrowed to its logical
 conclusion. The selected value is pushed to the dossier like any other
 value, so it survives suspension, migration, and the death of the
-official. Since v0.8 every draw is also entered in the case's
-**ledger** in the same atomic step, and a reenactment re-serves the
-recorded draw instead of taking a fresh one; see §14.4. Inside an
+official. Every draw is also entered in the case's **ledger** in the
+same atomic step, and a reenactment re-serves the recorded draw instead of
+taking a fresh one; see §14.4. Inside an
 `AND`-separated argument list, the `BETWEEN` consumes the first `AND`
 greedily; parenthesize, as one would.
 
@@ -671,10 +670,10 @@ archive-commit = "COMMIT" , expression , "TO THE ARCHIVE AS" ,
 document-from  = "THE DOCUMENT" , factor , "FROM THE ARCHIVE" ;
 ```
 
-The archive (v0.8) is the case's filesystem: an append-only topic of immutable documents
-(`case.<id>.archive`; a document's offset is its handle) and a
-compacted catalog topic (`case.<id>.catalog`; key = document name,
-value = the offset of the current version).
+The archive is the case's filesystem: an append-only topic of immutable
+documents (`case.<id>.archive`; a document's offset is its handle) and a
+compacted catalog topic (`case.<id>.catalog`; key = document name, value = the
+offset of the current version).
 
 `COMMIT v TO THE ARCHIVE AS "name".` enters any value in the archive
 and repoints the catalog. The name must be a string. Committing under
@@ -707,10 +706,10 @@ patent-grant = "LET LETTERS PATENT ISSUE FOR" , identifier , "," ,
 practice     = "THE PRACTICE OF" , identifier ;
 ```
 
-The patent system (v0.9) models a **public disclosure that no one else may
-use**. The registry is a single court-wide topic (`the-patent-office`, one
-partition, retained forever). Priority is offset order, so **"first to file"
-is an integer comparison**.
+The patent system models a **public disclosure that no one else may use**. The
+registry is a single court-wide topic (`the-patent-office`, one partition,
+retained forever). Priority is offset order, so **"first to file" is an integer
+comparison**.
 
 `LET LETTERS PATENT ISSUE FOR name, DISCLOSING v, FOR A TERM OF n
 DAYS.` files a claim: the disclosure (any value), the holder (the
@@ -736,8 +735,8 @@ was first, and the loser discovers it at practice time.
   disclosure is returned to anyone who asks.
 
 Expiry checks read the clock through the ledger (§14.4), so a
-timeline, once recorded, holds still. Since v2.8, the registry
-instructions' **outcomes ride the ledger too** (kinds `issuance`,
+timeline, once recorded, holds still. The registry instructions'
+**outcomes ride the ledger too** (kinds `issuance`,
 `practice`, `license`, `assignment`). Without these entries, a reenacted
 issuance could rescan the live registry and find its own first-timeline claim.
 A reenactment instead uses the first outcome, scans nothing, and appends
@@ -756,7 +755,7 @@ assignment     = "ASSIGN THE LETTERS FOR" , identifier , "TO" ,
 
 Letters patent form an ownership system: court-wide named values with
 exclusive-use semantics, priority by log order, terms as lifetimes, and
-mandatory disclosure as the public type signature. Since v2.1 the mapping is:
+mandatory disclosure as the public type signature. The mapping is:
 
 | The registry | The ownership system it is |
 |---|---|
@@ -1481,7 +1480,7 @@ current frame only; the caller's records are untouched. Concerns are
 passed by value, exhibits included (§8).
 
 Offices are recursive; the call stack is the appeals topic, and its practical
-depth is bounded by broker storage. Since v2.6 offices are also higher-order by
+depth is bounded by broker storage. Offices are also higher-order by
 instrument; see §12.5. Closures remain unavailable: an office can access its
 concerns and the case records.
 
@@ -1569,7 +1568,7 @@ shapes, and further defined terms, in whatever order they arrive.
   performed at the opening of the case), and its referrals reach only its own
   articles; its defined terms and exhibit shapes are likewise its own (§5).
   The `trial hearing` REPL is this mechanism in a loop.
-- **Form S-1** (v0.9) is a *statute*: a library. A statute contains
+- **Form S-1** is a *statute*: a library. A statute contains
   offices, exhibit shapes, and defined terms, and **no articles**; a
   statute legislates, it does not litigate. Statutes are published
   with `trial enact`, which appends the source to the court-wide topic
@@ -1578,10 +1577,10 @@ shapes, and further defined terms, in whatever order they arrive.
 
 ### 13.2a Incorporation by reference
 
-`INCORPORATE BY REFERENCE <statute>.` clauses stand at the head of a
-Form K-1 filing, or of a Form S-1 statute (since v1.9; a supplemental
-K-2 still may not incorporate). At filing time the clerk fetches the
-statute's **latest enactment**, parses it, and splices its offices,
+`INCORPORATE BY REFERENCE <statute>.` clauses stand at the head of a Form K-1
+filing or a Form S-1 statute; a supplemental K-2 may not incorporate. At filing
+time the clerk fetches the statute's **latest enactment**, parses it, and
+splices its offices,
 exhibit shapes, and defined terms into the case, exactly as though
 the accused had typed them, which, legally, they did. Consequences,
 all by construction rather than by tooling:
@@ -1594,8 +1593,7 @@ all by construction rather than by tooling:
 - **Collisions.** An incorporated office, exhibit, or term that
   collides with one of yours (or with another statute's) is a rejected
   filing, under the ordinary duplicate rules (§16.1).
-- **Transitivity** (v1.9; formerly refused, until the canon demanded
-  it). A statute may incorporate statutes; what it stands on is
+- **Transitivity.** A statute may incorporate statutes; what it stands on is
   spliced before it, depth-first. Each statute is spliced **at most
   once** per filing, however many roads lead to it, so a diamond is
   not a duplicate; every splice, transitive ones included, leaves its
@@ -1653,8 +1651,9 @@ The Court fetches the instruction at the committed program counter,
 executes it against the cached state, and enters the instruction's
 complete effect (every record it appends, plus the advance of the
 Court's attention) as one Kafka transaction. A jump assigns a different logical
-program counter. The transaction-per-instruction design limits a case to a few
-hundred instructions per second in the recorded benchmark (§17.7).
+program counter. The transaction-per-instruction design makes single-step
+throughput depend on broker transaction latency; §17.7 describes the benchmark
+harness and the expedited alternative.
 
 ### 14.3 Exactly-once execution
 
@@ -1682,10 +1681,10 @@ Consequences, each of which is a tested invariant:
 
 #### 14.3a The expedited docket
 
-`trial proceed --expedited n` (v2.7) relaxes the grain, not the
-guarantee: the official executes up to *n* instructions per committed step,
-with one transaction carrying their effects and one attention note at the end.
-The parity suite checks that several batch sizes produce the same timelines:
+`trial proceed --expedited n` relaxes the grain, not the guarantee: the
+official executes up to *n* instructions per committed step, with one
+transaction carrying their effects and one attention note at the end. The
+parity suite checks that several batch sizes produce the same timelines:
 
 - **Uncommitted work that perishes with its official re-executes
   deterministically.** A crash mid-batch loses nothing durable and
@@ -1717,10 +1716,9 @@ topic is then served again.
 
 The nondeterministic doors, **`THE DISCRETION OF THE COURT`** (a
 random source), **`THE DATE OF THESE PRESENTS`** (the wall clock,
-also consulted by letters patent, §10.10), the case number assigned
-by **`COMMENCE PROCEEDINGS`** (§11.12, v1.1), and the answer given by
-**`THE STANDING OF`** (§10.11, v1.3), are recorded by the **ledger** (v0.8).
-The mechanism:
+also consulted by letters patent, §10.10), the case number assigned by
+**`COMMENCE PROCEEDINGS`** (§11.12), and the answer given by
+**`THE STANDING OF`** (§10.11), are recorded by the **ledger**. The mechanism:
 
 - Every draw and every clock reading is entered in the case's ledger
   topic (`case.<id>.ledger`) **in the same atomic step that uses it**,
@@ -1739,9 +1737,9 @@ The mechanism:
   verdict: the timeline has been tampered with, and a reenactment
   that cannot be faithful will not be performed at all.
 
-Since v2.8 the registry instructions (§10.10, §10.10a) route their
-outcomes through the ledger as well (kinds `issuance`, `practice`,
-`license`, `assignment`), beside the clock reading they already made:
+The registry instructions (§10.10, §10.10a) route their outcomes through the
+ledger as well (kinds `issuance`, `practice`, `license`, `assignment`), beside
+the clock reading they already made:
 the registry keeps moving after the fact, and a reenactment must use the
 original outcome rather than the current registry state (§14.5).
 
@@ -1809,7 +1807,7 @@ and a respondent whose case file was burned after service. Burning that case
 removes state needed to audit every case that served it, so the audit reports
 an inconsistency.
 
-**Docket audit** (v2.9, "The Burrow"). `trial audit --docket` audits every
+**Docket audit.** `trial audit --docket` audits every
 case on file and reports additional docket-wide state:
 
 - **Drafts in the archive**: archive records at offsets no catalog
@@ -2052,30 +2050,32 @@ broker limit deliberately.
 
 ### 17.7 Throughput, latency, and what this machine is for
 
-Measured (v1.5, `BenchmarkStepsMemory`, one case, in-memory Log,
-Ryzen 7 9800X3D): the interpreter itself executes about **640,000
-steps per second** (≈1.6 µs per committed instruction). Against Apache Kafka,
-one instruction adds a broker round trip and transaction commit. Measured on a
-live
-single-node KRaft broker on the same host (`BenchmarkStepsKafka`, CI,
-2-vCPU runner): about **170 steps per second** (≈5.8 ms per
-committed instruction), about 3,700 times the measured interpretation cost.
-A broker across a network adds its round trips; expect tens to low hundreds of
-instructions per second per case under similar conditions. The runtime is not
-suited to hot loops. Cases use independent topic families, and officials are
-stateless and can scale across cases (one per case, enforced by fencing).
+The benchmark harness reports instructions per second and time per instruction
+for the in-memory and Kafka-backed runtimes. Run both benchmarks on the same
+revision and host before comparing them:
+
+```console
+go test ./internal/court -run '^$' \
+  -bench '^BenchmarkStepsMemory(Expedited)?$' -benchmem -count=5
+TRIAL_E2E_BROKER=localhost:9092 go test ./internal/court -run '^$' \
+  -bench '^BenchmarkStepsKafka(Expedited)?$' -benchmem -count=5
+```
+
+The in-memory result isolates interpreter work. The Kafka result also includes
+broker round trips and transaction commits, and depends on broker placement,
+storage, configuration, and load. Results from different machines are not a
+controlled comparison. This runtime is not intended for low-latency loops.
+Cases use independent topic families and can run in parallel, with at most one
+official per case enforced by fencing.
 `AWAIT SUMMONS` blocks *outside* any transaction, so a case
 waiting for input holds no broker resources hostage and cannot hit
 transaction timeouts, however long the wait; a continuance (§11.8)
 waits the same way and may wait for long periods.
 
 When a case must nonetheless hurry, the expedited docket (§14.3a)
-amortizes the commit: `--expedited 100` carries about a hundred
-instructions per transaction (`BenchmarkStepsMemoryExpedited` measures
-about 98 because awaits and registry operations flush early), so
-against the live broker the ~5.8 ms commit is split across the batch
-and throughput can increase toward the batch size times the single-step figure.
-The tradeoffs are listed in §14.3a.
+amortizes commit overhead by carrying multiple instructions in one transaction.
+Awaits and registry operations may flush a batch before it reaches the requested
+size. The tradeoffs are listed in §14.3a.
 
 ### 17.8 Interop: other programs may (carefully) touch the case
 

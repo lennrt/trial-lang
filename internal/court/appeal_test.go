@@ -1,8 +1,6 @@
 package court
 
-// v3.0 "Prometheus": the appeal. The legend comes down in several
-// versions, each of which ends differently, and the docket holds all
-// of them.
+// Appeals copy a case into a new matter without changing the original.
 
 import (
 	"context"

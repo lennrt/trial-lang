@@ -124,11 +124,11 @@ timer must survive the process that started it.
    instruction.
 
 A grant whose `pc` differs from the current PC is stale (a completed
-continuance from an earlier visit) and is treated as no grant. Since
-v1.6 an honored grant is also withdrawn explicitly: the advancing step
-carries a tombstone for the key, so a grant record can never outlive
-its own instruction and be mistaken for fresh on a later visit to the
-same offset. The key is compacted, so only the latest value needs to remain.
+continuance from an earlier visit) and is treated as no grant. An honored grant
+is also withdrawn explicitly: the advancing step carries a tombstone for the
+key, so a grant record can never outlive its own instruction and be mistaken
+for fresh on a later visit to the same offset. The key is compacted, so only
+the latest value needs to remain.
 
 `AWAIT-FOR` follows the same protocol under its own key
 (`__attendance__`), with one difference in step 2: the waiting official

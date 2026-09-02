@@ -1,10 +1,8 @@
 package court
 
-// v2.6 "The New Advocate": powers of attorney, the office as a value.
-// An office is a logical address in the proceedings, so a function
-// pointer here is literally a pointer; the instrument records the
-// office's name, address, concerns, and the case that executed it,
-// and is enforceable in that case alone.
+// Powers of attorney make offices values. The instrument records the office's
+// name, instruction address, concerns, and originating case. It is valid only
+// in that case.
 
 import (
 	"context"

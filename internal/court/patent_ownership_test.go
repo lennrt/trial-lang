@@ -1,12 +1,9 @@
 package court
 
-// v2.1 "The Examiner": letters patent as an ownership discipline.
-// Exclusive practice was already ownership; licenses are shared
-// borrows bounded by the letters' lifetime, assignment is a move that
-// makes the old holder's practice infringement, the letters cannot
-// move while licenses are outstanding, and the plainly visible misuse
-// (practicing what the same block assigned away) is refused at the
-// counter by the examiner rather than punished at runtime.
+// Letters patent form an ownership discipline. Licenses are shared borrows
+// bounded by the letters' lifetime. Assignment transfers ownership and is
+// refused while licenses remain outstanding. Statically visible use after
+// assignment is rejected during compilation.
 
 import (
 	"context"

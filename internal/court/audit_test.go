@@ -1,11 +1,8 @@
 package court
 
-// v2.8 "The Warden of the Tomb": the audit, and what the audit found.
-// The registry instructions read court-wide state that keeps moving
-// after the fact, so their outcomes ride the ledger now, like every
-// other reading of the moving world; and `trial audit` replays a case
-// in chambers, against a copy, disturbing nothing, and reports whether
-// the record is consistent with itself.
+// Registry outcomes are recorded in the ledger so replay does not depend on
+// later court-wide state. Audit replays a copy without changing the case and
+// reports whether the record is internally consistent.
 
 import (
 	"context"

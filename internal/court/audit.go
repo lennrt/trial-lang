@@ -66,7 +66,7 @@ type auditLog struct {
 	// maxLedger is the high-water mark of the ledger cursor across
 	// every committed step: exactly how much of the tape had been
 	// written when the replay stopped, whatever reenactments did to
-	// the cursor along the way. The appeal (v3.0) truncates there.
+	// the cursor along the way. An appeal truncates there.
 	maxLedger int64
 	// arrived, if set, is consulted after each commit.
 	arrived func() (bool, error)
@@ -74,7 +74,7 @@ type auditLog struct {
 	// serve. The audit decides what that means; the log merely refuses.
 	starved func(topic string, offset int64)
 	// meter, if set, hears the address of every instruction the replay
-	// fetches for execution: the profiler (v3.1) listening to where
+	// fetches for execution: the profiler listening to where
 	// the time goes.
 	meter func(pc int64)
 }

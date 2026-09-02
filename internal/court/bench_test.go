@@ -76,9 +76,8 @@ func BenchmarkStepsMemory(b *testing.B) {
 	benchRun(b, func() docket.Log { return docket.NewMemoryLog() }, 500)
 }
 
-// BenchmarkStepsKafka: the production figure. One instruction is one
-// broker round-trip plus one transaction commit; the number is small
-// and the smallness is the design point. Gated on TRIAL_E2E_BROKER.
+// BenchmarkStepsKafka includes one broker round trip and one transaction
+// commit per instruction. It is gated on TRIAL_E2E_BROKER.
 func BenchmarkStepsKafka(b *testing.B) {
 	broker := os.Getenv("TRIAL_E2E_BROKER")
 	if broker == "" {
@@ -93,11 +92,9 @@ func BenchmarkStepsKafka(b *testing.B) {
 	}, 50)
 }
 
-// benchRunExpedited measures the expedited docket (v2.7): the same
-// program, up to `expedite` instructions per committed step. One
-// calibration run at the standing doctrine counts the instructions, so
-// the metric stays instructions per second, which is the number a
-// batch is bought for.
+// benchRunExpedited measures the same program with up to `expedite`
+// instructions per commit. A single-instruction calibration run keeps the
+// reported metric in instructions per second.
 func benchRunExpedited(b *testing.B, mk func() docket.Log, laps, expedite int) {
 	b.Helper()
 	calLog := docket.NewMemoryLog()
@@ -147,9 +144,8 @@ func BenchmarkStepsMemoryExpedited(b *testing.B) {
 	benchRunExpedited(b, func() docket.Log { return docket.NewMemoryLog() }, 500, 100)
 }
 
-// BenchmarkStepsKafkaExpedited: the number the expedited docket is
-// for. A hundred instructions to the transaction amortizes the ~6ms
-// commit across the batch. Gated on TRIAL_E2E_BROKER.
+// BenchmarkStepsKafkaExpedited measures how a larger transaction amortizes
+// commit overhead. It is gated on TRIAL_E2E_BROKER.
 func BenchmarkStepsKafkaExpedited(b *testing.B) {
 	broker := os.Getenv("TRIAL_E2E_BROKER")
 	if broker == "" {

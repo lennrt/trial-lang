@@ -1,9 +1,7 @@
 package court
 
-// v2.2 "The Recreation of the Guards": the DOOM entry on the docket.
-// The example is deposed frame by frame in examples/the-castle.deposition,
-// which asserts every rendered character; this test runs the same
-// speedrun with a metered log to check the frames' shape and cost.
+// The Castle deposition asserts every rendered character. This test runs the
+// same program with a metered log to check the frames' shape and cost.
 
 import (
 	"context"

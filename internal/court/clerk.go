@@ -74,8 +74,8 @@ func Enact(ctx context.Context, log docket.Log, src string) (string, int, error)
 	if prog.Form != "S-1" {
 		return "", 0, errors.New("statutes are enacted on Form S-1; what you have filed is a case, and a case is tried, not enacted")
 	}
-	// A statute may stand on other statutes (transitive incorporation,
-	// v1.9); those must already be enacted, because validation splices
+	// A statute may stand on other statutes through transitive incorporation.
+	// Those statutes must already be enacted, because validation splices
 	// them in before compiling. The stored text stays verbatim: the
 	// splice is re-performed, against the then-current enactments, by
 	// every case that eventually incorporates this statute.

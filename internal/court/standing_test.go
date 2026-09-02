@@ -1,9 +1,8 @@
 package court
 
-// v1.3 "Standing": THE STANDING OF, the supervision primitive. A case
-// may ask after another case's status; the answer goes through the
-// ledger, so what a case did with the answer replays even though the
-// world has since moved on.
+// THE STANDING OF lets a case ask for another case's status. The answer goes
+// through the ledger so replay uses the original result after the other case
+// moves on.
 
 import (
 	"context"

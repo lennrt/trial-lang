@@ -1571,12 +1571,21 @@ func mcpCmd(ctx context.Context, rest []string) int {
 	defer log.Close()
 
 	fmt.Fprintln(os.Stderr, "trial MCP server listening on stdio")
-	srv := &advocate.Server{Log: log, In: os.Stdin, Out: os.Stdout}
+	srv := newAdvocateServer(log, os.Stdin, os.Stdout)
 	if err := srv.Serve(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "MCP server stopped: %v\n", err)
 		return 1
 	}
 	return 0
+}
+
+func newAdvocateServer(log docket.Log, in io.Reader, out io.Writer) *advocate.Server {
+	return &advocate.Server{
+		Log:     log,
+		In:      in,
+		Out:     out,
+		Version: resolveVersion(),
+	}
 }
 
 func counselCmd(ctx context.Context, rest []string) int {

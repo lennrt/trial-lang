@@ -1,10 +1,8 @@
 package court
 
-// v1.8 "An Imperial Message": the gazette. PUBLISH rides the step's
-// transaction into one court-wide topic; AWAIT THE GAZETTE reads it at
-// a per-case cursor carried in the attention, so every case consumes
-// every edition, in order, at its own pace, exactly once. A message
-// sent to everyone arrives at whoever comes to read it.
+// PUBLISH writes to one court-wide topic in the step transaction. AWAIT THE
+// GAZETTE reads from a per-case cursor in attention, so every case consumes
+// every edition in order at its own pace.
 
 import (
 	"context"

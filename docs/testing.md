@@ -23,6 +23,7 @@ generated-demo freshness, and repository examples.
 | Fuzz | `go test ./internal/gregor -run '^$' -fuzz '^FuzzParse$' -fuzztime=30s` | None |
 | Integration and E2E | Command in the threat model | Kafka |
 | Differential | Included in the Kafka command | Kafka |
+| Black-box CLI | `make build && bash scripts/kafka-cli-smoke.sh` | Kafka |
 
 The generated Court properties use fixed seeds from 0 through 23. A failing
 subtest names its seed.
@@ -32,3 +33,7 @@ run is exploratory and is not deterministic.
 
 Tests must use a finite timeout. Readiness checks must poll a protocol canary
 until a deadline. Tests must close every resource that they create.
+
+The Kafka CI job builds the `trial` binary, runs the internal integration and
+differential suites, then runs the black-box script through `file`, `proceed`,
+`status`, `audit`, and `burn`.

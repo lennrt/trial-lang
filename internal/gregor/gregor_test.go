@@ -258,9 +258,8 @@ func TestDefinedTermRejections(t *testing.T) {
 	}
 }
 
-// TestSelectiveReceiveParses: v2.4, the voice of Josephine. Both
-// forms compile; the FROM clause takes any expression, and the timed
-// form still demands its contingency.
+// TestSelectiveReceiveParses verifies both forms. The FROM clause accepts any
+// expression, and the timed form requires its contingency.
 func TestSelectiveReceiveParses(t *testing.T) {
 	good := map[string]string{
 		"untimed":                  "FORM K-1.\nIN THE MATTER OF: x.\nARTICLE 1.\nAWAIT SUMMONS FROM \"case-000901\", FILED UNDER song.\nADJOURN INDEFINITELY.",

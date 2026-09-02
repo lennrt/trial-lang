@@ -1,8 +1,7 @@
 package court
 
-// v1.1 "Joinder": COMMENCE PROCEEDINGS, the in-language filing of new
-// cases. Spawn joins send (SERVE NOTICE) and receive (AWAIT SUMMONS);
-// the actor model is complete, and the docket grows from within.
+// COMMENCE PROCEEDINGS files new cases from within the language. These tests
+// combine commencement with SERVE NOTICE and AWAIT SUMMONS.
 
 import (
 	"context"

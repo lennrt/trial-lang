@@ -121,6 +121,9 @@ func TestAdvocateProtocol(t *testing.T) {
 	if info["name"] != "trial" {
 		t.Fatalf("serverInfo.name = %v", info["name"])
 	}
+	if info["version"] != "(devel)" {
+		t.Fatalf("serverInfo.version = %v", info["version"])
+	}
 	// The initialized notification receives, and requires, no reply.
 	if err := s.enc.Encode(map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}); err != nil {
 		t.Fatal(err)

@@ -1,10 +1,8 @@
 package court
 
-// v1.6 "A Hunger Artist": the receive with a deadline. AWAIT SUMMONS
-// FOR AT MOST n DAYS either takes what is served or, when nobody
-// comes, turns to the mandatory FAILING WHICH arm. The outcome is
-// entered in the ledger, so a record that arrived too late stays too
-// late in every reenactment.
+// AWAIT SUMMONS FOR AT MOST n DAYS either takes what is served or follows the
+// mandatory FAILING WHICH arm. The outcome is entered in the ledger, so a
+// record that arrived too late stays late in every reenactment.
 
 import (
 	"context"
