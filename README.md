@@ -60,43 +60,38 @@ go build -o trial ./cmd/trial
 
 ## Demo
 
-The Orrery prints a rotating ASCII sphere. It records the frame number before
-printing each frame, so a restarted process continues from the recorded
-position.
+The recovery demo uses a real local Kafka broker. It files a case, interrupts
+one `trial proceed` process after a continuance is committed, and starts a new
+process for the same case. It then checks that both committed output lines
+appear once and that an audit can reproduce the result.
 
-![The triallang Orrery](docs/the-orrery.gif)
+![Kafka-backed process recovery in triallang](docs/the-recovery.gif)
 
-Run the brokerless terminal animation:
+Run it with Docker Compose and Go 1.27.0:
 
 ```console
 go build -o trial ./cmd/trial
+./docs/the-recovery-demo.sh
+```
+
+The script starts its own broker when needed. On exit, it tries to delete the
+demo case and stops a broker it started.
+
+### Brokerless animation
+
+The Orrery is a smaller visual example. It records each frame number before
+printing a rotating ASCII sphere, so another process can continue from the
+recorded position.
+
+![The triallang Orrery](docs/the-orrery.gif)
+
+Run it without Kafka:
+
+```console
 ./docs/the-orrery-demo.sh
 ```
 
-For a Kafka-backed run, start the broker and file the case:
-
-```console
-./trial summon
-./trial file examples/the-orrery.trial
-```
-
-Use the printed case number in two terminals:
-
-```console
-./docs/the-orrery-demo.sh case-...
-```
-
-```console
-./trial proceed case-...
-```
-
-Restart `proceed` with the same case number to resume. Serve `q` to stop:
-
-```console
-./trial serve case-... q
-```
-
-Check all generated frames without wall-clock delays:
+Check its generated frames without wall-clock delays:
 
 ```console
 go run ./cmd/trial test examples/the-orrery.deposition
