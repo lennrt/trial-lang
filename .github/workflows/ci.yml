@@ -81,3 +81,8 @@ jobs:
         run: go test -timeout=10m ./internal/court -run '^(TestE2E|TestDifferential)' -count=1 -v
         env:
           TRIAL_E2E_BROKER: localhost:9092
+      - name: Run black-box CLI smoke test
+        run: bash scripts/kafka-cli-smoke.sh
+        env:
+          TRIAL_BIN: ${{ runner.temp }}/trial
+          TRIAL_E2E_BROKER: localhost:9092

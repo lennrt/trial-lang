@@ -1,5 +1,5 @@
-# Record the Orrery demo for review. This workflow does not write to the
-# repository or publish the artifact.
+# Record the Kafka recovery demo for review. This workflow does not write to
+# the repository or publish the artifact.
 name: Demo
 
 on:
@@ -17,9 +17,9 @@ env:
 
 jobs:
   recording:
-    name: Record Orrery
+    name: Record Kafka recovery
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -42,14 +42,21 @@ jobs:
           go install github.com/charmbracelet/vhs@v0.11.0
       - name: Check generated demo
         run: make demo-check
+      - name: Pull the pinned Kafka image
+        run: docker compose pull the-court
+      - name: Verify recovery against Kafka
+        run: |
+          set -euo pipefail
+          chmod +x docs/the-recovery-demo.sh
+          timeout --signal=TERM --kill-after=10s 3m \
+            env TRIAL_RECOVERY_DELAY=0 ./docs/the-recovery-demo.sh
       - name: Record demo
         run: |
           set -euo pipefail
-          chmod +x docs/the-orrery-demo.sh
-          vhs docs/the-orrery.tape
+          vhs docs/the-recovery.tape
       - name: Upload recording for review
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: the-orrery
-          path: docs/the-orrery.gif
+          name: the-recovery
+          path: docs/the-recovery.gif
           if-no-files-found: error
