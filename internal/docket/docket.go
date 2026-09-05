@@ -154,7 +154,8 @@ type Attention struct {
 }
 
 // Log stores execution state. Every topic has exactly one partition.
-// Implementations must copy retained input and returned byte slices.
+// Implementations must copy retained input and returned byte slices, preserving
+// the distinction between nil (a tombstone value) and non-nil empty slices.
 type Log interface {
 	// Append writes one record outside an execution step and returns its offset.
 	Append(ctx context.Context, topic string, key, value []byte) (int64, error)

@@ -2,6 +2,13 @@
 
 # triallang
 
+[![Version](https://img.shields.io/github/v/release/lennrt/trial-lang)](https://github.com/lennrt/trial-lang/releases/latest)
+[![License](https://img.shields.io/github/license/lennrt/trial-lang)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/lennrt/trial-lang/ci.yml?branch=main&label=CI)](https://github.com/lennrt/trial-lang/actions/workflows/ci.yml)
+[![Go version](https://img.shields.io/github/go-mod/go-version/lennrt/trial-lang)](go.mod)
+[![Go Reference](https://img.shields.io/badge/Go-Reference-007d9c)](https://pkg.go.dev/github.com/lennrt/trial-lang/canon)
+[![Stars](https://img.shields.io/github/stars/lennrt/trial-lang?style=flat)](https://github.com/lennrt/trial-lang/stargazers)
+
 *A toy programming language backed by Apache Kafka.*
 
 > [!NOTE]
@@ -29,17 +36,24 @@ need Kafka for the quickstart.
 
 Prerequisite: Go 1.27.0.
 
-Install the v0.1.0 release:
+Install the latest release:
 
 ```console
-go install github.com/lennrt/trial-lang/cmd/trial@v0.1.0
+go install github.com/lennrt/trial-lang/cmd/trial@latest
 trial version
 ```
 
-[Prebuilt archives and checksums](https://github.com/lennrt/trial-lang/releases/tag/v0.1.0)
+[Prebuilt archives and checksums](https://github.com/lennrt/trial-lang/releases/latest)
 are available for Linux, macOS, and Windows on AMD64 and ARM64.
 
-Run one brokerless example:
+To use the examples and development commands below, start in a source checkout:
+
+```console
+git clone https://github.com/lennrt/trial-lang.git
+cd trial-lang
+```
+
+Run one brokerless example from this checkout:
 
 ```console
 go run ./cmd/trial test examples/hello.deposition

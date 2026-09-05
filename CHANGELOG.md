@@ -1,8 +1,34 @@
 # Changelog
 
-## Unreleased
+## v0.2.0 - Unreleased
 
-No changes yet.
+### Fixed
+
+- Preserve the distinction between nil tombstones and non-nil empty record
+  payloads when copying log records.
+- Wake blocked in-memory readers when their case topics are deleted, and honor
+  cancellation before returning cached records or nonblocking fetch results.
+- Report truncated Counsel frames as unexpected EOF instead of a clean editor
+  disconnect, and propagate short writes rather than silently losing replies.
+- Reject malformed and duplicate Content-Length headers, enforce header limits
+  independently of the reader buffer size, and accept exactly the documented
+  maximum number of headers.
+- Clarify that brokerless examples and development commands need a source
+  checkout.
+
+### Added
+
+- Add focused storage and framing regression tests, including Unicode frame
+  round trips and a framing fuzz target.
+- Add README badges for the latest release, license, CI, required Go version,
+  Go reference, and stars.
+
+### Compatibility
+
+- Language syntax, stored JSON, and the public Go API are unchanged. No new
+  dependencies are required.
+- The CLI continues to obtain its release version from the release linker flag or
+  module metadata; this unreleased entry does not create a release tag.
 
 ## v0.1.0 - 2026-09-01
 

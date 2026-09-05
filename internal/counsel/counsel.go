@@ -68,11 +68,18 @@ func (s *Server) write(v rpcResponse) error {
 	if len(b) > maxMessageBytes {
 		return fmt.Errorf("response is %d bytes; limit is %d", len(b), maxMessageBytes)
 	}
-	if _, err := fmt.Fprintf(s.Out, "Content-Length: %d\r\n\r\n", len(b)); err != nil {
+	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(b))
+	if n, err := io.WriteString(s.Out, header); err != nil {
 		return err
+	} else if n != len(header) {
+		return io.ErrShortWrite
 	}
-	_, err = s.Out.Write(b)
-	return err
+	if n, err := s.Out.Write(b); err != nil {
+		return err
+	} else if n != len(b) {
+		return io.ErrShortWrite
+	}
+	return nil
 }
 
 func (s *Server) respond(req *rpcRequest, response rpcResponse) error {
@@ -88,15 +95,19 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 	length := -1
 	headerBytes := 0
 	for headerCount := 0; ; headerCount++ {
-		if headerCount >= maxHeaders {
-			return nil, fmt.Errorf("message has more than %d headers", maxHeaders)
-		}
 		lineBytes, err := r.ReadSlice('\n')
 		if err != nil {
 			if errors.Is(err, bufio.ErrBufferFull) {
 				return nil, fmt.Errorf("header line exceeds %d bytes", maxHeaderLineBytes)
 			}
+			// EOF is a clean disconnect only between complete messages.
+			if errors.Is(err, io.EOF) && (headerBytes > 0 || len(lineBytes) > 0) {
+				return nil, io.ErrUnexpectedEOF
+			}
 			return nil, err
+		}
+		if len(lineBytes) > maxHeaderLineBytes {
+			return nil, fmt.Errorf("header line exceeds %d bytes", maxHeaderLineBytes)
 		}
 		headerBytes += len(lineBytes)
 		if headerBytes > maxHeaderBytes {
@@ -105,6 +116,9 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 		line := strings.TrimRight(string(lineBytes), "\r\n")
 		if line == "" {
 			break
+		}
+		if headerCount >= maxHeaders {
+			return nil, fmt.Errorf("message has more than %d headers", maxHeaders)
 		}
 		name, value, ok := strings.Cut(line, ":")
 		if !ok {
@@ -115,7 +129,11 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 			if length >= 0 {
 				return nil, fmt.Errorf("message has more than one Content-Length header")
 			}
-			parsed, err := strconv.Atoi(strings.TrimSpace(value))
+			value = strings.TrimSpace(value)
+			if value == "" || strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+				return nil, errors.New("Content-Length must be a nonnegative decimal integer")
+			}
+			parsed, err := strconv.Atoi(value)
 			if err != nil {
 				return nil, fmt.Errorf("the Content-Length header cannot be read: %w", err)
 			}
@@ -134,6 +152,9 @@ func readMessage(r *bufio.Reader) ([]byte, error) {
 	}
 	buf := make([]byte, length)
 	if _, err := io.ReadFull(r, buf); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, io.ErrUnexpectedEOF
+		}
 		return nil, err
 	}
 	return buf, nil

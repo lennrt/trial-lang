@@ -1,6 +1,7 @@
 package docket
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sort"
@@ -126,6 +127,9 @@ func (m *MemoryLog) Fetch(ctx context.Context, topic string, offset int64, wait 
 		defer stopCancel()
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		recs, ok := m.topics[topic]
 		if !ok {
 			return nil, fmt.Errorf("%w: %q", ErrTopicNotFound, topic)
@@ -136,9 +140,6 @@ func (m *MemoryLog) Fetch(ctx context.Context, topic string, offset int64, wait 
 		}
 		if !wait {
 			return nil, nil
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
 		}
 		m.cond.Wait()
 	}
@@ -272,13 +273,16 @@ func (m *MemoryLog) DeleteCaseTopics(ctx context.Context, c Case) error {
 		delete(m.topics, t)
 	}
 	delete(m.attention, c.ID)
+	// Readers waiting for records must also observe that their topic is gone.
+	m.cond.Broadcast()
 	return nil
 }
 
 func (m *MemoryLog) Close() {}
 
 func cloneBytes(b []byte) []byte {
-	return append([]byte(nil), b...)
+	// A nil value is a tombstone; a non-nil empty value is not.
+	return bytes.Clone(b)
 }
 
 func cloneRecord(r Record) Record {
