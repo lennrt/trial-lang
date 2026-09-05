@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Bind the unauthenticated development Kafka broker to host loopback instead of
+  publishing it on every host interface.
+- Keep proceedings-cache addresses as 64-bit integers and validate cache-window
+  bounds, removing the narrowing conversion reported by CodeQL.
+
 - Preserve the distinction between nil tombstones and non-nil empty record
   payloads when copying log records.
 - Wake blocked in-memory readers when their case topics are deleted, and honor
@@ -17,6 +22,12 @@
   checkout.
 
 ### Added
+
+- Run parser/compiler and Counsel framing fuzz targets in CI and release
+  verification; provide a statement-coverage command.
+- Document contribution review, vulnerability response and remediation,
+  interface contracts, secure development, and OpenSSF Passing evidence.
+- Display the live OpenSSF Best Practices badge in the README.
 
 - Add focused storage and framing regression tests, including Unicode frame
   round trips and a framing fuzz target.

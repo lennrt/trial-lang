@@ -1,5 +1,26 @@
 # Contributing
 
+## Propose a change
+
+Use [GitHub Issues](https://github.com/lennrt/trial-lang/issues) for bugs,
+enhancement requests, and questions. Search open and closed issues first.
+For bugs, include the revision or `trial version`, operating system, a small
+synthetic reproducer, and expected and actual behavior. For enhancements,
+describe the use case and proposed behavior. Use English for reports and review.
+Follow [SECURITY.md](SECURITY.md) for undisclosed vulnerabilities.
+
+Fork the repository, create a branch, and open a pull request against `main`.
+Discuss substantial language, storage, or interface changes in an issue before
+implementing them. Explain the problem, the resulting behavior, and validation
+in the pull request. Add tests for new functionality and regression tests for
+bug fixes, and update affected documentation and the changelog.
+
+The maintainer reviews the patch and CI results, requests changes as needed,
+and merges accepted changes. Contributors should address review feedback in
+the same pull request. A report or proposal may be declined with a reason.
+The maintainer aims to acknowledge reports and enhancement requests within
+14 days; reports and responses remain searchable in the issue tracker.
+
 ## Prerequisites
 
 - Go 1.27.0
@@ -48,6 +69,8 @@ required test with a skip.
 ## Change requirements
 
 - Add deterministic tests for behavior changes. Record every generated seed.
+- Add automated tests with major new functionality; retain reproducing inputs
+  from fuzz failures as regression tests.
 - Give each test a finite timeout. Use a deadline-based canary for readiness.
 - Close every resource that a test creates.
 - Update the specification with language or bytecode behavior.
@@ -58,6 +81,10 @@ required test with a skip.
 - Keep production builds compatible with `CGO_ENABLED=0`.
 - Keep dependencies behind small internal interfaces. Do not expose vendor
   types from public APIs.
+- Run all required checks before merging. Fix compiler, vet, and linter findings;
+  document a specific false positive before using a narrow suppression.
+- Review [secure development](docs/secure-development.md) and update the
+  [threat model](docs/threat-model.md) when trust assumptions change.
 - Do not include credentials, payloads, personal data, or raw identifiers in
   diagnostics or fixtures.
 

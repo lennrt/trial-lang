@@ -568,8 +568,13 @@ func (k *KafkaLog) cacheProceeding(topic string, pc, physical int64) error {
 	return k.cacheProceedingLocked(proceedingAddress{topic: topic, pc: pc}, physical)
 }
 
-func (k *KafkaLog) cacheProceedingWindow(topic string, records []Record, start int) error {
-	end := min(len(records), start+maxProceedingCacheWindow)
+func (k *KafkaLog) cacheProceedingWindow(topic string, records []Record, start int64) error {
+	if start < 0 || start > int64(len(records)) {
+		return fmt.Errorf("proceedings cache start %d is outside the %d-record snapshot", start, len(records))
+	}
+	// Keep logical addresses as int64, including slice indexes. Bound the
+	// remaining window before addition so its end cannot overflow.
+	end := start + min(int64(len(records))-start, int64(maxProceedingCacheWindow))
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	if k.proceedings == nil {
@@ -579,7 +584,7 @@ func (k *KafkaLog) cacheProceedingWindow(topic string, records []Record, start i
 		k.proceedingsLRU = list.New()
 	}
 	for i := start; i < end; i++ {
-		if err := k.cacheProceedingLocked(proceedingAddress{topic: topic, pc: int64(i)}, records[i].Offset); err != nil {
+		if err := k.cacheProceedingLocked(proceedingAddress{topic: topic, pc: i}, records[i].Offset); err != nil {
 			return err
 		}
 	}
@@ -637,7 +642,7 @@ func (k *KafkaLog) fetchProceeding(ctx context.Context, c Case, pc int64, wait b
 		if cached && physical != cachedPhysical {
 			return nil, 0, fmt.Errorf("proceedings logical address %d expected physical offset %d, found %d", pc, cachedPhysical, physical)
 		}
-		if err := k.cacheProceedingWindow(topic, records, int(pc)); err != nil {
+		if err := k.cacheProceedingWindow(topic, records, pc); err != nil {
 			return nil, 0, err
 		}
 		record := records[pc]

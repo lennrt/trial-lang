@@ -10,6 +10,10 @@ The repository owner controls every release.
 - GitHub private vulnerability reporting is enabled.
 - The GitHub `release` environment requires an owner review.
 - `CHANGELOG.md` describes the release.
+- The security triage and fix requirements in [SECURITY.md](../SECURITY.md) are
+  satisfied, including findings from static analysis, race detection, and fuzzing.
+- Release notes explain upgrade impact and list CVE/GHSA identifiers for every
+  fixed publicly known vulnerability in triallang that has an assigned identifier.
 
 ## Prepare the tag
 
@@ -28,6 +32,11 @@ git push origin vX.Y.Z
 ```
 
 Pushing the tag does not publish a release.
+
+Every public release uses a unique semantic version and an immutable Git tag.
+Do not move an existing release tag or replace its published assets; publish a
+new patch version for a correction. Development changes remain available for
+review between releases in the public commit history and pull requests.
 
 ## Publish
 

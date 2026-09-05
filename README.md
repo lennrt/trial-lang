@@ -5,6 +5,7 @@
 [![Version](https://img.shields.io/github/v/release/lennrt/trial-lang)](https://github.com/lennrt/trial-lang/releases/latest)
 [![License](https://img.shields.io/github/license/lennrt/trial-lang)](LICENSE)
 [![CI](https://img.shields.io/github/actions/workflow/status/lennrt/trial-lang/ci.yml?branch=main&label=CI)](https://github.com/lennrt/trial-lang/actions/workflows/ci.yml)
+[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14461/badge)](https://www.bestpractices.dev/projects/14461)
 [![Go version](https://img.shields.io/github/go-mod/go-version/lennrt/trial-lang)](go.mod)
 [![Go Reference](https://img.shields.io/badge/Go-Reference-007d9c)](https://pkg.go.dev/github.com/lennrt/trial-lang/canon)
 [![Stars](https://img.shields.io/github/stars/lennrt/trial-lang?style=flat)](https://github.com/lennrt/trial-lang/stargazers)
@@ -245,9 +246,22 @@ The CI, security, and release workflows do not run on a schedule. See
 
 The CLI includes case operations, depositions, the Advocate MCP server, and the
 Counsel language server. Run `trial help` for commands.
+See the [interface reference](docs/interfaces.md) for inputs, outputs, protocol
+limits, and API documentation.
 
 `canon` is the only importable Go package. See the
 [Go API compatibility record](docs/api-compatibility.md).
+
+## Feedback and contributions
+
+Report bugs and propose enhancements in [GitHub Issues](https://github.com/lennrt/trial-lang/issues).
+Use the [contribution process](CONTRIBUTING.md) to propose a pull request.
+Documentation, reports, and code-review discussions use English.
+Report undisclosed vulnerabilities through the private channel in
+[SECURITY.md](SECURITY.md).
+
+The [OpenSSF assessment](docs/openssf.md) records evidence for the Passing
+criteria. The badge above displays the current status of the public entry.
 
 ## License
 

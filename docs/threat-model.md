@@ -1,6 +1,6 @@
 # Threat model
 
-Review date: 2026-09-01
+Review date: 2026-09-05
 
 Status: design review only. This is not a security certification.
 
@@ -14,7 +14,8 @@ The system has four runtime parts:
 4. Kafka stores case, statute, message, and execution records.
 
 The in-memory log is a test adapter. Docker Compose starts one local Kafka
-broker with plaintext transport.
+broker with plaintext transport, published only on host loopback
+(`127.0.0.1:9092`). See [ADR 0002](adr/0002-loopback-development-broker.md).
 
 ## Trust roots and assets
 

@@ -4,8 +4,9 @@ GOIMPORTS_VERSION := v0.49.0
 GOVULNCHECK_VERSION := v1.7.0
 GO_LICENSES_VERSION := v2.0.1
 ACTIONLINT_VERSION := v1.7.12
+FUZZ_TIME ?= 30s
 
-.PHONY: hooks build test race property fmt fmt-check vet lint tidy-check examples api-check workflow-check vuln licenses purego arm64 demo-generate demo-check verify
+.PHONY: hooks build test race property fuzz coverage fmt fmt-check vet lint tidy-check examples api-check workflow-check vuln licenses purego arm64 demo-generate demo-check verify
 
 hooks:
 	git config core.hooksPath .githooks
@@ -22,6 +23,14 @@ race:
 
 property:
 	go test -timeout=3m ./internal/court -run '^TestGeneratedPrograms' -count=1
+
+fuzz:
+	go test -timeout=2m ./internal/gregor -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=2m ./internal/counsel -run '^$$' -fuzz '^FuzzCounselReadMessage$$' -fuzztime=${FUZZ_TIME} -parallel=4
+
+coverage:
+	go test -timeout=3m -coverprofile=coverage.out ./...
+	go tool cover -func=coverage.out
 
 fmt:
 	go run golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION} -w .
@@ -77,6 +86,7 @@ verify:
 	${MAKE} vet
 	${MAKE} test
 	${MAKE} race
+	${MAKE} fuzz
 	${MAKE} lint
 	${MAKE} api-check
 	${MAKE} workflow-check
