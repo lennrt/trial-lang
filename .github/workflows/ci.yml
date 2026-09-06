@@ -92,7 +92,7 @@ jobs:
           echo "Kafka did not become ready within 60 seconds" >&2
           exit 1
       - name: Run integration tests
-        run: go test -timeout=10m ./internal/court -run '^(TestE2E|TestDifferential)' -count=1 -v
+        run: go test -timeout=10m ./internal/court ./cmd/trial -run '^(TestE2E|TestDifferential|TestCLI)' -count=1 -v
         env:
           TRIAL_E2E_BROKER: localhost:9092
       - name: Run black-box CLI smoke test

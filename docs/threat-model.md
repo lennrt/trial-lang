@@ -132,7 +132,7 @@ gitleaks git --redact --no-banner
 Run Kafka integration tests with the pinned Compose image:
 
 ```console
-docker compose up -d
+docker compose up -d --wait --wait-timeout 120
 TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court -run '^(TestE2E|TestDifferential)' -count=1 -v
 ```
 

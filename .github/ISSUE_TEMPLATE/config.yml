@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/lennrt/trial-lang/blob/main/SECURITY.md
+    about: Do not open a public issue for undisclosed vulnerabilities. SECURITY.md describes the private channel.
+  - name: Language and interface references
+    url: https://github.com/lennrt/trial-lang/blob/main/spec/spec.md
+    about: Check the specification, grammar, and interface reference before reporting behavior as a bug.

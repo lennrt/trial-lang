@@ -17,6 +17,7 @@ import (
 	"runtime/debug"
 	"sort"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/lennrt/trial-lang/canon"
@@ -84,91 +85,50 @@ func run(args []string) int {
 		return 2
 	}
 	cmd, rest := args[0], args[1:]
-
-	if cmd == "help" || cmd == "--help" || cmd == "-h" {
-		if len(rest) > 1 {
-			unexpectedArgs("help", rest[1:])
-			return 2
-		}
-		if len(rest) > 0 {
-			return helpCmd(rest[0])
-		}
-		fmt.Println(usage)
-		return 0
+	switch cmd {
+	case "--help", "-h":
+		cmd = "help"
+	case "--version", "-v":
+		cmd = "version"
 	}
-	// Help takes precedence over other command options.
-	if wantsHelp(rest) {
+	// Preserve the help command's positional-argument rules. For other
+	// commands, a help flag takes precedence over command options.
+	if cmd != "help" && wantsHelp(rest) {
 		return helpCmd(cmd)
 	}
-
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	c, ok := lookupCommand(cmd)
+	if !ok {
+		fmt.Fprintf(os.Stderr, "trial: unknown command %q.", cmd)
+		if s := nearest(cmd); s != "" {
+			fmt.Fprintf(os.Stderr, " Perhaps 'trial %s' was intended.", s)
+		}
+		fmt.Fprintln(os.Stderr, " See 'trial help'.")
+		return 2
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Restore default handling after cancellation so a second signal can
+	// force exit while the command is unwinding.
+	stopSignal := context.AfterFunc(ctx, stop)
+	defer stopSignal()
+	code := c.run(ctx, rest)
+	if ctx.Err() != nil {
+		return 1
+	}
+	return code
+}
 
-	switch cmd {
-	case "summon":
-		if unexpectedArgs(cmd, rest) {
-			return 2
-		}
-		return summon(ctx)
-	case "dismiss":
-		if unexpectedArgs(cmd, rest) {
-			return 2
-		}
-		return dismiss(ctx)
-	case "file":
-		return fileCase(ctx, rest)
-	case "proceed":
-		return proceedCase(ctx, rest)
-	case "observe":
-		return observe(ctx, rest)
-	case "serve":
-		return serve(ctx, rest)
-	case "amend":
-		return amend(ctx, rest)
-	case "enact":
-		return enact(ctx, rest)
-	case "statutes":
-		return statutes(ctx, rest)
-	case "hearing":
-		return hearing(ctx, rest)
-	case "test":
-		return testCmd(ctx, rest)
-	case "verdict":
-		return verdict(ctx, rest)
-	case "status":
-		return status(ctx, rest)
-	case "docket":
-		return docketCmd(ctx, rest)
-	case "transcript":
-		return transcript(ctx, rest)
-	case "reenact":
-		return reenact(ctx, rest)
-	case "audit":
-		return audit(ctx, rest)
-	case "appeal":
-		return appeal(ctx, rest)
-	case "profile":
-		return profileCmd(ctx, rest)
-	case "burn":
-		return burn(ctx, rest)
-	case "mcp":
-		return mcpCmd(ctx, rest)
-	case "counsel":
-		return counselCmd(ctx, rest)
-	case "watch":
-		return watch(ctx, rest)
-	case "version", "--version", "-v":
-		if unexpectedArgs("version", rest) {
-			return 2
-		}
-		return versionCmd()
+// helpDispatch implements "trial help [command]".
+func helpDispatch(_ context.Context, rest []string) int {
+	if len(rest) > 1 {
+		unexpectedArgs("help", rest[1:])
+		return 2
 	}
-	fmt.Fprintf(os.Stderr, "trial: unknown command %q.", cmd)
-	if s := nearest(cmd); s != "" {
-		fmt.Fprintf(os.Stderr, " Perhaps 'trial %s' was intended.", s)
+	if len(rest) > 0 {
+		return helpCmd(rest[0])
 	}
-	fmt.Fprintln(os.Stderr, " See 'trial help'.")
-	return 2
+	fmt.Println(usage)
+	return 0
 }
 
 // helpCmd prints help for one command.
@@ -187,6 +147,16 @@ func compose(ctx context.Context, verb string, extra ...string) int {
 	c := exec.CommandContext(ctx, "docker", args...)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
+	// On Ctrl+C or SIGTERM, forward an interrupt and allow a grace period so
+	// Compose can leave the project consistent; the default is an immediate
+	// SIGKILL. Platforms without Interrupt support fall back to Kill.
+	c.Cancel = func() error {
+		if err := c.Process.Signal(os.Interrupt); err != nil {
+			return c.Process.Kill()
+		}
+		return nil
+	}
+	c.WaitDelay = 15 * time.Second
 	if err := c.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Docker Compose failed: %v\n(Is Docker installed and running?)\n", err)
 		return 1
@@ -195,7 +165,10 @@ func compose(ctx context.Context, verb string, extra ...string) int {
 }
 
 func summon(ctx context.Context) int {
-	if code := compose(ctx, "up", "-d"); code != 0 {
+	// --wait blocks until the broker's healthcheck passes, so the hint below
+	// is true when it prints and an immediate `trial file` does not race
+	// the JVM startup.
+	if code := compose(ctx, "up", "-d", "--wait", "--wait-timeout", "120"); code != 0 {
 		return code
 	}
 	fmt.Println()
@@ -213,11 +186,15 @@ func dismiss(ctx context.Context) int {
 	return 0
 }
 
+// kafkaDiagnostic reports non-fatal broker maintenance problems on stderr so
+// they never mix with command output on stdout.
+func kafkaDiagnostic(err error) {
+	fmt.Fprintf(os.Stderr, "Kafka maintenance warning: %v\n", err)
+}
+
 // openLog connects to Kafka. The caller owns the returned log.
 func openLog(ctx context.Context, broker string) (*docket.KafkaLog, int) {
-	log, err := docket.OpenKafkaLog(ctx, broker, docket.WithDiagnostic(func(err error) {
-		fmt.Fprintf(os.Stderr, "Kafka maintenance warning: %v\n", err)
-	}))
+	log, err := docket.OpenKafkaLog(ctx, broker, docket.WithDiagnostic(kafkaDiagnostic))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return nil, 1
@@ -232,17 +209,23 @@ func isTTY(f *os.File) bool {
 	return err == nil && fi.Mode()&os.ModeCharDevice != 0
 }
 
+// maxSourceBytes bounds one filing, statute, or deposition read by the CLI.
+// The limit is enforced before the whole input is buffered.
+const maxSourceBytes = 4 << 20
+
 // readSource reads at most maxSourceBytes from path. A path of "-" reads
 // standard input. The function rejects extra input before allocation grows.
-func readSource(path string) ([]byte, error) {
+func readSource(ctx context.Context, path string) ([]byte, error) {
 	if path == "-" {
-		return readBounded(os.Stdin, "standard input", 4<<20)
+		input, closeInput := commandInput(ctx)
+		defer closeInput()
+		return readBounded(input, "standard input", maxSourceBytes)
 	}
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	data, readErr := readBounded(file, path, 4<<20)
+	data, readErr := readBounded(file, path, maxSourceBytes)
 	closeErr := file.Close()
 	return data, errors.Join(readErr, closeErr)
 }
@@ -331,7 +314,8 @@ func printJSON(v any) int {
 	return 0
 }
 
-// parseCase parses options on either side of one case identifier.
+// caseFlags parses --broker and any extra options on either side of one case
+// identifier. It reports usage errors itself and returns ok=false for them.
 func caseFlags(name string, rest []string, extra func(*flag.FlagSet)) (*flag.FlagSet, string, docket.Case, bool) {
 	fs := commandFlags(name)
 	broker := fs.String("broker", brokerDefault(), "Kafka broker address")
@@ -369,7 +353,7 @@ func fileCase(ctx context.Context, rest []string) int {
 		fmt.Fprintln(os.Stderr, "trial file: exactly one .trial filing is accepted per visit. See 'trial help file'.")
 		return 2
 	}
-	src, err := readSource(path)
+	src, err := readSource(ctx, path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trial file: read source: %v\n", err)
 		return 1
@@ -396,13 +380,7 @@ func fileCase(ctx context.Context, rest []string) int {
 }
 
 func reportFileError(w io.Writer, c docket.Case, err error, revealRejection bool) int {
-	if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-		_, _ = fmt.Fprintln(w, "The filing was rejected pursuant to Article §4.2.")
-		if revealRejection {
-			_, _ = fmt.Fprintf(w, "\n[counsel] %s\n", rej.Error())
-		} else {
-			_, _ = fmt.Fprintln(w, "\n(Rerun with --counsel for details.)")
-		}
+	if reportRejection(w, "filing", err, revealRejection) {
 		return 1
 	}
 	if reportRecoverableCaseError(w, "filing", c, err) {
@@ -410,6 +388,23 @@ func reportFileError(w io.Writer, c docket.Case, err error, revealRejection bool
 	}
 	_, _ = fmt.Fprintf(w, "The filing failed: %v\n", err)
 	return 1
+}
+
+// reportRejection explains a filing rejected by the compiler. The particulars
+// stay sealed unless counsel was requested, matching the other case commands.
+// It reports whether err was a rejection.
+func reportRejection(w io.Writer, what string, err error, revealRejection bool) bool {
+	rej, ok := errors.AsType[*gregor.RejectedFiling](err)
+	if !ok {
+		return false
+	}
+	_, _ = fmt.Fprintf(w, "The %s was rejected pursuant to Article §4.2.\n", what)
+	if revealRejection {
+		_, _ = fmt.Fprintf(w, "\n[counsel] %s\n", rej.Error())
+	} else {
+		_, _ = fmt.Fprintln(w, "\n(Rerun with --counsel for details.)")
+	}
+	return true
 }
 
 func reportRecoverableCaseError(w io.Writer, operation string, c docket.Case, err error) bool {
@@ -522,7 +517,8 @@ func proceedDocket(ctx context.Context, broker string) int {
 
 	err := court.ServeDocket(ctx, log, court.DocketOptions{
 		Dial: func(dialCtx context.Context) (docket.Log, error) {
-			l, err := docket.OpenKafkaLog(dialCtx, broker)
+			// Per-case connections get the same warning sink as the main one.
+			l, err := docket.OpenKafkaLog(dialCtx, broker, docket.WithDiagnostic(kafkaDiagnostic))
 			if err != nil {
 				return nil, err
 			}
@@ -648,7 +644,7 @@ func amend(ctx context.Context, rest []string) int {
 		fmt.Fprintln(os.Stderr, "trial amend: exactly one supplemental filing (Form K-2) is required. See 'trial help amend'.")
 		return 2
 	}
-	src, err := readSource(fs.Arg(0))
+	src, err := readSource(ctx, fs.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trial amend: read source: %v\n", err)
 		return 1
@@ -661,13 +657,7 @@ func amend(ctx context.Context, rest []string) int {
 
 	n, err := court.Amend(ctx, log, c, string(src))
 	if err != nil {
-		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-			fmt.Fprintln(os.Stderr, "The supplemental filing was rejected pursuant to Article §4.2.")
-			if *counsel {
-				fmt.Fprintf(os.Stderr, "\n[counsel] %s\n", rej.Error())
-			} else {
-				fmt.Fprintln(os.Stderr, "(Rerun with --counsel for details.)")
-			}
+		if reportRejection(os.Stderr, "supplemental filing", err, *counsel) {
 			return 1
 		}
 		if reportAmbiguousCommit(os.Stderr, "supplemental filing", "case "+c.ID, err) {
@@ -728,7 +718,7 @@ func enact(ctx context.Context, rest []string) int {
 		fmt.Fprintln(os.Stderr, "trial enact: provide one Form S-1 statute, or use --canon. See 'trial help enact'.")
 		return 2
 	}
-	src, err := readSource(path)
+	src, err := readSource(ctx, path)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "trial enact: read source: %v\n", err)
 		return 1
@@ -741,13 +731,7 @@ func enact(ctx context.Context, rest []string) int {
 
 	name, n, err := court.Enact(ctx, log, string(src))
 	if err != nil {
-		if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-			fmt.Fprintln(os.Stderr, "The statute was rejected pursuant to Article §4.2.")
-			if *counsel {
-				fmt.Fprintf(os.Stderr, "\n[counsel] %s\n", rej.Error())
-			} else {
-				fmt.Fprintln(os.Stderr, "(Rerun with --counsel for details.)")
-			}
+		if reportRejection(os.Stderr, "statute", err, *counsel) {
 			return 1
 		}
 		if name != "" && reportAmbiguousCommit(os.Stderr, "enactment", fmt.Sprintf("statute %s (enactment %d)", name, n), err) {
@@ -846,7 +830,9 @@ func hearing(ctx context.Context, rest []string) int {
 		fmt.Println()
 	}
 
-	scanner := bufio.NewScanner(os.Stdin)
+	input, closeInput := commandInput(ctx)
+	defer closeInput()
+	scanner := bufio.NewScanner(input)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for {
 		if interactive {
@@ -864,7 +850,7 @@ func hearing(ctx context.Context, rest []string) int {
 			return 0
 		}
 		line := scanner.Text()
-		if len(line) == 0 || len(strings.TrimSpace(line)) == 0 {
+		if strings.TrimSpace(line) == "" {
 			if interactive {
 				fmt.Println("(empty input ignored)")
 			}
@@ -873,9 +859,11 @@ func hearing(ctx context.Context, rest []string) int {
 		proclaimed, verdict, err := h.Submit(ctx, line)
 		if err != nil {
 			if rej, ok := errors.AsType[*gregor.RejectedFiling](err); ok {
-				fmt.Println("The statement was rejected pursuant to Article §4.2.")
+				// Diagnostics go to stderr so a piped hearing's stdout carries
+				// only proclamations, as the interface reference promises.
+				fmt.Fprintln(os.Stderr, "The statement was rejected pursuant to Article §4.2.")
 				if *counsel {
-					fmt.Printf("[counsel] %s\n", rej.Error())
+					fmt.Fprintf(os.Stderr, "[counsel] %s\n", rej.Error())
 				}
 				continue
 			}
@@ -901,8 +889,19 @@ func hearing(ctx context.Context, rest []string) int {
 	}
 }
 
+func depositionsInterrupted(ctx context.Context) bool {
+	if ctx.Err() == nil {
+		return false
+	}
+	fmt.Fprintln(os.Stderr, "Depositions interrupted; the remaining files were not run.")
+	return true
+}
+
 // testCmd runs each selected deposition against a new in-memory log.
 func testCmd(ctx context.Context, rest []string) int {
+	if depositionsInterrupted(ctx) {
+		return 1
+	}
 	fs := commandFlags("test")
 	transcript := fs.Bool("transcript", false, "print everything each witness proclaimed, verbatim")
 	if err := fs.Parse(rest); err != nil {
@@ -950,7 +949,12 @@ func testCmd(ctx context.Context, rest []string) int {
 	fmt.Println()
 	contradicted := 0
 	for _, f := range files {
-		src, err := readSource(f)
+		// A signal cancels ctx; without this check every remaining deposition
+		// would run, fail instantly, and be reported as contradicted.
+		if depositionsInterrupted(ctx) {
+			return 1
+		}
+		src, err := readSource(ctx, f)
 		if err != nil {
 			fmt.Printf("  FAIL    %s\n          the deposition could not be read: %v\n", f, err)
 			contradicted++
@@ -967,13 +971,16 @@ func testCmd(ctx context.Context, rest []string) int {
 			contradicted++
 			continue
 		}
-		prog, err := readSource(filepath.Join(filepath.Dir(f), dep.Program))
+		prog, err := readSource(ctx, filepath.Join(filepath.Dir(f), dep.Program))
 		if err != nil {
 			fmt.Printf("  FAIL    %s\n          the deposed could not be located: %v\n", f, err)
 			contradicted++
 			continue
 		}
 		res := deposition.Run(ctx, string(prog), dep)
+		if depositionsInterrupted(ctx) {
+			return 1
+		}
 		if res.OK() {
 			fmt.Printf("  ok      %-40s (%.2fs)\n", f, res.Elapsed.Seconds())
 		} else {
@@ -1571,7 +1578,9 @@ func mcpCmd(ctx context.Context, rest []string) int {
 	defer log.Close()
 
 	fmt.Fprintln(os.Stderr, "trial MCP server listening on stdio")
-	srv := newAdvocateServer(log, os.Stdin, os.Stdout)
+	input, closeInput := commandInput(ctx)
+	defer closeInput()
+	srv := newAdvocateServer(log, input, os.Stdout)
 	if err := srv.Serve(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "MCP server stopped: %v\n", err)
 		return 1
@@ -1597,7 +1606,9 @@ func counselCmd(ctx context.Context, rest []string) int {
 		return 2
 	}
 	fmt.Fprintln(os.Stderr, "trial LSP server listening on stdio")
-	srv := &counsel.Server{In: os.Stdin, Out: os.Stdout, Version: resolveVersion()}
+	input, closeInput := commandInput(ctx)
+	defer closeInput()
+	srv := &counsel.Server{In: input, Out: os.Stdout, Version: resolveVersion()}
 	if err := srv.Serve(ctx); err != nil {
 		fmt.Fprintf(os.Stderr, "LSP server stopped: %v\n", err)
 		return 1

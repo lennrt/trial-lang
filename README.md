@@ -135,7 +135,7 @@ File and run a case:
 Stop the local broker when you finish:
 
 ```console
-docker compose down
+go run ./cmd/trial dismiss
 ```
 
 The Compose configuration uses plaintext localhost transport. Do not use it as
@@ -225,14 +225,19 @@ make verify
 make vuln
 ```
 
+`make help` lists every development target.
+
 Run the Kafka integration tests with the pinned Compose image:
 
 ```console
-docker compose up -d
-TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court \
-  -run '^(TestE2E|TestDifferential)' -count=1 -v
-docker compose down
+docker compose up -d --wait --wait-timeout 120
+TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court ./cmd/trial \
+  -run '^(TestE2E|TestDifferential|TestCLI)' -count=1 -v
+go run ./cmd/trial dismiss
 ```
+
+`dismiss` retains stored case data. `docker compose down --volumes` also deletes
+the data; use it only when those cases are no longer needed.
 
 CI also builds the CLI and runs
 [`scripts/kafka-cli-smoke.sh`](scripts/kafka-cli-smoke.sh) through `file`,

@@ -1,7 +1,7 @@
 # One Apache Kafka broker in KRaft mode, with no ZooKeeper.
 #
-#   trial summon   ->  docker compose up -d
-#   trial dismiss  ->  docker compose down   (the archive volume survives)
+# trial summon  -> docker compose up -d --wait --wait-timeout 120
+# trial dismiss -> docker compose down            (the archive volume survives)
 services:
   the-court:
     image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
@@ -22,6 +22,17 @@ services:
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_LOG_DIRS: /var/lib/kafka/data
+    # A KRaft broker listens before it can serve requests. Asking the broker
+    # for its API versions verifies that it answers protocol requests.
+    # `docker compose up --wait` and `trial summon` wait for this check.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1
+      interval: 5s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
     volumes:
       - court-archives:/var/lib/kafka/data
 

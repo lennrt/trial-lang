@@ -17,12 +17,26 @@ Normal command results go to stdout and errors go to stderr. Exit codes are
 0 for success, 1 for a command or case failure, and 2 for invalid arguments.
 For scripting, `file --quiet` prints only the created case identifier;
 `proceed --quiet` and `serve --quiet` suppress progress/confirmation output.
+Options may appear before or after the first positional argument; a value that
+begins with `-` must follow a `--` terminator, for example
+`trial serve <case> -- -5`.
 The `status`, `verdict`, `docket`, `audit`, and `profile` commands support JSON
 output. `burn` requires `--with-prejudice` and permanently deletes case topics.
 
 Case identifiers have the form `case-` followed by 24 lowercase hexadecimal
 digits. A failure after an ambiguous commit can mean that a write succeeded:
 inspect the case or statute identified by the error before retrying.
+
+Every command runs under a context that SIGINT (Ctrl+C) or SIGTERM cancels.
+Long-running commands such as `proceed`, `proceed --docket`, `observe`,
+`watch`, `hearing`, `mcp`, and `counsel` stop at their next cancellation
+check, and the CLI interrupts standard-input reads to unblock waiting readers.
+Cancellation exits with status 1. An in-flight commit may have an uncertain
+outcome; inspect the identified case or statute before retrying. On Unix, a
+second signal can force exit. `summon` waits up to 120 seconds for the
+Compose broker to report healthy. `trial help` documents `--broker` only for
+commands that connect to Kafka; the list is derived from the command table in
+[cmd/trial/commands.go](../cmd/trial/commands.go).
 
 ## Source, bytecode, and durable records
 

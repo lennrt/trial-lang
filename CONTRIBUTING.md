@@ -1,5 +1,8 @@
 # Contributing
 
+Participation in issues, pull requests, and reviews is covered by the
+[code of conduct](CODE_OF_CONDUCT.md).
+
 ## Propose a change
 
 Use [GitHub Issues](https://github.com/lennrt/trial-lang/issues) for bugs,
@@ -39,6 +42,9 @@ files.
 
 ## Run local checks
 
+`make help` lists every target with a one-line description; a bare `make`
+prints the same list.
+
 Run the required brokerless checks:
 
 ```console
@@ -53,9 +59,9 @@ builds, Linux ARM64, and repository examples.
 Run the live-broker tests when Docker is available:
 
 ```console
-docker compose up -d
-TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court \
-  -run '^(TestE2E|TestDifferential)' -count=1 -v
+docker compose up -d --wait --wait-timeout 120
+TRIAL_E2E_BROKER=localhost:9092 go test -timeout=10m ./internal/court ./cmd/trial \
+  -run '^(TestE2E|TestDifferential|TestCLI)' -count=1 -v
 docker compose down
 ```
 

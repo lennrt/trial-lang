@@ -5,6 +5,7 @@ run:
   modules-download-mode: readonly
 
 linters:
+  # Explicit correctness and maintainability checks, verified with make lint.
   default: none
   enable:
     - copyloopvar
@@ -12,15 +13,22 @@ linters:
     - errcheck
     - errorlint
     - exhaustive
+    - gocheckcompilerdirectives
     - govet
     - ineffassign
+    - misspell
     - modernize
     - nilerr
+    - nilnesserr
     - noctx
     - nolintlint
+    - predeclared
+    - reassign
     - staticcheck
     - unconvert
     - unused
+    - usestdlibvars
+    - wastedassign
 
 formatters:
   enable:

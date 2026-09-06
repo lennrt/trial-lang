@@ -67,6 +67,8 @@ FLAGS
   -h, --help                      Show command help
 
 Use "-" as the file name to read a filing from standard input.
+Use "--" before positional values that begin with "-", for example
+"trial serve <case> -- -5".
 
 EXIT STATUS
   0  The command succeeded.
@@ -93,7 +95,7 @@ var helpExamples = map[string]string{
 	"file":    "  trial file examples/hello.trial\n  trial proceed \"$(trial file examples/hello.trial --quiet)\"",
 	"proceed": "  trial proceed case-7f3a1c8e2d4b609af137c5e9\n  trial proceed --docket",
 	"observe": "  trial observe case-7f3a1c8e2d4b609af137c5e9 --from-the-beginning",
-	"serve":   "  trial serve case-7f3a1c8e2d4b609af137c5e9 3",
+	"serve":   "  trial serve case-7f3a1c8e2d4b609af137c5e9 3\n  trial serve case-7f3a1c8e2d4b609af137c5e9 -- -5",
 	"test":    "  trial test examples\n  trial test --transcript examples/hello.deposition",
 	"status":  "  trial status case-7f3a1c8e2d4b609af137c5e9 --json",
 	"docket":  "  trial docket --json",
@@ -141,13 +143,11 @@ func helpFor(name string) (string, bool) {
 	return b.String(), true
 }
 
+// acceptsBroker reports whether the command connects to Kafka and therefore
+// documents --broker in its help.
 func acceptsBroker(name string) bool {
-	switch name {
-	case "summon", "dismiss", "test", "counsel", "help", "version":
-		return false
-	default:
-		return true
-	}
+	c, ok := lookupCommand(name)
+	return ok && c.broker
 }
 
 // wantsHelp reports whether an option before "--" requests help.
@@ -163,12 +163,16 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
-var commandNames = []string{
-	"summon", "dismiss", "file", "proceed", "observe", "serve", "amend",
-	"enact", "statutes", "hearing", "test", "verdict", "status", "docket",
-	"transcript", "reenact", "audit", "appeal", "profile", "burn", "mcp",
-	"counsel", "watch", "help", "version",
-}
+// commandNames lists every subcommand in help order. It is derived from the
+// command table so that dispatch, help, and suggestions cannot drift apart.
+var commandNames = func() []string {
+	table := commandTable()
+	names := make([]string, 0, len(table))
+	for _, c := range table {
+		names = append(names, c.name)
+	}
+	return names
+}()
 
 // nearest returns a command within two edits of cmd.
 func nearest(cmd string) string {

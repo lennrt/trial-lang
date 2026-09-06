@@ -95,3 +95,48 @@ verify:
 	${MAKE} arm64
 	${MAKE} demo-check
 	${MAKE} examples
+
+# A bare `make` used to run the first target, which rewired core.hooksPath.
+# Listing the targets is the safer default.
+.DEFAULT_GOAL := help
+
+.PHONY: help install clean
+
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo devel)
+
+help:
+	@echo "trial-lang development targets:"
+	@echo
+	@echo "  help           List development targets (the default)"
+	@echo "  build          Compile ./cmd/trial into ./trial"
+	@echo "  install        go install ./cmd/trial with the git version stamped in"
+	@echo "  test           Test suite (Kafka tests require TRIAL_E2E_BROKER)"
+	@echo "  race           Tests under the race detector"
+	@echo "  property       Generated-program property tests"
+	@echo "  fuzz           Parser and Counsel framing fuzz targets (FUZZ_TIME=${FUZZ_TIME})"
+	@echo "  coverage       Statement coverage report"
+	@echo "  examples       Run the brokerless example depositions"
+	@echo "  fmt            Rewrite sources with goimports"
+	@echo "  fmt-check      Check gofmt and goimports without rewriting files"
+	@echo "  tidy-check     Check module tidiness without rewriting files"
+	@echo "  vet            Go vet analyzers"
+	@echo "  api-check      Check the public API snapshot"
+	@echo "  workflow-check Validate GitHub Actions workflows"
+	@echo "  licenses       Check dependency license compatibility"
+	@echo "  purego         Build without CGO"
+	@echo "  arm64          Cross-build for Linux ARM64"
+	@echo "  demo-generate  Regenerate demo assets"
+	@echo "  demo-check     Check generated demo assets"
+	@echo "  lint           golangci-lint with the pinned version"
+	@echo "  vuln           govulncheck"
+	@echo "  verify         Required local checks; also run make vuln"
+	@echo "  hooks          Point core.hooksPath at .githooks"
+	@echo "  clean          Remove the local binary and coverage output"
+	@echo
+	@echo "Run 'make verify' before opening a pull request. See CONTRIBUTING.md."
+
+install:
+	go install -ldflags "-X main.version=$(VERSION)" ./cmd/trial
+
+clean:
+	rm -f trial trial.exe coverage.out

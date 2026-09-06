@@ -1,0 +1,59 @@
+name: Bug report
+description: The Court, the CLI, or a protocol server did something the documentation does not describe.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. The more of the following you can fill in, the faster it can be reproduced.
+        Vulnerabilities go through SECURITY.md, not this form.
+  - type: input
+    id: version
+    attributes:
+      label: trial version
+      description: Output of `trial version`.
+      placeholder: trial v0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      options:
+        - CLI (file, proceed, observe, ...)
+        - Brokerless depositions (trial test)
+        - Kafka-backed execution
+        - Advocate MCP server (trial mcp)
+        - Counsel language server (trial counsel)
+        - Compiler or language semantics
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Operating system and architecture; `go version` if built from source; the Kafka version if a broker other than the Compose one was involved.
+      placeholder: macOS 15 arm64, go1.27.0, Compose broker from docker-compose.yml
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A minimal `.trial` or `.deposition` file and the exact commands. A deposition that fails under `trial test` is ideal because it needs no broker.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Cite the specification, interface reference, or help text where possible.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include full output. Use `--counsel` on rejected filings so the particulars are visible.
+    validations:
+      required: true

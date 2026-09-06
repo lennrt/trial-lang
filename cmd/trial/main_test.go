@@ -153,7 +153,7 @@ func TestHelpForUnknown(t *testing.T) {
 // A near command gets one suggestion. An unrelated value gets none.
 func TestNearest(t *testing.T) {
 	cases := map[string]string{
-		"procede": "proceed",
+		"procede": "proceed", //nolint:misspell // Intentional typo exercises command suggestions.
 		"satus":   "status",
 		"veridct": "verdict",
 		"dockte":  "docket",

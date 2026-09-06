@@ -4,6 +4,22 @@
 
 ### Fixed
 
+- Stop `trial` cleanly on SIGTERM as well as Ctrl+C, so containerized
+  `proceed --docket`, `watch`, `mcp`, and `counsel` processes cancel and unwind.
+  Interrupt standard-input reads on cancellation, including partial protocol messages.
+- Print the target list when `make` runs without arguments instead of silently
+  rewriting `core.hooksPath`.
+- Make `trial summon` return only after the Compose broker passes its
+  healthcheck, so the "Kafka is running" hint is true when printed and an
+  immediate `trial file` no longer races broker startup.
+- Route Kafka maintenance warnings from per-case connections opened by
+  `proceed --docket` to stderr like every other connection.
+- Stop `trial test` after Ctrl+C or SIGTERM without counting interrupted
+  or unrun depositions as failures.
+- Forward an interrupt to `docker compose` and wait up to 15 seconds when
+  `summon` or `dismiss` is interrupted, instead of killing it outright.
+- Write `trial hearing` rejection notices to stderr so a piped hearing's
+  stdout carries only proclamations.
 - Bind the unauthenticated development Kafka broker to host loopback instead of
   publishing it on every host interface.
 - Keep proceedings-cache addresses as 64-bit integers and validate cache-window
@@ -21,8 +37,25 @@
 - Clarify that brokerless examples and development commands need a source
   checkout.
 
+### Changed
+
+- Dispatch CLI subcommands from one table that also drives `trial help`,
+  `--broker` documentation, and near-miss suggestions, so a new command cannot
+  be added to one and forgotten in another.
+- Report rejected filings identically across `file`, `amend`, and `enact`.
+- Enable `gocheckcompilerdirectives`, `misspell`, `nilnesserr`, `predeclared`,
+  `reassign`, `usestdlibvars`, and `wastedassign` in lint.
+
 ### Added
 
+- Add `make help`, `make install` (stamps the git version into the binary), and
+  `make clean`.
+- Add Dependabot configuration for Go modules, GitHub Actions, and the Compose
+  broker image; issue and pull request templates; a code of conduct; and an
+  EditorConfig.
+- Document signal handling and the `--broker` rule in the interface reference.
+- Document the `--` terminator for values that begin with `-` in `trial help`,
+  `trial help serve`, and the interface reference.
 - Run parser/compiler and Counsel framing fuzz targets in CI and release
   verification; provide a statement-coverage command.
 - Document contribution review, vulnerability response and remediation,

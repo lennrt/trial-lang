@@ -146,8 +146,8 @@ func TestMemoryFetchHonorsCanceledContext(t *testing.T) {
 
 func TestCloneBytesPreservesOwnership(t *testing.T) {
 	original := []byte("evidence")
-	copy := cloneBytes(original)
-	copy[0] = 'X'
+	cloned := cloneBytes(original)
+	cloned[0] = 'X'
 	if string(original) != "evidence" {
 		t.Fatal("cloneBytes retained caller-owned storage")
 	}
