@@ -91,11 +91,6 @@ func run(args []string) int {
 	case "--version", "-v":
 		cmd = "version"
 	}
-	// Preserve the help command's positional-argument rules. For other
-	// commands, a help flag takes precedence over command options.
-	if cmd != "help" && wantsHelp(rest) {
-		return helpCmd(cmd)
-	}
 	c, ok := lookupCommand(cmd)
 	if !ok {
 		fmt.Fprintf(os.Stderr, "trial: unknown command %q.", cmd)
@@ -104,6 +99,15 @@ func run(args []string) int {
 		}
 		fmt.Fprintln(os.Stderr, " See 'trial help'.")
 		return 2
+	}
+	// Help takes precedence over other options, but a flag's value is data.
+	// For example, --serve --help supplies the literal string "--help".
+	valueFlags := c.valueFlags
+	if c.broker {
+		valueFlags = append(valueFlags, "broker")
+	}
+	if cmd != "help" && wantsHelp(rest, valueFlags...) {
+		return helpCmd(cmd)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -216,10 +220,17 @@ const maxSourceBytes = 4 << 20
 // readSource reads at most maxSourceBytes from path. A path of "-" reads
 // standard input. The function rejects extra input before allocation grows.
 func readSource(ctx context.Context, path string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if path == "-" {
 		input, closeInput := commandInput(ctx)
 		defer closeInput()
-		return readBounded(input, "standard input", maxSourceBytes)
+		data, err := readBounded(input, "standard input", maxSourceBytes)
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, ctxErr
+		}
+		return data, err
 	}
 	file, err := os.Open(path)
 	if err != nil {

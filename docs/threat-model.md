@@ -1,6 +1,6 @@
 # Threat model
 
-Review date: 2026-09-05
+Review date: 2026-09-30
 
 Status: design review only. This is not a security certification.
 
@@ -13,7 +13,7 @@ The system has four runtime parts:
 3. The Court executes instructions and writes durable state.
 4. Kafka stores case, statute, message, and execution records.
 
-The in-memory log is a test adapter. Docker Compose starts one local Kafka
+The in-memory log supports local runs and tests. Docker Compose starts one local Kafka
 broker with plaintext transport, published only on host loopback
 (`127.0.0.1:9092`). See [ADR 0002](adr/0002-loopback-development-broker.md).
 
@@ -39,6 +39,19 @@ canonical `case-` form. Invalid flags stop before network access.
 
 Residual risk: a user can ask the CLI to read any file that the same user can
 read. This is normal local CLI authority.
+
+`trial run` uses a fresh memory log and never connects to Kafka. It bounds source
+files, explicit dependencies, and served inputs. Its positive timeout defaults
+to 30 seconds, with at most 64 child workers at once. Normal completion joins
+the Court workers and output reader. Cancellation allows one additional second
+for cleanup. If loading, compilation, or stdout remains blocked, the command
+returns failure and process exit stops that remaining work. The final stderr
+diagnostic shares the same grace. Output and diagnostics can be incomplete.
+
+The timeout does not impose a total heap limit or a parser nesting limit.
+The stdin helper can live until process exit. Programs can allocate substantial
+memory through retained execution records. Local execution is not a security sandbox. See
+[ADR 0004](adr/0004-brokerless-run.md).
 
 ### MCP client to Advocate
 
@@ -109,6 +122,10 @@ Residual risks:
 | Enactments per deposition | 100 |
 | Summonses, proclamations, or record expectations | 1,000 each |
 | Deposition duration | 600 court days |
+| Explicit statutes for `run` | 100 files, 4 MiB each, 256 MiB total |
+| Inputs for `run` | 1,000 values and 4 MiB total |
+| Default timeout for `run` | 30 seconds, with a positive override |
+| Concurrent child workers for `run` | 64 |
 | Docket workers | 1,024 |
 
 ## Security sinks

@@ -12,6 +12,7 @@ import (
 	"math/big"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -31,6 +32,7 @@ type Server struct {
 }
 
 const (
+	protocolVersion    = "2025-06-18"
 	maxRequestBytes    = 16 << 20
 	maxSourceBytes     = 4 << 20
 	maxToolValues      = 1000
@@ -137,40 +139,117 @@ func (s *Server) Serve(ctx context.Context) error {
 	if s.Version == "" {
 		s.Version = "(devel)"
 	}
-	enc := json.NewEncoder(s.Out)
 	sc := bufio.NewScanner(s.In)
-	sc.Buffer(make([]byte, 0, 64*1024), maxRequestBytes)
+	// Scanner's buffer also holds the line ending. Bound the JSON separately
+	// so an exactly-at-limit request works with LF, CRLF, or final EOF.
+	sc.Buffer(make([]byte, 0, 64*1024), maxRequestBytes+2)
 
-	for sc.Scan() {
+	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if !sc.Scan() {
+			break
+		}
 		line := sc.Bytes()
+		if len(line) > maxRequestBytes {
+			return fmt.Errorf("request exceeds the %d-byte limit", maxRequestBytes)
+		}
 		if len(line) == 0 {
 			continue
 		}
 		var req rpcRequest
-		if err := decodeStrict(line, &req, false); err != nil {
-			if encodeErr := enc.Encode(rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"),
-				Error: &rpcError{Code: -32700, Message: "request could not be read: " + err.Error()}}); encodeErr != nil {
-				return encodeErr
+		var requestError *rpcError
+		if !json.Valid(line) {
+			requestError = &rpcError{Code: -32700, Message: "request could not be read: invalid JSON"}
+		} else if err := decodeStrict(line, &req, false); err != nil {
+			requestError = &rpcError{Code: -32600, Message: "request could not be read: " + err.Error()}
+		} else if req.JSONRPC != "2.0" || req.Method == "" {
+			requestError = &rpcError{Code: -32600, Message: "request must use JSON-RPC 2.0 and name a method"}
+		} else if !validRequestID(req.ID) {
+			requestError = &rpcError{Code: -32600, Message: "request ID must be a string or integer"}
+		} else if params := bytes.TrimSpace(req.Params); len(params) > 0 && params[0] != '{' {
+			requestError = &rpcError{Code: -32600, Message: "request params must be an object"}
+		}
+		if requestError != nil {
+			if err := s.writeResponse(rpcResponse{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: requestError}); err != nil {
+				return err
 			}
 			continue
 		}
 		resp, reply := s.handle(ctx, &req)
 		if reply {
-			if err := enc.Encode(resp); err != nil {
+			if err := s.writeResponse(resp); err != nil {
 				return err
 			}
 		}
 	}
-	return sc.Err()
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	return ctx.Err()
+}
+
+func (s *Server) writeResponse(response rpcResponse) error {
+	data, err := json.Marshal(response)
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+	n, err := s.Out.Write(data)
+	if err == nil && n != len(data) {
+		return io.ErrShortWrite
+	}
+	return err
+}
+
+// MCP permits string and integer IDs, but not JSON-RPC's null ID. Determine
+// integrality from decimal digits without rounding through float64 or expanding
+// arbitrarily large exponents. The enclosing JSON has already been validated.
+func validRequestID(raw json.RawMessage) bool {
+	id := bytes.TrimSpace(raw)
+	if len(id) == 0 || id[0] == '"' {
+		return true // absent ID is a notification
+	}
+	if id[0] != '-' && (id[0] < '0' || id[0] > '9') {
+		return false
+	}
+	mantissa := string(id)
+	var exponent int64
+	if i := strings.IndexAny(mantissa, "eE"); i >= 0 {
+		// On range errors ParseInt returns the signed boundary. That is
+		// sufficient to compare with a fraction bounded by the request size.
+		exponent, _ = strconv.ParseInt(mantissa[i+1:], 10, 64)
+		mantissa = mantissa[:i]
+	}
+	if strings.Trim(mantissa, "-0.") == "" {
+		return true
+	}
+	fraction := 0
+	if dot := strings.IndexByte(mantissa, '.'); dot >= 0 {
+		fraction = len(mantissa) - dot - 1
+	}
+	trailingZeros := 0
+	for i := len(mantissa) - 1; i >= 0; i-- {
+		if mantissa[i] == '.' {
+			continue
+		}
+		if mantissa[i] != '0' {
+			break
+		}
+		trailingZeros++
+	}
+	return exponent >= int64(fraction-trailingZeros)
 }
 
 func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool) {
-	// JSON-RPC notifications have no ID and receive no response.
-	notification := len(req.ID) == 0
 	resp := rpcResponse{JSONRPC: "2.0", ID: req.ID}
+	// MCP notifications have no ID and receive no response. The methods
+	// below are requests; in particular, tools/call must not mutate storage
+	// when sent without the ID needed to acknowledge its result.
+	if len(req.ID) == 0 {
+		return resp, false
+	}
 
 	switch req.Method {
 	case "initialize":
@@ -183,15 +262,13 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 		if len(req.Params) > 0 {
 			if err := decodeStrict(req.Params, &params, false); err != nil {
 				resp.Error = &rpcError{Code: -32602, Message: "initialize parameters could not be read: " + err.Error()}
-				return resp, !notification
+				return resp, true
 			}
 		}
-		version := params.ProtocolVersion
-		if version == "" {
-			version = "2025-06-18"
-		}
+		// Unsupported offers receive a version we implement. Echoing an
+		// arbitrary client string would falsely claim support for that version.
 		resp.Result = map[string]any{
-			"protocolVersion": version,
+			"protocolVersion": protocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}},
 			"serverInfo": map[string]any{
 				"name":    "trial",
@@ -200,15 +277,15 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 			},
 			"instructions": advocateInstructions,
 		}
-		return resp, !notification
+		return resp, true
 
 	case "ping":
 		resp.Result = map[string]any{}
-		return resp, !notification
+		return resp, true
 
 	case "tools/list":
 		resp.Result = map[string]any{"tools": toolDefs()}
-		return resp, !notification
+		return resp, true
 
 	case "tools/call":
 		var params struct {
@@ -218,15 +295,12 @@ func (s *Server) handle(ctx context.Context, req *rpcRequest) (rpcResponse, bool
 		}
 		if err := decodeStrict(req.Params, &params, false); err != nil {
 			resp.Error = &rpcError{Code: -32602, Message: "tools/call parameters could not be read"}
-			return resp, !notification
+			return resp, true
 		}
 		resp.Result = s.call(ctx, params.Name, params.Arguments)
-		return resp, !notification
+		return resp, true
 	}
 
-	if notification {
-		return resp, false // initialized, cancelled, and other notifications
-	}
 	resp.Error = &rpcError{Code: -32601, Message: fmt.Sprintf("method %q is not supported", req.Method)}
 	return resp, true
 }
@@ -371,6 +445,7 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 		ProgramSource    string   `json:"program_source"`
 		DepositionSource string   `json:"deposition_source"`
 	}
+	args.Limit = defaultPageSize
 	if len(rawArgs) > 0 {
 		if err := decodeStrict(rawArgs, &args, true); err != nil {
 			return errorResult("the arguments could not be read: %v", err)
@@ -379,11 +454,8 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 	if args.FromOffset < 0 {
 		return errorResult("from_offset must be nonnegative")
 	}
-	if args.Limit < 0 || args.Limit > maxPageSize {
+	if args.Limit < 1 || args.Limit > maxPageSize {
 		return errorResult("limit must be between 1 and %d", maxPageSize)
-	}
-	if args.Limit == 0 {
-		args.Limit = defaultPageSize
 	}
 	if len(args.Source) > maxSourceBytes || len(args.ProgramSource) > maxSourceBytes || len(args.DepositionSource) > maxSourceBytes {
 		return errorResult("source text exceeds the %d-byte tool limit", maxSourceBytes)
@@ -690,38 +762,55 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 }
 
 func validateToolFields(name string, raw json.RawMessage) error {
-	if len(raw) == 0 {
-		return nil
-	}
 	var fields map[string]json.RawMessage
-	if err := decodeStrict(raw, &fields, false); err != nil {
-		return err
+	if len(raw) > 0 {
+		if err := decodeStrict(raw, &fields, false); err != nil {
+			return err
+		}
 	}
-	var allowed []string
+	var allowed, required []string
 	switch name {
 	case "trial_amend":
 		allowed = []string{"case", "source"}
+		required = allowed
 	case "trial_file", "trial_enact":
 		allowed = []string{"source"}
+		required = allowed
 	case "trial_proceed":
 		allowed = []string{"case", "for_at_most_court_days"}
+		required = []string{"case"}
 	case "trial_serve":
 		allowed = []string{"case", "values"}
+		required = allowed
 	case "trial_observe", "trial_status":
 		allowed = []string{"case", "from_offset", "limit"}
+		required = []string{"case"}
 	case "trial_verdict", "trial_reenact":
 		allowed = []string{"case"}
+		required = allowed
 	case "trial_docket":
 		allowed = []string{"from_offset", "limit"}
 	case "trial_statutes":
 	case "trial_test":
 		allowed = []string{"program_source", "deposition_source"}
+		required = allowed
 	default:
 		return nil
 	}
-	for field := range fields {
+	if len(raw) > 0 && fields == nil {
+		return errors.New("arguments must be an object")
+	}
+	for field, value := range fields {
 		if !slices.Contains(allowed, field) {
 			return fmt.Errorf("unknown field %q for %s", field, name)
+		}
+		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			return fmt.Errorf("field %q must not be null", field)
+		}
+	}
+	for _, field := range required {
+		if _, exists := fields[field]; !exists {
+			return fmt.Errorf("field %q is required for %s", field, name)
 		}
 	}
 	return nil

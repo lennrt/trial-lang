@@ -1,0 +1,6 @@
+# Keep Go formatting and shell scripts stable in Windows checkouts.
+* text=auto eol=lf
+*.png binary
+*.gif binary
+# Generated ASCII frames preserve their exact rectangular padding in <pre>.
+docs/gallery.html whitespace=-blank-at-eol

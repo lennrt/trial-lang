@@ -21,17 +21,18 @@ numeric offset can differ where transaction control records occupy offsets.
 |---|---|---|
 | `op` | all | opcode, below |
 | `value` | SUBMIT | the literal to push |
-| `name` | RETRIEVE, FILE, STRIKE | the record's name; on PETITION, the office's name (decorative); on EXHIBIT, the exhibit's name; on INSPECT and ENTER, the entry's name |
-| `target` | REFER, REFER-OVERRULED, PETITION | destination logical instruction address |
-| `params` | PETITION, EXHIBIT | PETITION: names bound in the office's frame, in order; EXHIBIT: the entries, in filing order |
-| `wants` | PETITION | the caller awaits a finding |
+| `name` | RETRIEVE, FILE, STRIKE, DISCOVERY, PETITION, POWER, EXHIBIT, INSPECT, ENTER, PATENT, PRACTICE, LICENSE, ASSIGN, MOTION | record, office, exhibit, entry, or invention name; MOTION: optional record for the grounds |
+| `target` | REFER, REFER-OVERRULED, PETITION, POWER, MOTION, AWAIT-FOR, AWAIT-FROM-FOR | destination logical instruction address |
+| `params` | PETITION, POWER, EXHIBIT | PETITION and POWER: unique concern names in declaration order; EXHIBIT: entries in filing order |
+| `wants` | PETITION, PETITION-UNDER | the caller awaits a finding |
 | `with` | REMAND | a finding accompanies the remand |
-| `count` | SCHEDULE | how many items to pop |
+| `count` | SCHEDULE, PETITION-UNDER | number of schedule items or dynamic call arguments to pop |
 | `pos` | any | source position |
 
 ## Values
 
-`{"t":"int","i":N}` · `{"t":"str","s":"…"}` · `{"t":"finding","b":true}`
+`{"t":"int","i":N}` · `{"t":"sum","i":1250}` (12.50, stored in pennies) ·
+`{"t":"str","s":"…"}` · `{"t":"finding","b":true}`
 (SUSTAINED is `true`; OVERRULED is `false`) ·
 `{"t":"exhibit","of":"person","x":{"name":{"t":"str","s":"Josef K."},…}}`
 (exhibits nest: any entry may itself be an exhibit) ·
@@ -53,15 +54,15 @@ executing case, and the concerns as strings).
 | `FILE` | v → | pop into record `name` |
 | `COMBINE` | l r → v | `+`; string joinder when both are strings |
 | `DEDUCT` `COMPOUND` | l r → v | `-`, `×` |
-| `APPORTION` | l r → v | integer division toward zero; among zero parties: GUILTY |
-| `NOTWITHSTANDING` | l r → v | remainder; zero notwithstanding: GUILTY |
-| `EXCEEDS` `FALLS-SHORT` | l r → f | integer magnitude; anything else: GUILTY |
-| `EQUALS` `DIFFERS` | l r → f | same-kind comparison; unlike kinds: GUILTY |
+| `APPORTION` | l r → v | division toward zero at integer or penny precision (spec §10.2); zero divisor: GUILTY |
+| `NOTWITHSTANDING` | l r → v | remainder; zero divisor: GUILTY |
+| `EXCEEDS` `FALLS-SHORT` | l r → f | integer or sum magnitude; promote an integer paired with a sum; non-numbers: GUILTY |
+| `EQUALS` `DIFFERS` | l r → f | same-kind comparison, also allowing an integer paired with a sum; other unlike kinds: GUILTY |
 | `OVERTURN` | f → f | negate a finding |
 | `REFER` | — | jump to `target` |
 | `REFER-OVERRULED` | f → | jump to `target` if the finding is OVERRULED |
 | `PROCLAIM` | v → | append `v.Display()` to proclamations |
-| `AWAIT` | → v | block on the summons topic; integers arrive as integers |
+| `AWAIT` | → v | block on the summons topic; complete, in-range integer and two-decimal sum strings arrive as numbers; other text remains a string |
 | `PETITION` | args… → | pop `len(params)` args, open a frame, jump to `target` |
 | `REMAND` | [v →] | close the frame, return; push v iff `with` and caller `wants` |
 | `ADJOURN` | — | commit PC+1 and suspend |
@@ -77,6 +78,7 @@ executing case, and the concerns as strings).
 | `CONTEMPT` | v → | HOLD … IN CONTEMPT: emit a verdict with sealed particulars `held in contempt: <display>` |
 | `STRIKE` | — | strike record `name`: a **tombstone** (key = `name`, null value) in the records topic; no such record: GUILTY |
 | `SERVE` | v w → | SERVE NOTICE OF v UPON w: append `v.Display()` to case `w`'s summons topic, key = the serving case's number, inside this instruction's transaction; `w` not a string, or no such case on file: GUILTY |
+| `JUDGMENT` | g c → | pop target case number `c`, then grounds `g`; the target must be a child commenced by this case and must have no verdict. Append its verdict and record the judgment in the parent's ledger in one step. Reenactment reuses the ledger entry without another verdict; invalid target or absent jurisdiction: GUILTY |
 | `CASE-AT-BAR` | → s | push this case's own number, as a string |
 | `CONTINUANCE` | n → | ADJOURN FOR n DAYS: a durable timer; see the two-step protocol below. Non-integer n, or n < 0: GUILTY |
 | `DISCRETION` | a b → n | pop upper then lower bound; push an integer in [a, b], both inclusive, chosen by the Court; non-integers or a > b: GUILTY. The draw is entered in the ledger topic in this step; a reenactment re-serves it |
@@ -91,7 +93,7 @@ executing case, and the concerns as strings).
 | `ROSTER` | r → s | pop a register; push a schedule of its keys, alphabetically; non-register: GUILTY |
 | `POWER` | → p | push a power of attorney over the office at `target`: `name`, `params`, and the executing case travel with it. The target is resolved at compile time like a `PETITION`'s and shifted by `CompileAt` like one |
 | `PETITION-UNDER` | p args… → | pop `count` arguments, pop the power; verify it is a power, that it was executed in this case, and that the arity fits (each failure: GUILTY); then open a frame exactly as `PETITION` does (CALL event in the appeals topic, locals bound from the instrument's concerns) and jump to the conferred address. `wants` says whether a finding is expected back |
-| `ARCHIVE` | v s → | COMMIT v TO THE ARCHIVE AS s: append the document to the archive topic (its offset becomes the handle), then update the catalog (key = s, value = `{"offset":N}`) inside this step's transaction; non-string name: GUILTY |
+| `ARCHIVE` | v s → | COMMIT v TO THE ARCHIVE AS s: append the document before the step commits to obtain its offset, then commit the catalog pointer (key = s, value = `{"offset":N}`) with the step. A failure between them can leave an uncataloged draft; non-string name: GUILTY |
 | `DOCUMENT` | s → v | THE DOCUMENT s FROM THE ARCHIVE: fold the catalog, fetch the archive record at the current offset, push the value; unknown name: GUILTY |
 | `PATENT` | v n → | LET LETTERS PATENT ISSUE FOR `name`: pop term (days) then disclosure; read the court day via the ledger; scan `the-patent-office`; a claim in force on `name` is GUILTY (prior art, or double patenting if yours); otherwise append the claim (key = `name`) inside this step's transaction |
 | `PRACTICE` | → v | THE PRACTICE OF `name`: read the court day via the ledger; the first in-force claim in registry (offset) order governs; the holder (assignments applied) and live licensees get the disclosure, others GUILTY (infringement); all terms lapsed: the latest disclosure (the public domain); no claim ever: GUILTY |
@@ -102,15 +104,23 @@ executing case, and the concerns as strings).
 | `MOTION` | — | FILE A MOTION TO RECONSIDER: place the motion on file (records topic, reserved key `__motion__`, value `{"target":N,"grounds":"name"}`), durably, within this step's transaction. While on file and unspent, the first verdict that would issue is intercepted instead of delivered, as one atomic step: an `IMPOUND` event in the dossier topic (empties the stack fold), an `IMPOUND` event in the appeals topic (empties the call-stack fold), the motion rewritten spent, the sealed particulars filed under `grounds` (if named), and the committed attention seeking to `target`. Filing again after the grant: GUILTY. A ledger/proceedings mismatch and an unreadable instruction record are not intercepted |
 | `DISCOVERY` | s → v | THE RECORD `name` IN THE MATTER OF s: pop a case number; fold the respondent's records topic as its own Court would (last writing per key since its latest reenactment marker, tombstones honored) and push the record `name`; the reading is entered in the ledger in this step, so a reenactment re-serves it. Non-string, no such matter, or no such record: GUILTY |
 | `PUBLISH` | v → | PUBLISH v IN THE GAZETTE: append `v.Display()` to `the-gazette` (key = the publishing case's number) inside this step's transaction; exactly-once publication |
-| `AWAIT-GAZETTE` | → v | AWAIT THE GAZETTE: block at this case's gazette cursor (carried in the attention note), consume the next edition, push it (integers arrive as integers); the cursor advances with the step, so consumption is exactly-once per case, and reenactment (cursor to zero) re-reads the same immutable editions with no ledger entry |
+| `AWAIT-GAZETTE` | → v | AWAIT THE GAZETTE: block at this case's gazette cursor (carried in the attention note), consume the next edition, push it (numeric text is parsed as for AWAIT); the cursor advances with the step, so consumption is exactly-once per case, and reenactment (cursor to zero) re-reads the same immutable editions with no ledger entry |
 | `AWAIT-FOR` | n → [v] | AWAIT SUMMONS FOR AT MOST n DAYS: the receive with a deadline; the two-step grant protocol of `CONTINUANCE` (reserved key `__attendance__`), except the wait ends at whichever comes first, the summons or the date. Served: consume the summons, push it, fall through. Expired: push nothing, refer to `target` (the FAILING WHICH arm). The outcome (a finding) is entered in the **ledger** in the deciding step, so a record that arrived after expiry stays too late in every reenactment. The honored grant is withdrawn by tombstone in the same step. Non-integer or negative term: GUILTY |
 | `AWAIT-FROM` | c → v | AWAIT SUMMONS FROM c: pop a case number; scan the summons topic from the cursor and consume the first record whose key is that case's seal, **out of turn**: the offset joins the heard set in the attention note, the records passed over stay unconsumed for a plain `AWAIT` (which steps over heard offsets; when the cursor catches one up, it is dropped from the set). The scan is a deterministic fold over an append-only topic, so no ledger entry: reenactment re-hears the same voice by construction. Blocks until the voice arrives. Non-string: GUILTY |
 | `AWAIT-FROM-FOR` | c, n → [v] | AWAIT SUMMONS FROM c FOR AT MOST n DAYS: `AWAIT-FROM` under `AWAIT-FOR`'s grant protocol. Step 1 pops the term and the voice and files both in the grant (`__attendance__`, `{"pc","until_unix_ms","days","from"}`), without advancing. Step 2 waits for the named seal or the date, whichever first; the outcome is entered in the **ledger**, so a late record stays late in every reenactment. Served: consume out of turn as `AWAIT-FROM`. Expired: refer to `target`. Non-string voice, non-integer or negative term: GUILTY, at grant time |
 
+## Numeric execution
+
+Arithmetic instructions use signed 64-bit integer results or sum penny
+mantissas. An integer paired with a sum is interpreted at penny scale.
+Scaling, multiplication, and division retain exact intermediates, truncate
+toward zero when needed, and wrap only the final result to 64 bits. Numeric
+comparisons are exact even when an integer's promoted pennies would not fit.
+
 ## The continuance protocol
 
-`CONTINUANCE` is the one instruction that takes two steps, because a
-timer must survive the process that started it.
+`CONTINUANCE` takes two steps because a timer must survive the process
+that started it. Timed summonses use the same grant protocol below.
 
 1. **Grant.** On first execution the Court pops `n`, computes the
    absolute deadline `now + n × 1s`, and commits a step whose appends
@@ -143,11 +153,15 @@ the grant), so both survive the official together.
 
 1. The case in chief is laid down first, article by article, in filing
    order. Labels compile away.
-2. If offices exist, an implicit `ADJOURN` follows the last article, so
-   control cannot fall through into an office. If no offices exist,
-   nothing follows: running off the end is **apparent acquittal**; the
-   Court blocks on `poll()`, and new proceedings may be appended to a
-   running case at any time.
+2. If offices exist, an implicit `ADJOURN` follows the last article, then a
+   `REFER` whose target is the end of this filing, after all office bodies.
+   The first instruction suspends the session. On resumption, the referral
+   skips the offices and reaches the end or the first appended amendment.
+   Explicit adjournments inside articles or offices still resume at their
+   next instruction. If no offices exist, neither boundary instruction is
+   added. Running off the end is **apparent acquittal**. The default session
+   returns. With `WaitForProceedings` enabled, as in `trial proceed`, the
+   Court waits for appended proceedings.
 3. Each office body follows, ending with an implicit bare `REMAND`.
 4. `SHOULD cond, stmt` compiles to: ⟨cond⟩ (`OVERTURN` if `FAIL TO`),
    `REFER-OVERRULED` past ⟨stmt⟩. With `FAILING WHICH, stmt2`: the
@@ -181,6 +195,13 @@ the grant), so both survive the official together.
    the existing ones, where a case blocked at apparent acquittal will
    find them.
 
+The office-boundary referral is emitted only for newly compiled filings.
+Existing proceedings are not recompiled on resume or reenactment. A filing
+produced by an older compiler without this referral retains its stored
+fallthrough behavior; file its source as a new case to gain the guard. See
+[ADR 0007](../docs/adr/0007-resumable-office-guard.md) for the compatibility
+boundary.
+
 ## Execution state topics
 
 All working state is event-sourced; the Court's memory is a cache
@@ -211,11 +232,16 @@ rebuilt by replaying these topics on every session.
 
 ## Transactional execution
 
-One instruction = one Kafka transaction. The Court buffers every record
+By default, an ordinary instruction commits one Kafka transaction.
+Continuances and timed summonses use the two-step protocol above;
+expedited execution groups instructions (§14.3a of [the specification](spec.md#143a-the-expedited-docket)).
+The Court buffers the execution records
 the instruction wishes to enter (dossier motions, appeals events,
 records, proclamations, notices served on other cases) and commits them
 together with an attention note in a single transaction; the step lands
 whole or not at all. All readers use `read_committed` isolation.
+`ARCHIVE` and `COMMENCE` create their draft document or child case before
+the step commits; a failed step can leave that draft on file.
 Consequences:
 
 - **Execution recovery.** Stop the process at a commit boundary; the next

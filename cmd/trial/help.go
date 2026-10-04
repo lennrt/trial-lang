@@ -1,11 +1,21 @@
 package main
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 const usage = `trial compiles and executes triallang cases.
 
 USAGE
   trial <command> [flags]
+
+LOCAL EXECUTION
+  trial run <program.trial>       Run once with temporary memory storage
+    --serve <value>               Supply input; repeat in receive order
+    --enact <statute.trial>        Enact a statute; repeat in dependency order
+    --canon                       Enact the bundled canon before other statutes
+    --timeout 30s                 Positive limit for loading, execution, and output
 
 CASE COMMANDS
   trial file <program.trial>      Create a case and print its case number
@@ -81,6 +91,7 @@ USAGE
   trial <command> [flags]
 
 COMMON COMMANDS
+  run <program.trial>   Run locally without Kafka
   summon                Start the local broker
   file <program.trial>  Create a case
   proceed <case>        Start or resume a case
@@ -92,6 +103,7 @@ COMMON COMMANDS
 Run "trial help" for all commands. Run "trial help <command>" for one command.`
 
 var helpExamples = map[string]string{
+	"run":     "  trial run examples/hello.trial\n  trial run examples/countdown.trial --serve 3\n  trial run examples/the-cornell-box.trial --canon --timeout 2m",
 	"file":    "  trial file examples/hello.trial\n  trial proceed \"$(trial file examples/hello.trial --quiet)\"",
 	"proceed": "  trial proceed case-7f3a1c8e2d4b609af137c5e9\n  trial proceed --docket",
 	"observe": "  trial observe case-7f3a1c8e2d4b609af137c5e9 --from-the-beginning",
@@ -150,14 +162,22 @@ func acceptsBroker(name string) bool {
 	return ok && c.broker
 }
 
-// wantsHelp reports whether an option before "--" requests help.
-func wantsHelp(args []string) bool {
-	for _, arg := range args {
+// wantsHelp reports whether an option before "--" requests help. Values of
+// named non-boolean flags remain data even when they look like help options.
+func wantsHelp(args []string, valueFlags ...string) bool {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
 		if arg == "--" {
 			return false
 		}
 		if arg == "-h" || arg == "-help" || arg == "--help" {
 			return true
+		}
+		if name, ok := strings.CutPrefix(arg, "-"); ok {
+			name = strings.TrimPrefix(name, "-")
+			if slices.Contains(valueFlags, name) {
+				i++
+			}
 		}
 	}
 	return false

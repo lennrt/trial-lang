@@ -53,7 +53,7 @@ func open(t *testing.T) *session {
 		if err := inW.Close(); err != nil {
 			t.Errorf("close MCP input: %v", err)
 		}
-		if err := <-done; err != nil {
+		if err := <-done; err != nil && !errors.Is(err, context.Canceled) {
 			t.Errorf("serve MCP session: %v", err)
 		}
 		if err := outR.Close(); err != nil {
@@ -95,7 +95,11 @@ func (s *session) rpc(method string, params any) map[string]any {
 // isError flag.
 func (s *session) call(name string, args any) (map[string]any, bool) {
 	s.t.Helper()
-	res := s.rpc("tools/call", map[string]any{"name": name, "arguments": args})
+	params := map[string]any{"name": name}
+	if args != nil {
+		params["arguments"] = args
+	}
+	res := s.rpc("tools/call", params)
 	isErr, _ := res["isError"].(bool)
 	content := res["content"].([]any)
 	text := content[0].(map[string]any)["text"].(string)

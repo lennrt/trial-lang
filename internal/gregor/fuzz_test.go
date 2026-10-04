@@ -46,10 +46,14 @@ func FuzzParse(f *testing.F) {
 		// Whatever parses must compile or be rejected; it may not crash.
 		// CompileAt is exercised too: a supplemental filing takes that
 		// road, and the shift must hold for any base.
-		if _, err := Compile(prog); err == nil {
-			if _, err := CompileAt(prog, 1_000_000); err != nil {
-				t.Fatalf("Compile accepted what CompileAt rejected: %v", err)
+		if _, err := Compile(prog); err != nil {
+			if _, ok := errors.AsType[*RejectedFiling](err); !ok {
+				t.Fatalf("Compile returned an error that is not a rejected filing: %T: %v", err, err)
 			}
+			return
+		}
+		if _, err := CompileAt(prog, 1_000_000); err != nil {
+			t.Fatalf("Compile accepted what CompileAt rejected: %v", err)
 		}
 	})
 }

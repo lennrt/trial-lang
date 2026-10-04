@@ -1,0 +1,107 @@
+FORM K-1.
+IN THE MATTER OF: the-labyrinth.
+FILED BY: the office of the shortest petition.
+
+OFF THE RECORD: Breadth-first search visits each open cell at most once.
+OFF THE RECORD: Schedule positions represent cells in a 7 by 7 maze.
+OFF THE RECORD: Predecessors reconstruct a shortest route from S to E.
+OFF THE RECORD: Neighbor order is north, east, south, west.
+OFF THE RECORD: Row boundaries prevent horizontal movement into another row.
+OFF THE RECORD: At most 225 cells are allowed. No external input is needed.
+
+HEREINAFTER, width SHALL MEAN 7.
+HEREINAFTER, start-cell SHALL MEAN 9.
+HEREINAFTER, goal-cell SHALL MEAN 41.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT maze IS
+        "#######" PLUS
+        "#S#...#" PLUS
+        "#.#.#.#" PLUS
+        "#...#.#" PLUS
+        "###.#.#" PLUS
+        "#...#E#" PLUS
+        "#######".
+    SHOULD width FALL SHORT OF 2 OR IN THE ALTERNATIVE width EXCEED 25, HOLD "Maze width must be between 2 and 25." IN CONTEMPT.
+    SHOULD THE LENGTH OF maze EXCEED 225 OR IN THE ALTERNATIVE THE LENGTH OF maze EQUAL 0, HOLD "Maze must contain between 1 and 225 cells." IN CONTEMPT.
+    SHOULD THE LENGTH OF maze NOTWITHSTANDING width DIFFER FROM 0, HOLD "Maze rows must have equal widths." IN CONTEMPT.
+    SHOULD start-cell FALL SHORT OF 1 OR IN THE ALTERNATIVE start-cell EXCEED THE LENGTH OF maze, HOLD "Start cell is outside the maze." IN CONTEMPT.
+    SHOULD goal-cell FALL SHORT OF 1 OR IN THE ALTERNATIVE goal-cell EXCEED THE LENGTH OF maze, HOLD "Goal cell is outside the maze." IN CONTEMPT.
+    SHOULD AN EXCERPT OF maze FROM start-cell TO start-cell EQUAL "#", HOLD "Start cell is a wall." IN CONTEMPT.
+    SHOULD AN EXCERPT OF maze FROM goal-cell TO goal-cell EQUAL "#", HOLD "Goal cell is a wall." IN CONTEMPT.
+    LET IT BE RECORDED THAT predecessor IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT route IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT position IS 1.
+
+ARTICLE 2.
+    SHOULD position EXCEED THE LENGTH OF maze, REFER TO ARTICLE 3.
+    ANNEX 0 TO predecessor.
+    ANNEX 0 TO route.
+    LET IT BE RECORDED THAT position IS position PLUS 1.
+    REFER TO ARTICLE 2.
+
+ARTICLE 3.
+    SUBSTITUTE -1 FOR ITEM start-cell OF predecessor.
+    LET IT BE RECORDED THAT queue IS A SCHEDULE COMPRISING start-cell.
+    LET IT BE RECORDED THAT head IS 1.
+    LET IT BE RECORDED THAT visited IS 0.
+    LET IT BE RECORDED THAT directions IS A SCHEDULE COMPRISING 0 LESS width AND 1 AND width AND -1.
+
+ARTICLE 4.
+    SHOULD head EXCEED THE LENGTH OF queue, HOLD "The maze has no route to the exit." IN CONTEMPT.
+    LET IT BE RECORDED THAT current IS THE ITEM AT head IN queue.
+    LET IT BE RECORDED THAT visited IS visited PLUS 1.
+    SHOULD current EQUAL goal-cell, REFER TO ARTICLE 6.
+    LET IT BE RECORDED THAT direction IS 1.
+
+ARTICLE 5.
+    SHOULD direction EXCEED 4, REFER TO ARTICLE 8.
+    PETITION THE OFFICE OF visit WITH current PLUS THE ITEM AT direction IN directions AND current.
+    LET IT BE RECORDED THAT direction IS direction PLUS 1.
+    REFER TO ARTICLE 5.
+
+ARTICLE 6.
+    LET IT BE RECORDED THAT position IS goal-cell.
+    LET IT BE RECORDED THAT steps IS 0.
+
+ARTICLE 7.
+    SUBSTITUTE 1 FOR ITEM position OF route.
+    SHOULD position EQUAL start-cell, REFER TO ARTICLE 9.
+    LET IT BE RECORDED THAT position IS THE ITEM AT position IN predecessor.
+    LET IT BE RECORDED THAT steps IS steps PLUS 1.
+    REFER TO ARTICLE 7.
+
+ARTICLE 8.
+    LET IT BE RECORDED THAT head IS head PLUS 1.
+    REFER TO ARTICLE 4.
+
+ARTICLE 9.
+    PROCLAIM "Shortest route: " PLUS THE TRANSCRIPT OF steps PLUS " steps.".
+    LET IT BE RECORDED THAT position IS 1.
+    LET IT BE RECORDED THAT row IS "".
+
+ARTICLE 10.
+    SHOULD position EXCEED THE LENGTH OF maze, ADJOURN INDEFINITELY.
+    LET IT BE RECORDED THAT tile IS AN EXCERPT OF maze FROM position TO position.
+    SHOULD tile EQUAL ".", SHOULD THE ITEM AT position IN route EQUAL 1, LET IT BE RECORDED THAT tile IS "*".
+    LET IT BE RECORDED THAT row IS row PLUS tile.
+    SHOULD position NOTWITHSTANDING width EQUAL 0, REFER TO ARTICLE 11.
+    LET IT BE RECORDED THAT position IS position PLUS 1.
+    REFER TO ARTICLE 10.
+
+ARTICLE 11.
+    PROCLAIM row.
+    LET IT BE RECORDED THAT row IS "".
+    LET IT BE RECORDED THAT position IS position PLUS 1.
+    REFER TO ARTICLE 10.
+
+THE OFFICE OF visit, CONCERNING candidate AND parent.
+    SHOULD candidate FALL SHORT OF 1, REMAND.
+    SHOULD candidate EXCEED THE LENGTH OF maze, REMAND.
+    SHOULD candidate EQUAL parent PLUS 1, SHOULD parent NOTWITHSTANDING width EQUAL 0, REMAND.
+    SHOULD candidate EQUAL parent LESS 1, SHOULD parent NOTWITHSTANDING width EQUAL 1, REMAND.
+    SHOULD THE ITEM AT candidate IN predecessor DIFFER FROM 0, REMAND.
+    SHOULD AN EXCERPT OF maze FROM candidate TO candidate EQUAL "#", REMAND.
+    SUBSTITUTE parent FOR ITEM candidate OF predecessor.
+    ANNEX candidate TO queue.
+    REMAND.

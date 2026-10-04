@@ -201,7 +201,11 @@ ARTICLE 5.
 	if strings.Join(got, "|") != strings.Join(want, "|") {
 		t.Fatalf("proclamations = %q, want %q", got, want)
 	}
-	report, err := Audit(ctx, log, c)
+	// Audit copies relevant broker history. Give that phase its own finite
+	// budget instead of spending the amendment deadline during Proceed above.
+	auditCtx, auditCancel := context.WithTimeout(t.Context(), 120*time.Second)
+	defer auditCancel()
+	report, err := Audit(auditCtx, log, c)
 	if err != nil {
 		t.Fatal(err)
 	}

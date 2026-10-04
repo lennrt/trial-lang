@@ -179,10 +179,20 @@ func (s *Server) Serve(ctx context.Context) error {
 			return err
 		}
 		var req rpcRequest
-		if err := decodeStrict(msg, &req); err != nil {
-			if writeErr := s.write(rpcResponse{ID: json.RawMessage("null"), Error: &rpcError{
-				Code: -32700, Message: "request could not be read: " + err.Error(),
-			}}); writeErr != nil {
+		var requestError *rpcError
+		if !json.Valid(msg) {
+			requestError = &rpcError{Code: -32700, Message: "request could not be read: invalid JSON"}
+		} else if err := decodeStrict(msg, &req); err != nil {
+			requestError = &rpcError{Code: -32600, Message: "request could not be read: " + err.Error()}
+		} else if req.JSONRPC != "2.0" || req.Method == "" {
+			requestError = &rpcError{Code: -32600, Message: "request must use JSON-RPC 2.0 and name a method"}
+		} else if !validRequestID(req.ID) {
+			requestError = &rpcError{Code: -32600, Message: "request ID must be a string, number, or null"}
+		} else if !validRequestParams(req.Params) {
+			requestError = &rpcError{Code: -32600, Message: "request params must be an object, array, or null"}
+		}
+		if requestError != nil {
+			if writeErr := s.write(rpcResponse{ID: json.RawMessage("null"), Error: requestError}); writeErr != nil {
 				return writeErr
 			}
 			continue
@@ -194,6 +204,22 @@ func (s *Server) Serve(ctx context.Context) error {
 			return err
 		}
 	}
+}
+
+// validRequestID preserves JSON-RPC's scalar IDs, including its discouraged
+// but permitted null ID. A missing ID identifies a notification. The enclosing
+// message has already passed JSON validation, so only its type remains to check.
+func validRequestID(raw json.RawMessage) bool {
+	id := bytes.TrimSpace(raw)
+	return len(id) == 0 || bytes.Equal(id, []byte("null")) ||
+		id[0] == '"' || id[0] == '-' || id[0] >= '0' && id[0] <= '9'
+}
+
+// JSON-RPC parameters are structured. LSP also uses null for methods such as
+// shutdown that take no parameters. JSON syntax has already been checked.
+func validRequestParams(raw json.RawMessage) bool {
+	params := bytes.TrimSpace(raw)
+	return len(params) == 0 || bytes.Equal(params, []byte("null")) || params[0] == '{' || params[0] == '['
 }
 
 func (s *Server) handle(req *rpcRequest) error {
@@ -214,16 +240,19 @@ func (s *Server) handle(req *rpcRequest) error {
 	case "textDocument/didOpen":
 		var p struct {
 			TextDocument struct {
-				URI        string `json:"uri"`
-				LanguageID string `json:"languageId"`
-				Version    int64  `json:"version"`
-				Text       string `json:"text"`
+				URI        string  `json:"uri"`
+				LanguageID string  `json:"languageId"`
+				Version    int64   `json:"version"`
+				Text       *string `json:"text"`
 			} `json:"textDocument"`
 		}
 		if err := decodeStrict(req.Params, &p); err != nil {
 			return s.invalidParams(req, err)
 		}
-		if err := s.storeDocument(p.TextDocument.URI, p.TextDocument.Text, false); err != nil {
+		if p.TextDocument.Text == nil {
+			return s.invalidParams(req, errors.New("document text is required"))
+		}
+		if err := s.storeDocument(p.TextDocument.URI, *p.TextDocument.Text, false); err != nil {
 			return s.publishInputError(p.TextDocument.URI, err)
 		}
 		return s.publishDiagnostics(p.TextDocument.URI)
@@ -235,7 +264,7 @@ func (s *Server) handle(req *rpcRequest) error {
 				Version int64  `json:"version"`
 			} `json:"textDocument"`
 			ContentChanges []struct {
-				Text string `json:"text"`
+				Text *string `json:"text"`
 			} `json:"contentChanges"`
 		}
 		if err := decodeStrict(req.Params, &p); err != nil {
@@ -244,7 +273,10 @@ func (s *Server) handle(req *rpcRequest) error {
 		if len(p.ContentChanges) != 1 {
 			return s.publishInputError(p.TextDocument.URI, fmt.Errorf("full synchronization requires exactly one content change"))
 		}
-		if err := s.storeDocument(p.TextDocument.URI, p.ContentChanges[0].Text, true); err != nil {
+		if p.ContentChanges[0].Text == nil {
+			return s.invalidParams(req, errors.New("document text is required"))
+		}
+		if err := s.storeDocument(p.TextDocument.URI, *p.ContentChanges[0].Text, true); err != nil {
 			return s.publishInputError(p.TextDocument.URI, err)
 		}
 		return s.publishDiagnostics(p.TextDocument.URI)
@@ -414,7 +446,7 @@ func diagnosticRange(src string, line, column int) (position, position) {
 	if line < 0 || line >= len(lines) {
 		return position{}, position{}
 	}
-	text := lines[line]
+	text := strings.TrimSuffix(lines[line], "\r")
 	byteColumn := min(max(column-1, 0), len(text))
 	units := 0
 	for _, r := range text[:byteColumn] {
@@ -448,7 +480,7 @@ func wordAt(text string, pos position) string {
 	if pos.Line < 0 || pos.Line >= len(lines) {
 		return ""
 	}
-	line := lines[pos.Line]
+	line := strings.TrimSuffix(lines[pos.Line], "\r")
 	byteOffset, ok := utf16ColumnToByteOffset(line, pos.Character)
 	if !ok {
 		return ""
@@ -485,10 +517,8 @@ func utf16ColumnToByteOffset(line string, column int) (int, bool) {
 		}
 		units += width
 	}
-	if units == column {
-		return len(line), true
-	}
-	return 0, false
+	// LSP positions beyond the line clamp to its end.
+	return len(line), true
 }
 
 // --- language reference -------------------------------------------------
@@ -508,16 +538,16 @@ var hoverText = map[string]string{
 	"SECTION":         "**Office label.** `REFER TO SECTION` can reach a section only from the same office. — spec §12",
 	"PETITION":        "**The call.** `PETITION THE OFFICE OF name WITH args.` opens a frame on the appeals topic. As an expression: `THE FINDING OF name REGARDING args`. Dynamic, through a power of attorney: `PETITION UNDER p WITH args.` / `THE FINDING UNDER p REGARDING args`. — spec §11.7, §12, §12.5",
 	"ATTORNEY":        "**The office as a value.** `A POWER OF ATTORNEY OVER THE OFFICE OF f`: the right to petition f, wherever the instrument travels within the case. Exercised with PETITION UNDER / THE FINDING UNDER; enforceable only in the case that executed it. — spec §12.5",
-	"REMAND":          "**Return.** `REMAND.` or `REMAND WITH expr.` Outside an office, REMAND produces a verdict. — spec §11.7",
-	"ADJOURN":         "**Stop or delay execution.** `ADJOURN INDEFINITELY.` stops until amendment. `ADJOURN FOR n DAYS.` records a deadline. One court day is one second. — spec §11.8",
+	"REMAND":          "**Return.** `REMAND.` or `REMAND WITH expr.` Outside an office, REMAND is rejected at compile time. — spec §11.7",
+	"ADJOURN":         "**Stop or delay execution.** `ADJOURN INDEFINITELY.` suspends the case; the next `trial proceed` resumes at the following instruction. `ADJOURN FOR n DAYS.` records a deadline. One court day is one second. — spec §11.8",
 	"HOLD":            "**Explicit verdict.** `HOLD expr IN CONTEMPT.` records a verdict with the value as its sealed details. — spec §11.9",
 	"CONTEMPT":        "**See HOLD.** The expression is evaluated, displayed, and stored as verdict details. — spec §11.9",
 	"STRIKE":          "**Delete a record value.** `STRIKE x FROM THE RECORD.` writes a Kafka tombstone. — spec §11.10",
 	"SERVE":           "**Cross-case output.** `SERVE NOTICE OF v UPON w.` appends to case w's summons topic within the execution-step transaction. Self-service is allowed. — spec §11.11",
-	"COMMENCE":        "**Spawn.** `COMMENCE PROCEEDINGS UPON src, FILED UNDER c.` files a new case from a Form K-1 string; the number is ledgered, so replay opens nothing twice. — spec §11.12",
-	"JUDGMENT":        "**External verdict.** `ENTER JUDGMENT AGAINST c, ON THE GROUNDS OF g.` writes a verdict within the current step. The current case must have created c. Case c stops before its next step. — spec §11.12a",
-	"MOTION":          "**One-time verdict interception.** `FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE GROUNDS FILED UNDER g].` Filing clears the operand stack. — spec §11.13",
-	"RECONSIDER":      "**See MOTION.** A case can intercept its first eligible verdict. The operation clears the dossier. — spec §11.13",
+	"COMMENCE":        "**Spawn.** `COMMENCE PROCEEDINGS UPON src, FILED UNDER c.` files a new case from a Form K-1 string. Once the number is committed to the ledger, reenactment reuses it. A failure before that commit can leave an unreferenced child. — spec §11.12",
+	"JUDGMENT":        "**External verdict.** `ENTER JUDGMENT AGAINST c, ON THE GROUNDS OF g.` writes a verdict within the current step. The current case must have created c. Case c checks at its next commit boundary; an active wait first returns. — spec §11.12a",
+	"MOTION":          "**One-time verdict interception.** `FILE A MOTION TO RECONSIDER, REFERRING TO ARTICLE n[, THE GROUNDS FILED UNDER g].` Granting the motion clears the operand and call stacks, then resumes at the named article. Filing it alone does not clear them. — spec §11.13",
+	"RECONSIDER":      "**See MOTION.** A case can intercept its first eligible verdict. Granting the motion clears the dossier and pending appeals. — spec §11.13",
 	"INCORPORATE":     "**Import.** `INCORPORATE BY REFERENCE statute.` compiles the latest statute version into the filing. Imports are transitive. — spec §13.2a",
 	"HEREINAFTER":     "**Defined term.** `HEREINAFTER, k SHALL MEAN literal.` The compiler substitutes the literal at each use. — spec §5",
 	"EXHIBIT":         "**A struct.** Declare `THE EXHIBIT OF name, COMPRISING a AND b.`; offer `AN EXHIBIT OF name WHEREIN a IS 1 AND b IS 2`; inspect `THE a ENTERED IN x`. Value semantics, deep equality. — spec §8",
@@ -540,17 +570,17 @@ var hoverText = map[string]string{
 	"GRANT":           "**License.** `GRANT A LICENSE UNDER x TO c, FOR A TERM OF n DAYS.` Only the holder can grant it; the licensee gets read-only practice, and the license cannot outlive the patent. — spec §10.10a",
 	"LICENSE":         "**See GRANT.** Licenses allow read-only practice until their recorded expiry. — spec §10.10a",
 	"ASSIGN":          "**Transfer.** `ASSIGN THE LETTERS FOR x TO c.` transfers a patent and is refused while licenses are outstanding. The previous holder can no longer practice it. — spec §10.10a",
-	"PRACTICE":        "**Use of an invention.** `THE PRACTICE OF name`: the disclosure to the holder, infringement to everyone else while the term runs. — spec §10.10",
+	"PRACTICE":        "**Use of an invention.** `THE PRACTICE OF name` returns the disclosure to the holder and live licensees. Once all patent terms lapse, it is public. Other access while a claim is in force produces a verdict. — spec §10.10",
 	"TRANSCRIPT":      "**To string.** `THE TRANSCRIPT OF v`: any value, rendered as PROCLAIM would publish it. — spec §10.5",
-	"LENGTH":          "**Measure.** `THE LENGTH OF v`: characters of a string, entries of an exhibit, items of a schedule. — spec §10.5",
+	"LENGTH":          "**Measure.** `THE LENGTH OF v`: Unicode code points of a string, entries of an exhibit or register, or items of a schedule. — spec §10.5",
 	"EXCERPT":         "**Substring.** `AN EXCERPT OF s FROM i TO j`: 1-indexed, both ends inclusive, in characters. — spec §10.5",
-	"SUM":             "**Parse a number, or money.** `THE SUM CERTAIN OF v`: the integer or sum a string denotes, exactly and entirely, or a verdict. Sums are stated to the penny. — spec §10.5, §7",
+	"SUM":             "**Parse a number, or money.** `THE SUM CERTAIN OF v` parses a complete numeric string; integers and sums pass through unchanged. Invalid or out-of-range strings produce a verdict. Sums have exactly two decimal places. — spec §10.5, §7",
 	"SUSTAINED":       "**The affirmative finding** (true). Findings come from comparisons and return from offices. — spec §7",
 	"OVERRULED":       "**The negative finding** (false). — spec §7",
 	"OFF":             "**Comment.** `OFF THE RECORD: …` continues to the end of the line. The filing topic still stores the source text. — spec §4.2",
 	"CASE":            "**Self-reference.** `THE CASE AT BAR` returns this case's number as a string. — spec §10.8",
-	"NOTWITHSTANDING": "**Remainder.** `a NOTWITHSTANDING b` computes the integer remainder. A zero divisor produces a verdict. — spec §10.2",
-	"APPORTIONED":     "**Division.** `a APPORTIONED AMONG b` performs integer division toward zero. A zero divisor produces a verdict. — spec §10.2",
+	"NOTWITHSTANDING": "**Remainder.** `a NOTWITHSTANDING b` computes the remainder. If either operand is a sum, it operates in pennies. The result follows the dividend's sign. A zero divisor produces a verdict. — spec §10.2",
+	"APPORTIONED":     "**Division.** `a APPORTIONED AMONG b` truncates toward zero: to whole units for two integers, or to pennies when either operand is a sum. A zero divisor produces a verdict. — spec §10.2",
 }
 
 type completion struct{ label, detail string }
@@ -579,7 +609,7 @@ func buildCompletions() []completion {
 		{"THE FINDING UNDER", "dynamic call in expression position: … power REGARDING args"},
 		{"A POWER OF ATTORNEY OVER THE OFFICE OF", "the office as a value"},
 		{"REMAND WITH", "return a value from an office"},
-		{"ADJOURN INDEFINITELY.", "stop until amendment"},
+		{"ADJOURN INDEFINITELY.", "suspend until the next trial proceed"},
 		{"ADJOURN FOR", "durable timer: ADJOURN FOR n DAYS."},
 		{"HOLD", "deliberate verdict: HOLD expr IN CONTEMPT."},
 		{"STRIKE", "deletion: STRIKE x FROM THE RECORD."},

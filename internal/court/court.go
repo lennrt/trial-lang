@@ -82,7 +82,7 @@ const GazetteTopic = "the-gazette"
 // ledgerEvent records a nondeterministic result so reenactment can reuse it.
 type ledgerEvent struct {
 	PC    int64     `json:"pc"`
-	Kind  string    `json:"kind"` // "discretion" or "presents"
+	Kind  string    `json:"kind"` // observation kind, such as "discretion", "presents", or "commencement"
 	Value law.Value `json:"value"`
 }
 
@@ -492,7 +492,14 @@ func (c *Court) Proceed(ctx context.Context) (Outcome, error) {
 		// Check for a verdict entered by a parent case at each commit boundary.
 		// A blocked instruction observes it after the wait returns.
 		if batched == 0 {
-			if rec, err := c.Log.Fetch(ctx, c.Case.Verdicts(), 0, false); err == nil && rec != nil {
+			rec, err := c.Log.Fetch(ctx, c.Case.Verdicts(), 0, false)
+			if err != nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return OutcomeAdjourned, nil
+				}
+				return OutcomeAdjourned, err
+			}
+			if rec != nil {
 				c.note("A verdict has been reached in this case, elsewhere. The proceedings halt.")
 				return OutcomeGuilty, nil
 			}
@@ -600,7 +607,7 @@ func expeditionBoundary(op string) bool {
 	switch op {
 	case law.OpAwait, law.OpAwaitFrom, law.OpAwaitFor, law.OpAwaitFromFor, law.OpAwaitGazette,
 		law.OpContinuance, law.OpDocument, law.OpPatent, law.OpPractice, law.OpLicense, law.OpAssign,
-		law.OpJudgment:
+		law.OpJudgment, law.OpDiscovery, law.OpStanding:
 		return true
 	}
 	return false
@@ -2166,17 +2173,17 @@ func arithmetic(op string, l, r law.Value) (law.Value, error) {
 		case law.OpDeduct:
 			return law.Sum(lm - rm), nil
 		case law.OpCompound:
-			return law.Sum(lm * rm / law.SumScale), nil
+			return law.Sum(sumProduct(l, r)), nil
 		case law.OpApportion:
-			if rm == 0 {
+			if r.I == 0 {
 				return law.Value{}, guilty("apportionment among zero parties. The parties could not be located. The apportionment proceeds against you instead")
 			}
-			return law.Sum(lm * law.SumScale / rm), nil
+			return law.Sum(sumQuotient(l, r)), nil
 		case law.OpNotwithstanding:
-			if rm == 0 {
+			if r.I == 0 {
 				return law.Value{}, guilty("nothing remains, zero notwithstanding")
 			}
-			return law.Sum(lm % rm), nil
+			return law.Sum(sumRemainder(l, r)), nil
 		}
 	}
 	if l.T != law.KindInt || r.T != law.KindInt {
@@ -2206,11 +2213,12 @@ func arithmetic(op string, l, r law.Value) (law.Value, error) {
 func compare(op string, l, r law.Value) (law.Value, error) {
 	switch op {
 	case law.OpExceeds, law.OpFallsShort:
-		if lm, rm, ok := law.Amounts(l, r); ok {
+		if _, _, ok := law.Amounts(l, r); ok {
+			order := compareAmounts(l, r)
 			if op == law.OpExceeds {
-				return law.Finding(lm > rm), nil
+				return law.Finding(order > 0), nil
 			}
-			return law.Finding(lm < rm), nil
+			return law.Finding(order < 0), nil
 		}
 		if l.T != law.KindInt || r.T != law.KindInt {
 			return law.Value{}, guilty("magnitude is a property of numbers; %s and %s have none", describe(l), describe(r))

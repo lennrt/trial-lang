@@ -1,0 +1,61 @@
+FORM K-1.
+IN THE MATTER OF: the-wave-chamber.
+OFF THE RECORD: Four frames of interference from two circular wave sources.
+OFF THE RECORD: The scene computes distance and phase for every pixel.
+OFF THE RECORD: A phase is an angle in the canon's 120-unit circle.
+
+INCORPORATE BY REFERENCE statutes-of-trigonometry.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT wide IS 33.
+    LET IT BE RECORDED THAT tall IS 13.
+    LET IT BE RECORDED THAT sines IS THE FINDING OF the-table-of-sines.
+    LET IT BE RECORDED THAT ramp IS " .:-=+*#%@".
+    LET IT BE RECORDED THAT phase IS 0.
+ARTICLE 2.
+    LET IT BE RECORDED THAT frame IS "".
+    LET IT BE RECORDED THAT row IS 0.
+ARTICLE 3.
+    OFF THE RECORD: Two horizontal cells span the height of one terminal cell.
+    OFF THE RECORD: Positions use ten integer units per cell.
+    LET IT BE RECORDED THAT py IS (2 TIMES row LESS (tall LESS 1)) TIMES 320 APPORTIONED AMONG (wide LESS 1).
+    LET IT BE RECORDED THAT column IS 0.
+ARTICLE 4.
+    LET IT BE RECORDED THAT px IS (2 TIMES column LESS (wide LESS 1)) TIMES 160 APPORTIONED AMONG (wide LESS 1).
+    LET IT BE RECORDED THAT wave IS THE FINDING OF interference REGARDING px AND py AND phase.
+    LET IT BE RECORDED THAT shade-index IS (wave PLUS 2000) TIMES 9 APPORTIONED AMONG 4000 PLUS 1.
+    LET IT BE RECORDED THAT frame IS frame PLUS AN EXCERPT OF ramp FROM shade-index TO shade-index.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    SHOULD column FALL SHORT OF wide, REFER TO ARTICLE 4.
+    LET IT BE RECORDED THAT frame IS frame PLUS "\n".
+    LET IT BE RECORDED THAT row IS row PLUS 1.
+    SHOULD row FALL SHORT OF tall, REFER TO ARTICLE 3.
+    PROCLAIM frame.
+    LET IT BE RECORDED THAT phase IS phase PLUS 30.
+    SHOULD phase FALL SHORT OF 120, REFER TO ARTICLE 2.
+    ADJOURN INDEFINITELY.
+
+THE OFFICE OF wave-root, CONCERNING n.
+    OFF THE RECORD: The floor of the square root, by Newton iteration.
+    SHOULD n FAIL TO EXCEED 0, REMAND WITH 0.
+    OFF THE RECORD: Keep the first Newton average safe even for large inputs.
+    LET IT BE RECORDED THAT root-current IS n APPORTIONED AMONG 2 PLUS 1.
+    OFF THE RECORD: These exact square bounds reduce work for small inputs.
+    SHOULD n FAIL TO EXCEED 65536, LET IT BE RECORDED THAT root-current IS 256.
+    SHOULD n FAIL TO EXCEED 256, LET IT BE RECORDED THAT root-current IS 16.
+    SHOULD n FAIL TO EXCEED 16, LET IT BE RECORDED THAT root-current IS 4.
+    LET IT BE RECORDED THAT root-next IS (root-current PLUS n APPORTIONED AMONG root-current) APPORTIONED AMONG 2.
+SECTION 1.
+    SHOULD root-next FAIL TO FALL SHORT OF root-current, REMAND WITH root-current.
+    LET IT BE RECORDED THAT root-current IS root-next.
+    LET IT BE RECORDED THAT root-next IS (root-current PLUS n APPORTIONED AMONG root-current) APPORTIONED AMONG 2.
+    REFER TO SECTION 1.
+
+THE OFFICE OF interference, CONCERNING x AND y AND clock-phase.
+    OFF THE RECORD: Distances retain tenths of a cell through the square root.
+    OFF THE RECORD: The sources are six cells from the center on each side.
+    LET IT BE RECORDED THAT left-distance IS THE FINDING OF wave-root REGARDING (x PLUS 60) TIMES (x PLUS 60) PLUS y TIMES y.
+    LET IT BE RECORDED THAT right-distance IS THE FINDING OF wave-root REGARDING (x LESS 60) TIMES (x LESS 60) PLUS y TIMES y.
+    LET IT BE RECORDED THAT left-wave IS THE FINDING OF sine REGARDING left-distance TIMES 6 APPORTIONED AMONG 10 LESS clock-phase AND sines.
+    LET IT BE RECORDED THAT right-wave IS THE FINDING OF sine REGARDING right-distance TIMES 6 APPORTIONED AMONG 10 LESS clock-phase AND sines.
+    REMAND WITH left-wave PLUS right-wave.

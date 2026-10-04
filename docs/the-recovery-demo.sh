@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Demonstrate process-independent recovery against the real Kafka docket.
 # The video driver sets TRIAL_RECOVERY_DELAY to pace the otherwise quick steps.
+# Set TRIAL_RECOVERY_EXISTING_BROKER=1 and TRIAL_BROKER=host:port to use an
+# already-running broker without starting or stopping Docker Compose.
 set -euo pipefail
 
 export LC_ALL=C
@@ -21,6 +23,48 @@ trial_bin=""
 broker_was_running=1
 active_pid=""
 runner_status=0
+recovery_verified=0
+existing_broker="${TRIAL_RECOVERY_EXISTING_BROKER:-0}"
+interrupt_signal=INT
+case "$(uname -s)" in
+  MSYS*|MINGW*|CYGWIN*) interrupt_signal=KILL ;;
+esac
+
+# Run only in a background shell. Cancel and reap its current sleep as well as
+# the watchdog itself, so no timer can keep a caller's capture pipes open.
+watch_process() {
+  local child="$1" limit="$2" marker="${3:-}"
+  watchdog_timer=""
+  watchdog_canceled=0
+  trap 'if [[ -n "$watchdog_timer" ]]; then
+    kill -KILL "$watchdog_timer" 2>/dev/null || true
+    wait "$watchdog_timer" 2>/dev/null || true
+  fi' EXIT
+  # Do not exit between starting sleep and saving $!: finish that assignment,
+  # then let EXIT reap the child. During wait, killing it wakes the wait too.
+  trap 'watchdog_canceled=1
+    if [[ -n "$watchdog_timer" ]]; then
+      kill -KILL "$watchdog_timer" 2>/dev/null || true
+    fi' INT TERM
+
+  sleep "$limit" &
+  watchdog_timer=$!
+  if [[ "$watchdog_canceled" -eq 1 ]]; then return 0; fi
+  wait "$watchdog_timer" || true
+  if [[ "$watchdog_canceled" -eq 1 ]]; then return 0; fi
+  watchdog_timer=""
+  if kill -0 "$child" 2>/dev/null; then
+    if [[ -n "$marker" ]]; then touch "$marker"; fi
+    kill -TERM "$child" 2>/dev/null || true
+    sleep 2 &
+    watchdog_timer=$!
+    if [[ "$watchdog_canceled" -eq 1 ]]; then return 0; fi
+    wait "$watchdog_timer" || true
+    if [[ "$watchdog_canceled" -eq 1 ]]; then return 0; fi
+    watchdog_timer=""
+    kill -KILL "$child" 2>/dev/null || true
+  fi
+}
 
 run_quietly_with_timeout() {
   local limit="$1"
@@ -28,14 +72,7 @@ run_quietly_with_timeout() {
 
   "$@" >/dev/null 2>&1 &
   local child=$!
-  (
-    sleep "$limit"
-    if kill -0 "$child" 2>/dev/null; then
-      kill -TERM "$child" 2>/dev/null || true
-      sleep 2
-      kill -KILL "$child" 2>/dev/null || true
-    fi
-  ) &
+  watch_process "$child" "$limit" </dev/null >/dev/null 2>&1 &
   local watchdog=$!
 
   local result
@@ -54,7 +91,7 @@ cleanup() {
   trap - EXIT INT TERM
 
   if [[ -n "$active_pid" ]]; then
-    kill -INT "$active_pid" 2>/dev/null || true
+    kill -"$interrupt_signal" "$active_pid" 2>/dev/null || true
     for _ in {1..50}; do
       if ! kill -0 "$active_pid" 2>/dev/null; then
         break
@@ -72,16 +109,37 @@ cleanup() {
     wait "$active_pid" 2>/dev/null || true
   fi
   if [[ -n "$trial_bin" && -n "$case_id" ]]; then
-    run_quietly_with_timeout 15 "$trial_bin" burn "$case_id" --with-prejudice || true
+    printf '\n\033[2mCleaning up this demo case...\033[0m\n'
+    if run_quietly_with_timeout 15 "$trial_bin" burn "$case_id" --with-prejudice; then
+      printf 'Cleanup: the demo case was removed.\n'
+    else
+      printf '\033[33mCleanup: the demo case may remain on the broker.\033[0m\n'
+      printf 'Deletion was refused, failed, or exceeded its deadline.\n'
+    fi
   fi
   if [[ -n "$trial_bin" && "$broker_was_running" -eq 0 ]]; then
-    run_quietly_with_timeout 20 "$trial_bin" dismiss || true
+    if run_quietly_with_timeout 20 "$trial_bin" dismiss; then
+      printf 'Cleanup: the broker started here was stopped.\n'
+    else
+      printf '\033[33mCleanup: the broker started here may still be running.\033[0m\n'
+    fi
+  elif [[ "$existing_broker" == 1 ]]; then
+    printf 'Cleanup: the existing broker was left running.\n'
   fi
   if [[ "$temp_dir" == "$temp_prefix"?????? && "$temp_dir" != "/" && -d "$temp_dir" ]]; then
-    rm -rf -- "$temp_dir"
+    # These are the only files this script owns. Keep unexpected contents.
+    rm -f -- "$temp_dir/trial" "$temp_dir/observe.log" "$temp_dir/audit.log" "$temp_dir"/runner-*.timeout
+    if ! rmdir -- "$temp_dir"; then
+      printf 'demo: temporary directory was not empty: %s\n' "$temp_dir" >&2
+      result=1
+    fi
   else
     printf 'demo: refusing to remove unexpected temporary path: %s\n' "$temp_dir" >&2
     result=1
+  fi
+  printf '\033[0m\033[?25h'
+  if [[ "$result" -eq 0 && "$recovery_verified" -eq 1 ]]; then
+    printf '\n\033[1;32mRecovery demo complete.\033[0m\n'
   fi
   exit "$result"
 }
@@ -96,7 +154,13 @@ pause() {
 }
 
 prompt() {
-  printf '\n\033[1;36m$\033[0m %s\n' "$*"
+  printf '\n\033[38;5;109m$ %s\033[0m\n' "$*"
+}
+
+scene() {
+  printf '\033[?25l\033[2J\033[H\033[1;36mTHE RECOVERY\033[0m\n'
+  printf '\033[1;95m%s\033[0m\n' "$1"
+  printf '\033[2m%s\033[0m\n' "$2"
 }
 
 fail() {
@@ -142,24 +206,18 @@ wait_for_text() {
 }
 
 wait_for_runner() {
-  # A timely exit is success here even when SIGINT determines its status.
+  # A timely exit is success here even when the requested signal determines it.
   # Callers that require status zero inspect runner_status separately.
   local runner="$1"
   local limit="$2"
   local timeout_marker="$temp_dir/runner-$runner.timeout"
-  (
-    sleep "$limit"
-    if kill -0 "$runner" 2>/dev/null; then
-      touch "$timeout_marker"
-      kill -TERM "$runner" 2>/dev/null || true
-      sleep 2
-      kill -KILL "$runner" 2>/dev/null || true
-    fi
-  ) &
+  watch_process "$runner" "$limit" "$timeout_marker" </dev/null >/dev/null 2>&1 &
   local watchdog=$!
 
   local result
-  if wait "$runner"; then
+  # The explicit stop message above explains expected signal termination.
+  # Suppress Bash's redundant "Killed" notice while retaining the exit status.
+  if wait "$runner" 2>/dev/null; then
     result=0
   else
     result=$?
@@ -183,24 +241,30 @@ else
   go build -o "$trial_bin" ./cmd/trial
 fi
 
-command -v docker >/dev/null 2>&1 || fail "Docker is required for the Kafka recovery demo"
-docker compose version >/dev/null 2>&1 || fail "Docker Compose is required for the Kafka recovery demo"
-
-if docker compose ps --status running --services 2>/dev/null | grep -Fxq "the-court"; then
-  broker_was_running=1
-else
-  broker_was_running=0
-fi
-
-printf '\033[1;35mREAL KAFKA RECOVERY\033[0m\n'
-printf 'One durable case, resumed by two processes.\n'
-pause
-
-prompt "trial summon"
-"$trial_bin" summon
+scene 'REAL KAFKA | INDEPENDENT PROCESSES' 'Committed state survives the process that wrote it.'
+case "$existing_broker" in
+  1)
+    [[ -n "${TRIAL_BROKER:-}" ]] || fail "set TRIAL_BROKER when using an existing broker"
+    printf '\nUsing the existing Kafka broker at %s.\n' "$TRIAL_BROKER"
+    ;;
+  0)
+    command -v docker >/dev/null 2>&1 || fail "Docker is required unless TRIAL_RECOVERY_EXISTING_BROKER=1"
+    docker compose version >/dev/null 2>&1 || fail "Docker Compose is required for the Kafka recovery demo"
+    if ! running_services="$(docker compose ps --status running --services)"; then
+      fail "could not inspect existing Compose services; refusing to assume the broker is stopped"
+    fi
+    if ! grep -Fxq "the-court" <<<"$running_services"; then
+      broker_was_running=0
+    fi
+    prompt "trial summon"
+    "$trial_bin" summon
+    ;;
+  *) fail "TRIAL_RECOVERY_EXISTING_BROKER must be 0 or 1" ;;
+esac
 wait_for_broker || fail "Kafka did not become ready within 60 seconds"
 pause
 
+scene '1 / 4 | FILE A DURABLE CASE' 'The program pauses after its first committed line.'
 prompt "sed -n '1,80p' $source_file"
 sed -n '1,80p' "$source_file"
 pause
@@ -211,27 +275,32 @@ case_id="$("$trial_bin" file "$source_file" --quiet)"
 printf '%s\n' "$case_id"
 pause
 
+scene '2 / 4 | STOP THE FIRST PROCESS' 'Wait for the continuance to be committed to Kafka.'
 prompt "trial proceed $case_id"
 "$trial_bin" proceed "$case_id" &
 first_runner=$!
 active_pid="$first_runner"
 if ! wait_for_continuance; then
-  kill -TERM "$first_runner" 2>/dev/null || true
-  wait "$first_runner" 2>/dev/null || true
-  active_pid=""
+  # Keep the PID for bounded EXIT cleanup, including native Windows processes.
   fail "the case did not record its continuance within 20 seconds"
 fi
 pause
 
-printf '\n^C  interrupt process %s after the continuance is on file\n' "$first_runner"
-kill -INT "$first_runner"
+if [[ "$interrupt_signal" == KILL ]]; then
+  printf '\nForce-stop process %s after the continuance is on file.\n' "$first_runner"
+  printf 'Native Windows process termination; no graceful shutdown.\n'
+else
+  printf '\n^C  interrupt process %s after the continuance is on file\n' "$first_runner"
+fi
+kill -"$interrupt_signal" "$first_runner"
 if ! wait_for_runner "$first_runner" 5; then
   active_pid=""
-  fail "the first process did not stop cleanly"
+  fail "the first process did not stop within five seconds"
 fi
 active_pid=""
 pause
 
+scene '3 / 4 | RESUME IN A NEW PROCESS' 'The new official reconstructs this same case from Kafka.'
 prompt "trial status $case_id"
 "$trial_bin" status "$case_id"
 pause
@@ -254,17 +323,16 @@ pause
 before="committed before the interruption"
 after="committed after the restart"
 observe_log="$temp_dir/observe.log"
+scene '4 / 4 | VERIFY THE COMMITTED RECORD' 'Read the output, then replay the stored history for audit.'
 prompt "trial observe $case_id --from-the-beginning"
 "$trial_bin" observe "$case_id" --from-the-beginning >"$observe_log" 2>&1 &
 observer=$!
 active_pid="$observer"
 if ! wait_for_text "$observe_log" "$after"; then
-  kill -TERM "$observer" 2>/dev/null || true
-  wait "$observer" 2>/dev/null || true
-  active_pid=""
+  # Do not wait without a deadline for a process that may ignore TERM.
   fail "the committed output was not observable within 10 seconds"
 fi
-kill -INT "$observer"
+kill -"$interrupt_signal" "$observer"
 if ! wait_for_runner "$observer" 5; then
   active_pid=""
   fail "the observer did not stop cleanly"
@@ -277,7 +345,7 @@ after_count="$(grep -Fxc "$after" "$observe_log" || true)"
 if [[ "$before_count" != "1" || "$after_count" != "1" ]]; then
   fail "expected each committed line once; found $before_count and $after_count"
 fi
-printf '\nVerified: both committed lines appear exactly once.\n'
+printf '\n\033[1;32mVerified: both committed lines appear exactly once.\033[0m\n'
 pause
 
 prompt "trial audit $case_id"
@@ -286,7 +354,7 @@ audit_log="$temp_dir/audit.log"
 audit_runner=$!
 active_pid="$audit_runner"
 audit_deadline=$((SECONDS + 70))
-spinner=('|' '/' '-' '\\')
+spinner=('|' '/' '-' '\')
 spinner_index=0
 while kill -0 "$audit_runner" 2>/dev/null; do
   if ((SECONDS >= audit_deadline)); then
@@ -309,4 +377,5 @@ if [[ "$audit_status" -ne 0 ]]; then
 fi
 pause
 
-printf '\nDemo complete. Cleanup now attempts to remove the case and stop any broker started here.\n'
+recovery_verified=1
+# The EXIT trap performs bounded cleanup before publishing the completion marker.

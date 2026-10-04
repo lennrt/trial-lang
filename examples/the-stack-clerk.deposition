@@ -1,0 +1,10 @@
+DEPOSITION OF: the-stack-clerk.trial.
+ALLOW 15 COURT DAYS.
+SERVE: "8 3 - 4 * 2 /".
+
+EXPECT PROCLAMATION: "Result: 10".
+EXPECT PROCLAMATION: "Tokens executed: 7".
+EXPECT RECORD result: 10.
+EXPECT RECORD depth: 1.
+EXPECT RECORD tokens: 7.
+EXPECT ADJOURNMENT.

@@ -2,7 +2,7 @@ FORM K-1.
 IN THE MATTER OF: the-castle.
 OFF THE RECORD: A first-person raycaster over a 16 by 16 map. Camera values use
 OFF THE RECORD: fixed-point integers scaled by 1000. Each of 15 columns casts a
-OFF THE RECORD: ray; the 21-row ASCII framebuffer is one proclamation.
+OFF THE RECORD: ray; the seven-row ASCII framebuffer is one proclamation.
 OFF THE RECORD: Serve w/s to move, a/d to turn, or q to stop. The trigonometry
 OFF THE RECORD: comes from the bundled canon. Use trial test for brokerless runs.
 

@@ -1,0 +1,30 @@
+schema: spec-driven
+
+context: |
+  triallang is a toy language implemented in Go 1.27.0. The Court executes
+  compiled instructions against a small docket.Log interface. Kafka provides
+  durable transactions; the memory adapter supports local examples and tests.
+  Read CONTRIBUTING.md before changing the repository.
+  spec/spec.md, spec/grammar.ebnf, spec/bytecode.md, and spec/topics.md remain
+  the normative language and storage references. OpenSpec records capability
+  requirements and proposed changes, with links to those references.
+  Preserve the legal language keywords. Explain concepts in plain English.
+  Use short sentences, active voice, and one term for each meaning.
+  Only canon is a public Go API. Keep production builds compatible with CGO=0.
+  Add an ADR for public, wire, storage, security, or configuration boundaries.
+  Do not confuse brokerless tests with evidence from a live Kafka broker.
+
+rules:
+  proposal:
+    - Name the observable problem and the resulting behavior.
+    - Identify compatibility changes and the affected normative references.
+  specs:
+    - Use SHALL or MUST for requirements and WHEN/THEN scenarios for evidence.
+    - Include error, cancellation, and boundary cases when applicable.
+    - Link to existing language references instead of copying the whole language.
+  design:
+    - Explain ownership, time limits, resource limits, and cleanup where relevant.
+    - Record alternatives and the reason for each boundary decision.
+  tasks:
+    - Name the tests that prove each behavior change.
+    - Separate checks that passed from checks unavailable in the current environment.

@@ -1,0 +1,9 @@
+DEPOSITION OF: the-distance-field.trial.
+
+OFF THE RECORD: Every character is computed by the triallang source.
+OFF THE RECORD: This fixed output catches changes to arithmetic or rendering.
+EXPECT PROCLAMATION: "                    \n                    \n                    \n                    \n        @%*=        \n++++++++**=:...+++++\n++++++++++..++++++++\n++++++++++++++++++++\n++++++++++++++++++++\n++++++++++++++++++++\n".
+EXPECT RECORD wide: 20.
+EXPECT RECORD tall: 10.
+EXPECT ADJOURNMENT.
+ALLOW 180 COURT DAYS.

@@ -16,8 +16,8 @@ topic must keep one partition.
 | `case-X.summons` | stdin; input is served upon the case | `retention.ms=-1` |
 | `case-X.proclamations` | stdout | `retention.ms=-1` |
 | `case-X.verdicts` | GUILTY, at most; details sealed | `retention.ms=-1` |
-| `case-X.attention` | the **sealed original** of the program counter, one note per instruction, written inside each step's transaction | `cleanup.policy=compact`, `retention.ms=-1` |
-| `case-X.ledger` | every draw of the discretion and reading of the clock, `{"pc":N,"kind":K,"value":V}`; re-served on reenactment for bit-exact replay | `retention.ms=-1` |
+| `case-X.attention` | the **sealed original** of the program counter, one note per committed step (or expedited batch), inside the same transaction | `cleanup.policy=compact`, `retention.ms=-1` |
+| `case-X.ledger` | external observations and decisions, including random draws, clock readings, discovery, standing, timed summonses, commencement, and judgment; `{"pc":N,"kind":K,"value":V}`; re-served on reenactment | `retention.ms=-1` |
 | `case-X.archive` | documents, immutable; **offset = document handle** | `retention.ms=-1` |
 | `case-X.catalog` | document name → current archive offset | `cleanup.policy=compact`, `retention.ms=-1` |
 
@@ -44,7 +44,7 @@ underscores, so a program can neither read nor strike these:
 |---|---|
 | `__reenactment__` | fold-reset marker written by `trial reenact` |
 | `__continuance__` | the granted continuance: `{"pc":N,"until_unix_ms":T,"days":D}`, written when `ADJOURN FOR n DAYS` commits its grant; withdrawn by tombstone when honored |
-| `__attendance__` | the timed-await deadline (`AWAIT SUMMONS FOR AT MOST n DAYS`), same shape and protocol |
+| `__attendance__` | the timed-await deadline (`AWAIT SUMMONS FOR AT MOST n DAYS`), same shape and protocol; selective waits also store the sender in `from` |
 | `__motion__` | the motion to reconsider: `{"target":N,"grounds":"g","spent":B}` |
 
 These consumer groups are updated after each transaction:
@@ -74,8 +74,8 @@ Runtime behavior:
 
 Case topics use `retention.ms=-1`. `trial burn` requires
 `--with-prejudice` before it deletes them.
-Two exceptions are handled by compaction: the records and attention topics may
-purge superseded entries, and a `STRIKE` tombstone permits Kafka to remove that
+Three topics use compaction: records, attention, and catalog may purge
+superseded entries. A `STRIKE` tombstone permits Kafka to remove that
 key after `delete.retention.ms`. Both states produce the same fold.
 
 Running a case on a broker you provisioned yourself? Read

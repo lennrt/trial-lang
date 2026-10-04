@@ -1,0 +1,17 @@
+DEPOSITION OF: the-cellular-court.trial.
+ALLOW 15 COURT DAYS.
+
+EXPECT PROCLAMATION: "0 |........#........|".
+EXPECT PROCLAMATION: "1 |.......#.#.......|".
+EXPECT PROCLAMATION: "2 |......#...#......|".
+EXPECT PROCLAMATION: "3 |.....#.#.#.#.....|".
+EXPECT PROCLAMATION: "4 |....#.......#....|".
+EXPECT PROCLAMATION: "5 |...#.#.....#.#...|".
+EXPECT PROCLAMATION: "6 |..#...#...#...#..|".
+EXPECT PROCLAMATION: "7 |.#.#.#.#.#.#.#.#.|".
+EXPECT PROCLAMATION: "8 |#...............#|".
+EXPECT RECORD generation: 8.
+EXPECT RECORD population: 2.
+EXPECT RECORD column: 18.
+EXPECT RECORD row: "#...............#".
+EXPECT ADJOURNMENT.

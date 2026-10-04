@@ -26,8 +26,8 @@ func CompileAt(prog *Program, base int64) ([]law.Instr, error) {
 
 // Compile transforms a parsed case file into a flat list of proceedings. Each
 // instruction's index becomes its address; article and section labels do not
-// survive compilation. The layout is the case body, an implicit ADJOURN when
-// offices follow, then each office ending in an implicit REMAND.
+// survive compilation. When offices follow, the case body ends with an implicit
+// ADJOURN and a REFER past all office bodies. Each office has an implicit REMAND.
 func Compile(prog *Program) ([]law.Instr, error) {
 	// Reject statically visible use after assignment before generating code.
 	if err := examine(prog); err != nil {
@@ -63,7 +63,12 @@ func Compile(prog *Program) ([]law.Instr, error) {
 		if _, dup := c.officeParams[off.Name]; dup {
 			return nil, reject(off.Line, 1, "the office of %s is established more than once", off.Name)
 		}
+		seen := make(map[string]bool, len(off.Params))
 		for _, param := range off.Params {
+			if seen[param] {
+				return nil, reject(off.Line, 1, "the office of %s lists concern %q more than once", off.Name, param)
+			}
+			seen[param] = true
 			if _, isConst := c.constants[param]; isConst {
 				return nil, reject(off.Line, 1, "the office of %s uses defined term %q as a concern", off.Name, param)
 			}
@@ -97,8 +102,12 @@ func Compile(prog *Program) ([]law.Instr, error) {
 			}
 		}
 	}
+	officeGuard := int64(-1)
 	if len(prog.Offices) > 0 {
 		c.emit(law.Instr{Op: law.OpAdjourn})
+		// ADJOURN resumes at its successor. A later session must skip the
+		// office bodies, reaching the end or any subsequently appended K-2.
+		officeGuard = c.emit(law.Instr{Op: law.OpRefer})
 	}
 
 	// Pass 2: the offices.
@@ -135,6 +144,9 @@ func Compile(prog *Program) ([]law.Instr, error) {
 			c.instrs[pt.at].Target = target
 		}
 		c.sectionPatches = nil
+	}
+	if officeGuard >= 0 {
+		c.instrs[officeGuard].Target = int64(len(c.instrs))
 	}
 
 	// Pass 3: patch article referrals and office petitions.

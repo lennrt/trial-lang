@@ -18,6 +18,9 @@ type command struct {
 	// broker reports whether the command connects to Kafka and therefore
 	// accepts --broker.
 	broker bool
+	// valueFlags names options that consume the next argument. Help scanning
+	// must not treat their values as flags. The broker option is implicit.
+	valueFlags []string
 }
 
 // commandTable lists every subcommand. The order is the suggestion order
@@ -28,10 +31,11 @@ type command struct {
 // would form an initialization cycle.
 func commandTable() []command {
 	return []command{
+		{name: "run", run: runCmd, valueFlags: []string{"serve", "enact", "timeout"}},
 		{name: "summon", run: noArgs("summon", summon)},
 		{name: "dismiss", run: noArgs("dismiss", dismiss)},
 		{name: "file", run: fileCase, broker: true},
-		{name: "proceed", run: proceedCase, broker: true},
+		{name: "proceed", run: proceedCase, broker: true, valueFlags: []string{"expedited"}},
 		{name: "observe", run: observe, broker: true},
 		{name: "serve", run: serve, broker: true},
 		{name: "amend", run: amend, broker: true},
@@ -45,12 +49,12 @@ func commandTable() []command {
 		{name: "transcript", run: transcript, broker: true},
 		{name: "reenact", run: reenact, broker: true},
 		{name: "audit", run: audit, broker: true},
-		{name: "appeal", run: appeal, broker: true},
-		{name: "profile", run: profileCmd, broker: true},
+		{name: "appeal", run: appeal, broker: true, valueFlags: []string{"at-step"}},
+		{name: "profile", run: profileCmd, broker: true, valueFlags: []string{"top"}},
 		{name: "burn", run: burn, broker: true},
 		{name: "mcp", run: mcpCmd, broker: true},
 		{name: "counsel", run: counselCmd},
-		{name: "watch", run: watch, broker: true},
+		{name: "watch", run: watch, broker: true, valueFlags: []string{"interval"}},
 		{name: "help", run: helpDispatch},
 		{name: "version", run: noArgs("version", func(context.Context) int { return versionCmd() })},
 	}

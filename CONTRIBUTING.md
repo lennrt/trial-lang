@@ -28,6 +28,11 @@ The maintainer aims to acknowledge reports and enhancement requests within
 
 - Go 1.27.0
 - Docker with Compose for Kafka integration tests
+- Node.js 20.19.0 or later and npm for OpenSpec validation
+
+Node.js is optional for Go builds. Use [OpenSpec](docs/openspec.md) to record
+requirements, acceptance scenarios, design decisions, and tasks for behavior
+changes. Keep the normative files in `spec/` current in the same patch.
 
 ## Set up the repository
 
@@ -50,11 +55,17 @@ Run the required brokerless checks:
 ```console
 make verify
 make vuln
+make spec-check
 ```
 
 `make verify` checks formatting, imports, module drift, vet, ordinary tests, the
 race detector, fixed-seed property tests, lint, dependency licenses, pure-Go
-builds, Linux ARM64, and repository examples.
+builds, Linux ARM64, repository examples, local documentation links, and generated
+previews. `make spec-check` validates OpenSpec separately. It does not run tests.
+
+The Makefile uses a POSIX shell. On Windows, use Git Bash with Make and the
+required Go toolchain, or run the individual Go commands in
+[testing](docs/testing.md). The race detector also needs a compatible C compiler.
 
 Run the live-broker tests when Docker is available:
 
@@ -101,7 +112,9 @@ prerequisite, action, result, bound, owner, and failure behavior when they
 matter. Use one term for one meaning.
 
 Keep the legal vocabulary when it names a language feature. Do not let theme
-text obscure behavior.
+text obscure behavior. Follow the [writing guide](docs/writing.md), which uses
+the Plain guidance from SimpleEnglish. Preserve normative requirements and
+exact command syntax during a prose edit.
 
 ## Releases
 
