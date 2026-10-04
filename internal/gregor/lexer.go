@@ -209,10 +209,15 @@ func lex(src string) ([]token, error) {
 }
 
 // commentFollows reports whether the text after a lexed "OFF" continues
-// "THE RECORD" and a colon, with any amount of horizontal whitespace.
+// "THE RECORD" and a colon. Separate words need horizontal whitespace;
+// whitespace before the colon is optional.
 func commentFollows(rest string) bool {
 	for _, want := range []string{"THE", "RECORD"} {
-		rest = strings.TrimLeft(rest, " \t")
+		trimmed := strings.TrimLeft(rest, " \t")
+		if len(trimmed) == len(rest) {
+			return false
+		}
+		rest = trimmed
 		if !strings.HasPrefix(rest, want) {
 			return false
 		}

@@ -9,6 +9,7 @@
 | goimports module | `golang.org/x/tools@v0.49.0` |
 | govulncheck | v1.7.0 |
 | actionlint | v1.7.12 |
+| OpenSpec (optional documentation tool) | 1.13.2, with Node.js 20.19.0 or later |
 | go-licenses | v2.0.1 |
 | Gitleaks | v8.30.1 |
 | Syft | v1.51.1 |
@@ -17,6 +18,10 @@
 
 Go verifies module downloads with `go.sum` or the configured checksum database.
 CI verifies the Gitleaks archive with SHA-256 before extraction.
+
+OpenSpec is separate from the Go module graph. `make spec-check` and its CI job
+use the exact CLI version above. Node.js 24 supplies that CI job. Ordinary Go
+builds and tests do not need npm or OpenSpec.
 
 GitHub Actions use full commit SHAs. The workflow comment records the matching
 release tag.

@@ -4,6 +4,25 @@
 
 ### Fixed
 
+- Compute fixed-point products, divisions, remainders, and mixed comparisons
+  without overflowing intermediate values. Preserve final signed 64-bit wrapping.
+- Flush pending effects before expedited discovery and standing reads, so they
+  observe earlier updates, tombstones, and judgments.
+- Stop execution when a verdict read fails, preserving committed output for resume.
+- Keep resumed article execution out of office bodies in newly compiled filings.
+- Avoid full recovery on every docket sweep for unchanged completed cases; retry
+  after changes, newly visible proceedings, or failed probes.
+- Reject duplicate concern names within an office and malformed comment keywords.
+- Replace deposition statute sources atomically on reload. Reject rejection tests
+  that contain runtime assertions instead of silently ignoring those assertions.
+- Preserve flag values such as `--help` during CLI help detection. Report canceled
+  source reads as cancellation instead of a pipe-close error.
+- Preserve open Counsel documents after missing or null edit text. Distinguish
+  malformed JSON from invalid JSON-RPC requests and clamp LSP positions to line ends.
+- Validate MCP envelopes and required tool arguments before execution. Prevent
+  ID-less tool calls from changing storage, preserve exact integer IDs, negotiate
+  the supported version, accept the exact message-size bound, and detect short writes.
+- Keep source line endings consistent on Windows so formatting checks match CI.
 - Stop `trial` cleanly on SIGTERM as well as Ctrl+C, so containerized
   `proceed --docket`, `watch`, `mcp`, and `counsel` processes cancel and unwind.
   Interrupt standard-input reads on cancellation, including partial protocol messages.
@@ -39,6 +58,15 @@
 
 ### Changed
 
+- Reconcile the grammar, bytecode reference, and language specification with
+  implemented forms, operand evaluation order, fixed-point arithmetic, and record behavior.
+- Explain local execution, deposition assertions, example dependencies, and
+  generated-frame playback in plain English using SimpleEnglish guidance.
+- Add fixed-point arithmetic, deposition parsing, JSON-RPC envelopes, and MCP
+  numeric IDs to fuzz checks, and run local
+  CLI checks on Windows and macOS. Validate OpenSpec in a separate CI job.
+- Update indirect `golang.org/x/crypto` to v0.56.0, removing the module's
+  GO-2026-6354 and GO-2026-6355 SSH findings. triallang does not import SSH.
 - Dispatch CLI subcommands from one table that also drives `trial help`,
   `--broker` documentation, and near-miss suggestions, so a new command cannot
   be added to one and forgotten in another.
@@ -48,6 +76,16 @@
 
 ### Added
 
+- Add `trial run` for bounded brokerless source execution, repeated inputs and
+  statute dependencies, streamed main-case output, and joined child workers.
+- Add computed Julia, wave-interference, and distance-field shaders with exact
+  depositions, independent numerical checks, and retained-record budgets.
+- Add a Rule 90 automaton, shortest-path maze solver, and postfix calculator with
+  bounded inputs and edge-case tests.
+- Add an example index, shader and toy guides, and previews generated from actual runs.
+- Add OpenSpec capability requirements, a project configuration, a change proposal,
+  and pinned `make spec-check` validation.
+- Add a local documentation-link checker and generated-gallery freshness checks.
 - Add `make help`, `make install` (stamps the git version into the binary), and
   `make clean`.
 - Add Dependabot configuration for Go modules, GitHub Actions, and the Compose
@@ -69,8 +107,13 @@
 
 ### Compatibility
 
-- Language syntax, stored JSON, and the public Go API are unchanged. No new
-  dependencies are required.
+- Stored JSON, opcodes, and the public Go API are unchanged. No new Go dependencies
+  are required. OpenSpec validation uses optional Node.js and npm tooling.
+- Duplicate office parameters and malformed comment keywords now fail filing.
+  Correct those invalid sources before recompiling them.
+- Corrected arithmetic can change replay results for historical cases affected
+  by intermediate overflow. Review active cases before upgrading. See
+  [ADR 0005](docs/adr/0005-fixed-point-intermediates.md) for the compatibility boundary.
 - The CLI continues to obtain its release version from the release linker flag or
   module metadata; this unreleased entry does not create a release tag.
 

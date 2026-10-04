@@ -1,0 +1,69 @@
+FORM K-1.
+IN THE MATTER OF: the-cellular-court.
+FILED BY: the office of neighboring opinions.
+
+OFF THE RECORD: Rule 90, a one-dimensional cellular automaton.
+OFF THE RECORD: A cell is alive next turn exactly when its neighbors differ.
+OFF THE RECORD: Cells outside the 17-column board are always dead.
+OFF THE RECORD: Build a fresh schedule before replacing the current one.
+OFF THE RECORD: The case prints generations 0 through 8, then adjourns.
+
+HEREINAFTER, width SHALL MEAN 17.
+HEREINAFTER, last-generation SHALL MEAN 8.
+
+ARTICLE 1.
+    SHOULD width FALL SHORT OF 1 OR IN THE ALTERNATIVE width EXCEED 65, HOLD "Width must be between 1 and 65." IN CONTEMPT.
+    SHOULD last-generation FALL SHORT OF 0 OR IN THE ALTERNATIVE last-generation EXCEED 32, HOLD "Last generation must be between 0 and 32." IN CONTEMPT.
+    LET IT BE RECORDED THAT cells IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT column IS 1.
+    LET IT BE RECORDED THAT generation IS 0.
+
+ARTICLE 2.
+    SHOULD column EXCEED width, REFER TO ARTICLE 3.
+    ANNEX 0 TO cells.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    REFER TO ARTICLE 2.
+
+ARTICLE 3.
+    SUBSTITUTE 1 FOR ITEM width APPORTIONED AMONG 2 PLUS 1 OF cells.
+
+ARTICLE 4.
+    LET IT BE RECORDED THAT row IS "".
+    LET IT BE RECORDED THAT column IS 1.
+    LET IT BE RECORDED THAT population IS 0.
+
+ARTICLE 5.
+    SHOULD column EXCEED width, REFER TO ARTICLE 6.
+    SHOULD THE ITEM AT column IN cells EQUAL 1, REFER TO ARTICLE 7.
+    LET IT BE RECORDED THAT row IS row PLUS ".".
+    REFER TO ARTICLE 8.
+
+ARTICLE 6.
+    PROCLAIM THE TRANSCRIPT OF generation PLUS " |" PLUS row PLUS "|".
+    SHOULD generation EQUAL last-generation, ADJOURN INDEFINITELY.
+    LET IT BE RECORDED THAT next-cells IS AN EMPTY SCHEDULE.
+    LET IT BE RECORDED THAT column IS 1.
+    REFER TO ARTICLE 9.
+
+ARTICLE 7.
+    LET IT BE RECORDED THAT row IS row PLUS "#".
+    LET IT BE RECORDED THAT population IS population PLUS 1.
+
+ARTICLE 8.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    REFER TO ARTICLE 5.
+
+ARTICLE 9.
+    SHOULD column EXCEED width, REFER TO ARTICLE 10.
+    LET IT BE RECORDED THAT left IS 0.
+    LET IT BE RECORDED THAT right IS 0.
+    SHOULD column EXCEED 1, LET IT BE RECORDED THAT left IS THE ITEM AT column LESS 1 IN cells.
+    SHOULD column FALL SHORT OF width, LET IT BE RECORDED THAT right IS THE ITEM AT column PLUS 1 IN cells.
+    ANNEX (left PLUS right) NOTWITHSTANDING 2 TO next-cells.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    REFER TO ARTICLE 9.
+
+ARTICLE 10.
+    LET IT BE RECORDED THAT cells IS next-cells.
+    LET IT BE RECORDED THAT generation IS generation PLUS 1.
+    REFER TO ARTICLE 4.

@@ -37,10 +37,10 @@ const (
 	OpEnter           = "ENTER"            // pop value, pop exhibit; push the exhibit with entry Name replaced
 	OpConsolidate     = "CONSOLIDATE"      // pop two findings; push their conjunction (AND ALSO)
 	OpAlternative     = "ALTERNATIVE"      // pop two findings; push their disjunction (OR IN THE ALTERNATIVE)
-	OpMeasure         = "MEASURE"          // pop a string or exhibit; push its length (THE LENGTH OF)
+	OpMeasure         = "MEASURE"          // pop a string or collection; push its length (THE LENGTH OF)
 	OpExcerpt         = "EXCERPT"          // pop j, i, s; push s[i..j], 1-indexed, inclusive (AN EXCERPT OF)
 	OpTranscribe      = "TRANSCRIBE"       // pop any value; push its display string (THE TRANSCRIPT OF)
-	OpSumCertain      = "SUM-CERTAIN"      // pop a string or int; push the integer it denotes (THE SUM CERTAIN OF)
+	OpSumCertain      = "SUM-CERTAIN"      // parse a numeric string; integers and sums pass through (THE SUM CERTAIN OF)
 	OpContempt        = "CONTEMPT"         // pop a value and produce a verdict with it as the particulars
 	OpStrike          = "STRIKE"           // strike the record Name: a tombstone in the records topic
 	OpServe           = "SERVE"            // pop respondent case number, pop notice; append the notice to the respondent's summons topic
@@ -249,8 +249,11 @@ func (v Value) Display() string {
 // integers and sums compare by monetary amount.
 func (v Value) Equal(o Value) bool {
 	if v.T != o.T {
-		if lm, rm, ok := Amounts(v, o); ok {
-			return lm == rm
+		if v.T == KindInt && o.T == KindSum {
+			return o.I%SumScale == 0 && v.I == o.I/SumScale
+		}
+		if v.T == KindSum && o.T == KindInt {
+			return v.I%SumScale == 0 && v.I/SumScale == o.I
 		}
 		return false
 	}
@@ -275,7 +278,9 @@ func (v Value) Equal(o Value) bool {
 // Amounts converts two values to a common penny scale, when both are
 // numbers (integers or sums) and at least one is a sum. It reports
 // false otherwise; the promotion of integers to money is performed
-// only in the presence of money.
+// only in the presence of money. Returned mantissas wrap to int64;
+// comparisons and operations with a later division must preserve exact
+// intermediates instead of relying on an overflowing promotion.
 func Amounts(l, r Value) (lm, rm int64, ok bool) {
 	if (l.T != KindSum && l.T != KindInt) || (r.T != KindSum && r.T != KindInt) {
 		return 0, 0, false

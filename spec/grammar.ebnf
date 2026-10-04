@@ -25,6 +25,7 @@ case-file        = form-declaration , caption , { filing-clause } ,
                    { office | exhibit-declaration | const-declaration } ;
 
 statute-file     = "FORM S-1" , terminator , caption , { filing-clause } ,
+                   { incorporation } ,
                    { office | exhibit-declaration | const-declaration } ;
 (* A statute: a library. No articles; a statute legislates, it does
    not litigate. Published with trial enact; claimed with
@@ -87,6 +88,7 @@ statement        = recording
                  | entering
                  | proclamation
                  | summons
+                 | selective-summons
                  | timed-summons
                  | publish
                  | gazette-await
@@ -100,6 +102,7 @@ statement        = recording
                  | contempt
                  | strike
                  | service
+                 | judgment
                  | commencement
                  | motion
                  | annex
@@ -203,10 +206,10 @@ comparator       = "EXCEED"
    Court reads everything. Nest SHOULDs when a clause must be
    protected from evaluation.
 
-   EXCEED and FALL SHORT OF apply to integers. EQUAL and DIFFER FROM
-   apply to any two values of the same standing; exhibits are compared
-   entry by entry, recursively; the Court checks every page. Comparing
-   values of different kinds is GUILTY. *)
+   EXCEED and FALL SHORT OF apply to integers and sums. An integer is
+   promoted when compared with a sum. EQUAL and DIFFER FROM also allow
+   that numeric promotion; otherwise both values must have the same
+   kind. Collections are compared recursively. *)
 
 petition         = "PETITION THE OFFICE OF" , office-name ,
                    [ "WITH" , argument-list ] , terminator ;
@@ -214,8 +217,8 @@ petition         = "PETITION THE OFFICE OF" , office-name ,
    discarded unread. *)
 
 remand           = "REMAND" , [ "WITH" , expression ] , terminator ;
-(* Lawful only within an office. REMAND in the case in chief is
-   GUILTY. *)
+(* Lawful only within an office. REMAND in the case in chief is a
+   rejected filing. *)
 
 adjournment      = "ADJOURN INDEFINITELY" , terminator
                  | "ADJOURN FOR" , expression , ( "DAY" | "DAYS" ) ,
@@ -256,8 +259,15 @@ commencement     = "COMMENCE PROCEEDINGS UPON" , expression , "," ,
    convened; commencement is not process. A non-string source, or one
    the compiler rejects, is GUILTY, and nothing is opened. *)
 
+judgment         = "ENTER JUDGMENT AGAINST" , expression , "," ,
+                   "ON THE GROUNDS OF" , expression , terminator ;
+(* The target must be a child whose commencement this case recorded.
+   The grounds are evaluated before the target (spec.md 10.7). The
+   judgment is entered in the child's verdicts topic and in this case's
+   ledger in one step. Reenactment reuses the ledger entry. *)
+
 motion           = "FILE A MOTION TO RECONSIDER" , "," ,
-                   "REFERRING TO ARTICLE" , integer ,
+                   "REFERRING TO ARTICLE" , integer-literal ,
                    [ "," , "THE GROUNDS FILED UNDER" , identifier ] ,
                    terminator ;
 (* Verdict interception, once per case. While the motion is on file,
@@ -341,8 +351,9 @@ parameter-list   = identifier , { "AND" , identifier } ;
 section          = "SECTION" , section-number , terminator , { statement } ;
 section-number   = integer-literal ;
 
-(* Offices appear after the final article. Parameters are the office's
-   only local records; all other names refer to the case's records.
+(* Offices appear after the final article. Parameters must be unique
+   within each office. They are the office's only local records;
+   all other names refer to the case's records.
    Reaching the end of an office without REMANDing is an implicit
    "REMAND.": the office simply stops corresponding. *)
 
@@ -358,7 +369,8 @@ additive-operator
 term             = factor , { multiplicative-operator , factor } ;
 multiplicative-operator
                  = "TIMES" | "APPORTIONED AMONG" | "NOTWITHSTANDING" ;
-(* APPORTIONED AMONG is integer division, truncated toward zero.
+(* APPORTIONED AMONG truncates division toward zero: to an integer when
+   both operands are integers, or to a penny when either is a sum.
    Apportioning among zero parties is an automatic verdict.
    NOTWITHSTANDING is the remainder: "n NOTWITHSTANDING 15" is what
    remains of n, 15 notwithstanding. *)
@@ -440,8 +452,8 @@ petition-under   = "PETITION UNDER" , expression ,
 
 measurement      = "THE LENGTH OF" , factor ;
 (* Of a string, its length in Unicode code points; of an exhibit or a
-   register, its number of entries. Of an integer or a finding,
-   GUILTY: they have no length; they have, at most, magnitude. *)
+   register, its number of entries; of a schedule, its number of items.
+   Other kinds are GUILTY: they have no length. *)
 
 excerpt          = "AN EXCERPT OF" , factor ,
                    "FROM" , expression , "TO" , expression ;
@@ -455,10 +467,10 @@ transcript       = "THE TRANSCRIPT OF" , factor ;
    Transcription is always available. Interpretation is not offered. *)
 
 sum-certain      = "THE SUM CERTAIN OF" , factor ;
-(* The integer a string denotes (optional sign, digits, and nothing
-   else), or the integer itself, its sum having already been certain.
-   Anything else is GUILTY: the Court will not guess what you meant,
-   though it has recorded that you meant something. *)
+(* Parses an integer or fixed-point sum from a complete string: an
+   optional sign, decimal digits, and optionally a decimal point with
+   exactly two digits. Integers and sums pass through unchanged.
+   Whitespace, other syntax, and out-of-range values are GUILTY. *)
 
 case-at-bar      = "THE CASE AT BAR" ;
 (* This case's own number, as a string. Every case knows its own
@@ -469,11 +481,10 @@ case-at-bar      = "THE CASE AT BAR" ;
 discretion       = "THE DISCRETION OF THE COURT BETWEEN" , expression ,
                    "AND" , expression ;
 (* An integer between the two bounds, both inclusive, selected by a
-   process the Court does not explain and will not repeat. Bounds must
+   process the Court does not explain. Bounds must
    be integers with lower <= upper; anything else is GUILTY. The
-   selected value is pushed to the dossier like any other, so it
-   survives suspension and crashes; a reenactment, however, exercises
-   the discretion afresh (spec/spec.md §16). Inside an AND-separated
+   selected value is entered in the ledger in the same step. A
+   reenactment reuses the recorded draw (spec.md 14.4). Inside an AND-separated
    list, the BETWEEN consumes the first AND; parenthesize, as one
    would. *)
 
@@ -597,7 +608,10 @@ comment          = "OFF THE RECORD" , ":" , { ? any character except newline ? }
 (* Extends to end of line. Lexically discarded; permanently retained
    in the filing topic nonetheless. Nothing is ever off the record. *)
 
-free-text        = { ? any character except "." or newline ? } ;
+free-text        = { ? any non-terminator token accepted by the lexer ? } ;
+(* FILED BY is still tokenized. Quote punctuation that is not otherwise
+   part of the language. Newlines are whitespace; a period inside a
+   quoted string does not end the clause. *)
 
 lowercase-letter = ? "a" through "z" ? ;
 digit            = ? "0" through "9" ? ;

@@ -4,7 +4,10 @@ GOIMPORTS_VERSION := v0.49.0
 GOVULNCHECK_VERSION := v1.7.0
 GO_LICENSES_VERSION := v2.0.1
 ACTIONLINT_VERSION := v1.7.12
+OPENSPEC_VERSION := 1.13.2
+NPX ?= npx
 FUZZ_TIME ?= 30s
+FUZZ_TIMEOUT ?= 2m
 
 .PHONY: hooks build test race property fuzz coverage fmt fmt-check vet lint tidy-check examples api-check workflow-check vuln licenses purego arm64 demo-generate demo-check verify
 
@@ -25,8 +28,12 @@ property:
 	go test -timeout=3m ./internal/court -run '^TestGeneratedPrograms' -count=1
 
 fuzz:
-	go test -timeout=2m ./internal/gregor -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=${FUZZ_TIME} -parallel=4
-	go test -timeout=2m ./internal/counsel -run '^$$' -fuzz '^FuzzCounselReadMessage$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/gregor -run '^$$' -fuzz '^FuzzParse$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/counsel -run '^$$' -fuzz '^FuzzCounselReadMessage$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/counsel -run '^$$' -fuzz '^FuzzCounselEnvelope$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/advocate -run '^$$' -fuzz '^FuzzMCPIntegerID$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/deposition -run '^$$' -fuzz '^FuzzDepositionParse$$' -fuzztime=${FUZZ_TIME} -parallel=4
+	go test -timeout=${FUZZ_TIMEOUT} ./internal/court -run '^$$' -fuzz '^FuzzSumArithmetic$$' -fuzztime=${FUZZ_TIME} -parallel=4
 
 coverage:
 	go test -timeout=3m -coverprofile=coverage.out ./...
@@ -78,6 +85,30 @@ demo-generate:
 demo-check:
 	go run ./tools/demogen -check -root .
 
+.PHONY: doc-check gallery-generate gallery-check spec-check demos-check demos-record
+
+# Recording is optional: it needs Bash, VHS, ttyd, FFmpeg, and Chromium.
+# Validate ten tapes and nine local depositions before recording local demos.
+# Recovery is separate: bash docs/demos/record.sh the-recovery (needs Kafka).
+demos-check: build
+	bash docs/demos/check.sh
+
+demos-record: demos-check
+	bash docs/demos/record.sh
+
+doc-check:
+	go run ./tools/doccheck -root .
+
+gallery-generate:
+	go run ./tools/examplegallery -write -root .
+
+gallery-check:
+	go run ./tools/examplegallery -check -root .
+
+# OpenSpec is optional for Go builds. CI validates it in a separate Node job.
+spec-check:
+	OPENSPEC_TELEMETRY=0 ${NPX} --yes @fission-ai/openspec@${OPENSPEC_VERSION} validate --all --strict --no-interactive
+
 verify:
 	@test "$$(go env GOVERSION)" = "go${GO_VERSION}" || \
 		{ echo "Go ${GO_VERSION} is required; found $$(go env GOVERSION)" >&2; exit 1; }
@@ -94,6 +125,8 @@ verify:
 	${MAKE} purego
 	${MAKE} arm64
 	${MAKE} demo-check
+	${MAKE} doc-check
+	${MAKE} gallery-check
 	${MAKE} examples
 
 # A bare `make` used to run the first target, which rewired core.hooksPath.
@@ -113,7 +146,7 @@ help:
 	@echo "  test           Test suite (Kafka tests require TRIAL_E2E_BROKER)"
 	@echo "  race           Tests under the race detector"
 	@echo "  property       Generated-program property tests"
-	@echo "  fuzz           Parser and Counsel framing fuzz targets (FUZZ_TIME=${FUZZ_TIME})"
+	@echo "  fuzz           Language, deposition, protocols, and arithmetic fuzzing (FUZZ_TIME=${FUZZ_TIME})"
 	@echo "  coverage       Statement coverage report"
 	@echo "  examples       Run the brokerless example depositions"
 	@echo "  fmt            Rewrite sources with goimports"
@@ -127,6 +160,12 @@ help:
 	@echo "  arm64          Cross-build for Linux ARM64"
 	@echo "  demo-generate  Regenerate demo assets"
 	@echo "  demo-check     Check generated demo assets"
+	@echo "  doc-check      Check local Markdown link targets"
+	@echo "  gallery-generate Regenerate previews from executed examples"
+	@echo "  gallery-check  Check generated example previews"
+	@echo "  demos-check    Validate ten VHS tapes and nine local depositions"
+	@echo "  demos-record   Record nine local examples with VHS"
+	@echo "  spec-check     Validate OpenSpec (requires Node.js and npm)"
 	@echo "  lint           golangci-lint with the pinned version"
 	@echo "  vuln           govulncheck"
 	@echo "  verify         Required local checks; also run make vuln"

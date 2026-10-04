@@ -120,8 +120,10 @@ Statements and declarations end with a period.
 comment = "OFF THE RECORD" , ":" , { any character except newline } ;
 ```
 
-A comment runs from `OFF THE RECORD:` to the end of the line. Comments
-are lexically discarded but remain in the source stored in the filing topic.
+A comment runs from `OFF THE RECORD:` to the end of the line. Separate
+the three words with spaces or tabs; whitespace before the colon is optional.
+Comments are lexically discarded but remain in the source stored in the
+filing topic.
 
 ```trial
 LET IT BE RECORDED THAT n IS 3.   OFF THE RECORD: it was 4.
@@ -441,7 +443,7 @@ Jurisdiction is the visibility rule, and there is exactly one:
 ### 10.1 Operands
 
 ```
-factor = integer-literal | string-literal | finding-literal
+factor = integer-literal | sum-literal | string-literal | finding-literal
        | identifier
        | finding-of            (* §10.6: call for a value *)
        | exhibit-offer         (* §10.4 *)
@@ -452,9 +454,18 @@ factor = integer-literal | string-literal | finding-literal
        | sum-certain           (* §10.5: THE SUM CERTAIN OF *)
        | schedule-literal      (* §8.1 *)
        | item-at               (* §8.1: THE ITEM AT … IN *)
+       | register-literal      (* §8.2 *)
+       | entry-at              (* §8.2: THE ENTRY UNDER … IN *)
+       | roster-of             (* §8.2: THE ROSTER OF *)
+       | power-of              (* §12.5: office as a value *)
+       | call-under            (* §12.5: dynamic call for a value *)
        | case-at-bar           (* §10.8: THE CASE AT BAR *)
        | discretion            (* §10.8: THE DISCRETION OF THE COURT *)
        | date-of-presents      (* §10.8: THE DATE OF THESE PRESENTS *)
+       | document-from         (* §10.9: archive lookup *)
+       | practice              (* §10.10: licensed patent exercise *)
+       | standing              (* §10.11: case status *)
+       | discovery             (* §10.12: another case's record *)
        | "(" , expression , ")" ;
 ```
 
@@ -471,7 +482,7 @@ Two precedence levels, left-associative, with parentheses:
 
 | Level | Operators |
 |---|---|
-| multiplicative | `TIMES`, `APPORTIONED AMONG` (integer division, toward zero), `NOTWITHSTANDING` (remainder) |
+| multiplicative | `TIMES`, `APPORTIONED AMONG` (division toward zero at integer or penny precision), `NOTWITHSTANDING` (remainder) |
 | additive | `PLUS`, `LESS` |
 
 ```trial
@@ -490,19 +501,28 @@ PROCLAIM "guilt" PLUS "y".
 
 `PLUS` on a string and anything else is a verdict; convert first
 (§10.5). Apportioning among zero parties is a verdict; the parties
-could not be located. The remainder of zero is likewise a verdict;
-nothing remains, zero notwithstanding.
+could not be located. A zero divisor in `NOTWITHSTANDING` is likewise a
+verdict. A zero dividend is valid: `0 NOTWITHSTANDING 5` yields `0`.
+A nonzero remainder has the dividend's sign: `-17 NOTWITHSTANDING 5`
+yields `-2`, and `-5.25 NOTWITHSTANDING 2` yields `-1.25`.
 
 **Money arithmetic.** When either operand is a sum, the other,
 if an integer, is promoted to money, and the operation is performed on
 penny mantissas with the result a sum:
 
-- `PLUS` and `LESS` are exact.
+- `PLUS` and `LESS` add or subtract penny mantissas.
 - `TIMES` computes the exact product and truncates it to the penny,
   **toward zero**.
 - `APPORTIONED AMONG` divides at penny scale and truncates toward
   zero: `10.00 APPORTIONED AMONG 3` is `3.33`.
 - `NOTWITHSTANDING` yields the remainder, in pennies.
+
+Promotion and intermediate products are exact. Only the final penny
+mantissa wraps modulo 2⁶⁴ into the signed 64-bit range when an arithmetic
+result exceeds that range. Thus a large intermediate product does not
+corrupt a result that fits: `1000000000.00 TIMES 1000000.00` is
+`1000000000000000.00`, and dividing any sum by `1.00` preserves it.
+Comparisons use exact numeric values without wrapping promoted integers.
 
 The same promotion applies to magnitude comparisons and to equality
 (§10.3): `5.00 EQUAL 5` is `SUSTAINED`; they are the same money,
@@ -518,10 +538,18 @@ comparator = "EXCEED" | "FALL SHORT OF" | "EQUAL" | "DIFFER FROM" ;
 ```
 
 Comparisons appear only in `SHOULD` conditions (§11.5) and produce
-findings. `EXCEED` and `FALL SHORT OF` apply to integers only.
-`EQUAL` and `DIFFER FROM` apply to any two values **of the
-same kind**; comparing values of different kinds is a verdict, not an
-`OVERRULED`. The comparison itself is the offense.
+findings. `EXCEED` and `FALL SHORT OF` apply to integers and sums.
+`EQUAL` and `DIFFER FROM` apply to any two values of the same kind.
+All four comparators also allow an integer paired with a sum, using
+the numeric promotion in §10.2. Other pairs of different kinds produce
+a verdict, not an `OVERRULED`.
+
+Collection equality compares nested values recursively. Schedules must have
+the same length and equal values in each position. Registers must have the
+same keys and equal values under each key. Exhibits must also have the same
+subject name. Nested integers and sums compare by numeric value; other unlike
+nested kinds compare unequal. They do not cause a verdict when the two
+top-level collections have the same kind.
 
 `FAIL TO` negates the comparator it precedes: `SHOULD n FAIL TO
 EXCEED 100` is n ≤ 100.
@@ -555,8 +583,8 @@ sum-certain = "THE SUM CERTAIN OF" , factor ;
 ```
 
 **`THE LENGTH OF f`**: of a string, its length in characters (code
-points, §3); of an exhibit, its number of entries; of a schedule, its
-number of items. Applying it to an integer or finding is a verdict.
+points, §3); of an exhibit or register, its number of entries; of a
+schedule, its number of items. Other kinds produce a verdict.
 
 ```trial
 PROCLAIM THE LENGTH OF "Josef K.".      OFF THE RECORD: 8
@@ -586,14 +614,18 @@ Transcription is always available. Interpretation is not offered.
 PROCLAIM "the count stands at " PLUS THE TRANSCRIPT OF 42.
 ```
 
-**`THE SUM CERTAIN OF v`**: the integer a value denotes. A string
-must denote the integer exactly and entirely: an optional sign, then
-decimal digits, and nothing else; no whitespace, no commas, no
-prose. An integer passes through unchanged. Anything else is a verdict.
+**`THE SUM CERTAIN OF v`**: the integer or sum a value denotes. A
+string must contain an optional sign followed by decimal digits,
+optionally ending in a decimal point and exactly two more digits.
+The entire string must match: no whitespace, commas, or prose. The
+result must fit the corresponding signed 64-bit range (integer units
+or sum pennies). Integers and sums pass through unchanged. Other
+values produce a verdict.
 
 ```trial
 PROCLAIM THE SUM CERTAIN OF "42" PLUS 8.     OFF THE RECORD: 50
 PROCLAIM THE SUM CERTAIN OF "-7".            OFF THE RECORD: -7
+PROCLAIM THE SUM CERTAIN OF "12.50" PLUS 1.  OFF THE RECORD: 13.50
 PROCLAIM THE SUM CERTAIN OF "forty-two".     OFF THE RECORD: a verdict
 ```
 
@@ -615,9 +647,32 @@ would.
 
 ### 10.7 Evaluation order
 
-Operands are evaluated left to right, depth first, exactly as filed.
-Each evaluation step is one instruction and therefore one Kafka
-transaction (§14.3). The language has no unsequenced effects.
+Evaluation is depth first. Arithmetic operands, comparison operands,
+call arguments, schedule items, and exhibit entries are evaluated in
+source order. Conditions evaluate every clause; they do not short-circuit.
+
+Collection operations and judgment use the following order:
+
+| Form | Evaluation order |
+|---|---|
+| `THE ITEM AT i IN s` | schedule `s`, then index `i` |
+| `THE ENTRY UNDER k IN r` | register `r`, then key `k` |
+| `A REGISTER COMPRISING v UNDER k ...` | key `k`, then value `v`, for each entry in source order |
+| `ANNEX v TO s` | retrieve `s`, then value `v` |
+| `SUBSTITUTE v FOR ITEM i OF s` | retrieve `s`, then index `i`, then value `v` |
+| `INSCRIBE v UNDER k IN r` | retrieve `r`, then key `k`, then value `v` |
+| `EXPUNGE THE ENTRY UNDER k IN r` | retrieve `r`, then key `k` |
+| `LET IT BE ENTERED IN x THAT f IS v` | retrieve `x`, then value `v` |
+| `ENTER JUDGMENT AGAINST c, ON THE GROUNDS OF g` | grounds `g`, then target `c` |
+
+A collection update changes the copy retrieved before its operands run.
+If an operand calls an office that replaces the same record, the final
+update still files its original copy. To make side effects explicit,
+evaluate them in separate recording statements before the update.
+
+An expression can compile to several instructions. By default each
+instruction commits in its own transaction; expedited execution groups
+instructions (§14.3). The table describes evaluation order in both modes.
 
 ### 10.8 The case at bar, the discretion, and the date
 
@@ -873,11 +928,11 @@ Together with commencement (§11.12), standing (§10.11), and the timed summons
 
 ```
 statement = recording | entering | proclamation | summons
-          | timed-summons | referral
-          | conditional | petition | remand | adjournment
-          | contempt | strike | service | commencement | motion
+          | selective-summons | timed-summons | referral
+          | conditional | petition | petition-under | remand | adjournment
+          | contempt | strike | service | judgment | commencement | motion
           | publish | gazette-await
-          | annex | substitute | archive-commit | patent-grant
+          | annex | substitute | inscribe | expunge | archive-commit | patent-grant
           | license-grant | assignment ;
 ```
 
@@ -940,8 +995,10 @@ AWAIT SUMMONS, FILED UNDER applicant.
 
 Blocks on the summons topic. Input is not requested; it is served upon
 the case when the Court is ready. Text that parses as an integer (an
-optional sign, then digits) arrives as an integer; all other text
-arrives as a string. A summons is answered exactly once, however many
+optional sign, then digits) arrives as an integer. Otherwise, a complete
+fixed-point decimal with exactly two fractional digits arrives as a sum.
+Both must fit their signed 64-bit representation. Other text, including
+out-of-range numbers, arrives unchanged as a string. A summons is answered exactly once, however many
 officials perish in the answering (§14.3). The summons may have been
 appended by `trial serve`, by any foreign Kafka producer (§17.8), or
 by another case executing `SERVE NOTICE` (§11.11); the plain `AWAIT
@@ -1110,9 +1167,9 @@ remand   = "REMAND" , [ "WITH" , expression ] , terminator ;
 ```
 
 See §12. A petition discards any remanded value unread; the expression
-form (§10.6) requires one. `REMAND` outside an office is a verdict:
-there is no higher court to remand to. There is no higher court at
-all.
+form (§10.6) requires one. `REMAND` outside an office is rejected at
+compile time. A malformed instruction that remands without an active
+call produces a runtime verdict.
 
 ### 11.8 Adjournment (halt and durable timer)
 
@@ -1272,7 +1329,7 @@ respondent of a `SERVE NOTICE`. Semantics:
   convened; its proceedings begin when some official runs `trial
   proceed` against it (or an agent calls `trial_proceed`). The docket
   (`trial docket`) lists it immediately.
-- **Exactly one child per commencement, in every timeline.** The
+- **Reenactment reuses a committed commencement.** The
   assigned case number is entered in the **ledger** (§14.4) in the
   same atomic step, like a draw of the discretion. A reenactment
   re-serves the recorded number and opens nothing; the case numbers a
@@ -1462,10 +1519,17 @@ THE OFFICE OF actuarial-services, CONCERNING n.
 ```
 
 Offices appear after the final article. An office's parameters
-(*concerns*) are its only local records; every other name refers to
-the case's records. Sections are labels for internal control flow,
+(*concerns*) are its only local records. Concern names must be unique
+within an office; different offices may reuse a name. Every other name
+refers to the case's records. Sections are labels for internal control flow,
 subject to jurisdiction (§9). Reaching the end of an office is an
 implicit bare `REMAND.`; the office simply stops corresponding.
+
+After the final article, a filing with offices adjourns implicitly. On
+resumption, a compiler-generated referral skips the office bodies and reaches
+the end of that filing or an appended supplement. Calls still enter their
+office directly. This guard applies to newly compiled filings; see
+[the bytecode layout](bytecode.md#layout-rules-gregor) for existing cases.
 
 ### 12.2 Calling conventions
 
@@ -1553,7 +1617,8 @@ FILED BY: whoever is willing to admit it.
 ```
 
 `FILED BY:` clauses are recorded verbatim in the filing topic and
-never read. Then, in order: any exhibit shapes and defined terms; one
+never read. Then, in order: incorporation clauses (§13.2a); any exhibit
+shapes and defined terms; one
 or more articles (the case in chief); then offices, further exhibit
 shapes, and further defined terms, in whatever order they arrive.
 
@@ -1648,19 +1713,20 @@ cache rebuilt at the start of every session by refolding the topics.
 ### 14.2 The instruction cycle
 
 The Court fetches the instruction at the committed program counter,
-executes it against the cached state, and enters the instruction's
-complete effect (every record it appends, plus the advance of the
-Court's attention) as one Kafka transaction. A jump assigns a different logical
-program counter. The transaction-per-instruction design makes single-step
+executes it against the cached state, and commits its buffered execution
+records with the Court's attention in one Kafka transaction. A jump assigns
+a different logical program counter. Archive documents and child cases are
+created before that transaction, as described in §10.9 and §11.12. The
+transaction-per-instruction design makes single-step
 throughput depend on broker transaction latency; §17.7 describes the benchmark
 harness and the expedited alternative.
 
 ### 14.3 Exactly-once execution
 
-One instruction is one Kafka transaction: every record the instruction
-appends (stack motions, call events, variables, proclamations, notices
-served on other cases) commits atomically with the advance of the
-program counter, or none of it does. All reads are `read_committed`.
+By default, an ordinary instruction commits its buffered records (stack
+motions, call events, variables, proclamations, and served notices) atomically
+with the program counter. None of that buffered step becomes visible alone.
+All reads are `read_committed`.
 Consequences, each of which is a tested invariant:
 
 - **Crash-consistency.** Kill the official at any commit boundary; a
@@ -1674,10 +1740,17 @@ Consequences, each of which is a tested invariant:
   clerk per matter.
 - **Guilt is atomic.** A guilty instruction's pending effects are
   discarded unentered; only the verdict lands.
-- **The continuance is the one two-step instruction** (§11.8): its
-  grant and its eventual advance are separate transactions, with the
-  wait between them; each transaction individually observes all of the
-  above.
+- **Continuances and timed summonses use two steps** (§11.8, §11.4a):
+  the deadline grant and the eventual advance are separate transactions,
+  with the wait between them. Each transaction observes these rules.
+- **Archive and commencement drafts precede the step.** The archive
+  document or child case must exist before its offset or identifier can
+  be committed. A failure between these operations can leave a draft
+  that a later retry does not reuse (§10.9, §11.12).
+- **A failed verdict lookup stops execution.** At a commit boundary,
+  the Court must check for a judgment entered by another case. If that
+  read fails, the session returns the infrastructure error and preserves
+  the committed prefix for recovery.
 
 #### 14.3a The expedited docket
 
@@ -1686,16 +1759,19 @@ official executes up to *n* instructions per committed step, with one
 transaction carrying their effects and one attention note at the end. The
 parity suite checks that several batch sizes produce the same timelines:
 
-- **Uncommitted work that perishes with its official re-executes
-  deterministically.** A crash mid-batch loses nothing durable and
-  duplicates nothing: uncommitted ledger draws never happened (§14.4's
-  rule, doing new work), uncommitted summons consumptions never
-  happened, and the successor replays the batch from the last note.
+- **Recovery resumes from the last committed step.** Buffered writes
+  and input consumption from an uncommitted batch do not become visible.
+  The successor executes that batch again. Uncommitted ledger draws can
+  be taken afresh (§14.4), and archive or commencement drafts can remain
+  on file under the same rules as ordinary execution.
 - **The batch flushes early** at any instruction that reads what the
   batch may have written: the awaits (a self-served notice must be on
   file before the summons topic is scanned), the gazette await, the
-  archive read, and the patent registry (double patenting is checked
-  against the committed registry, not against intentions). The
+  archive read, discovery, standing, judgment, and the patent registry.
+  Discovery therefore sees earlier record updates and strikes, even
+  when it reads the case at bar. Standing sees a judgment entered
+  earlier in the same session. Double patenting is checked against the
+  committed registry. The
   continuance and timed-await grants also flush first, so a deadline
   is durable before any waiting begins, exactly as at the standing
   doctrine.
@@ -1721,7 +1797,7 @@ also consulted by letters patent, §10.10), the case number assigned by
 **`THE STANDING OF`** (§10.11), are recorded by the **ledger**. The mechanism:
 
 - Every draw and every clock reading is entered in the case's ledger
-  topic (`case.<id>.ledger`) **in the same atomic step that uses it**,
+  topic (`case-<id>.ledger`) **in the same atomic step that uses it**,
   tagged with the instruction address and the kind of reading.
 - The Court's attention records, alongside the program counter, how
   many ledger entries the current timeline has consumed.
@@ -1748,8 +1824,10 @@ live: `ADJOURN FOR` waits out real wall-clock time whenever the
 timeline reaches it (§11.8: the deadline is recorded; the waiting is
 not, and cannot be), and the archive's catalog (§10.9) is read as it
 stands rather than as it stood, though a case's catalog is written
-only by the case itself, whose writes replay. The case's machine state replays;
-external state does not.
+only by the case itself, whose writes replay. An archive read can therefore
+differ on reenactment if it occurs before the program rewrites that catalog
+entry. The ledger guarantees recorded observations; it does not snapshot
+the archive catalog or restore the outside world.
 
 Everything else remains closed: no environment variables, no
 filesystem beyond the archive, no network beyond the broker, no I/O
@@ -1909,10 +1987,11 @@ and particulars; columns are counted in bytes, §3.) Representative
 grounds for rejection:
 
 - a statement that does not end with a period;
-- a form other than K-1 or K-2;
-- a filing with no articles;
+- a form other than K-1, K-2, or S-1;
+- a K-1 or K-2 filing with no articles, or an S-1 statute with articles
+  or without an office;
 - duplicate article numbers, section numbers, office names, exhibit
-  names, exhibit entries, or defined terms;
+  names, exhibit entries, defined terms, or concerns within one office;
 - a referral to an article or section that does not exist, or across
   a jurisdictional boundary (§9);
 - `REMAND` in the case in chief;
@@ -1924,7 +2003,7 @@ grounds for rejection:
   a defined term;
 - an office established in a supplemental filing;
 - a K-2's referral to an article of the original filing;
-- a continuance in units other than DAYS (there are no other units of
+- a continuance in units other than DAY or DAYS (there are no other units of
   court time).
 
 There are no warnings.
@@ -1939,14 +2018,14 @@ offenses:
 | retrieving a record that does not exist | §6 |
 | striking a record that does not exist | §11.10 |
 | popping an empty dossier | (unreachable from valid filings) |
-| arithmetic on non-integers; joinder of unlike kinds | §10.2 |
-| apportionment among zero parties; the remainder of zero | §10.2 |
-| magnitude comparison (`EXCEED`, `FALL SHORT OF`) of non-integers | §10.3 |
-| equality comparison of values of different kinds | §10.3 |
+| arithmetic on non-numbers, except string joinder; joinder of unlike kinds | §10.2 |
+| division or remainder with a zero divisor | §10.2 |
+| magnitude comparison (`EXCEED`, `FALL SHORT OF`) of non-numbers | §10.3 |
+| equality comparison of different kinds, except an integer paired with a sum | §10.3 |
 | a connective applied to non-findings | (unreachable from lawful filings) |
-| `THE LENGTH OF` an integer or finding | §10.5 |
+| `THE LENGTH OF` a value other than a string, exhibit, schedule, or register | §10.5 |
 | an excerpt of a non-string; excerpt bounds not integers; bounds outside 1 ≤ i ≤ j ≤ length | §10.5 |
-| `THE SUM CERTAIN OF` a string that denotes no integer, or of a finding or exhibit | §10.5 |
+| `THE SUM CERTAIN OF` an invalid or out-of-range numeric string, or a value other than a string, integer, or sum | §10.5 |
 | inspecting a non-exhibit; inspecting an entry the exhibit does not bear | §8 |
 | entering into a non-exhibit; entering an entry not comprised | §8 |
 | remanding with no petition outstanding | §11.7 |
@@ -2079,13 +2158,15 @@ size. The tradeoffs are listed in §14.3a.
 
 ### 17.8 Interop: other programs may (carefully) touch the case
 
-Every topic is plain Kafka and every value plain JSON; any client in
+Every topic is plain Kafka. Payloads use the documented JSON or text formats;
+any client in
 any language may read a case's variables, tail its stdout, or feed its
 stdin. Rules of engagement:
 
 - **Summons** (stdin): appending is the supported interop surface.
-  Plain bytes; UTF-8 in, UTF-8 out; text matching `[+-]?[0-9]+` will
-  arrive as an integer (§11.4). Records appended by a running case's
+  Plain bytes; UTF-8 in, UTF-8 out. Complete, in-range integers and
+  two-decimal sums arrive as numbers; other input stays a string (§11.4).
+  Records appended by a running case's
   `SERVE NOTICE` (§11.11) additionally carry the server's case number
   as the record key; leave the key null in your own producers, or set
   it to something that is not a case number, so operators can distinguish
@@ -2156,26 +2237,23 @@ and joined; `AN EXCERPT OF` also makes a string an addressable tape.
 
 ## 19. Limits and non-features
 
-- Integers are 64-bit; there are no floats, and there never will be:
-  floats round differently on different machines, and this machine
-  cannot repeat itself inexactly. Money is served by sums (§10.2),
-  which are fixed-point, exact, and truncated toward zero.
+- Integers are 64-bit. There is no floating-point type. Sums use fixed-point
+  arithmetic with truncation toward zero and final signed-64-bit wrapping
+  (§10.2).
 - Strings are immutable; there is no in-place mutation of anything,
   the machine state being an append-only log all the way down.
 - Single partition per topic, single official per case: the law is
   single-threaded. Concurrency exists *between* cases, not within
-  one: any number of cases run in parallel, may correspond by
+  one: cases may run in parallel, correspond by
   `SERVE NOTICE` (§11.11), and may open one another by `COMMENCE
   PROCEEDINGS` (§11.12). Partitions-as-threads within a case remains
   post-1.0 discourse; it would make logical instruction order ambiguous.
 - No closures. Office values exist as powers of attorney but cannot be
   exercised outside the case that executed them (§12.5).
-- No environment variables, no filesystem except the archive (§10.9,
-  which is a pair of topics), no network beyond the broker. The clock
-  and the random source are admitted through exactly two named doors
-  (§10.8), and everything that comes through them is entered in the
-  ledger (§14.4), so even the dice replay exactly; nothing else from
-  the outside world is admitted at all.
+- No environment-variable access, no filesystem beyond the archive (§10.9,
+  which is a pair of topics), and no network beyond the broker. Clock and
+  random readings are entered in the ledger (§14.4). Broker messages and
+  observations of other cases provide the other documented inputs.
 - Error handling is limited. There is no try/catch; one filed `FILE A MOTION TO
   RECONSIDER` may intercept a verdict per case (§11.13), clearing the dossier
   and appeals. Validate with `SHOULD` before an operation that may fail.

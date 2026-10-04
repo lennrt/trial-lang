@@ -1,4 +1,4 @@
-# Record the Kafka recovery demo for review. This workflow does not write to
+# Record the Kafka recovery and local examples for review. This workflow does not write to
 # the repository or publish the artifact.
 name: Demo
 
@@ -51,12 +51,105 @@ jobs:
           timeout --signal=TERM --kill-after=10s 3m \
             env TRIAL_RECOVERY_DELAY=0 ./docs/the-recovery-demo.sh
       - name: Record demo
-        run: |
-          set -euo pipefail
-          vhs docs/the-recovery.tape
+        run: bash docs/demos/record.sh the-recovery
       - name: Upload recording for review
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: the-recovery
-          path: docs/the-recovery.gif
+          path: |
+            docs/the-recovery.gif
+            docs/the-recovery.tape
+            docs/the-recovery-demo.sh
+            docs/demos/record.sh
+            docs/demos/README.md
+            examples/the-recovery.trial
+            docker-compose.yml
+          if-no-files-found: error
+
+  local-examples:
+    name: Record local examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: make build
+      - name: Install recording tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/ttyd" \
+            https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          echo "8a217c968aba172e0dbf3f34447218dc015bc4d5e59bf51db2f2cd12b7be4f55  $RUNNER_TEMP/ttyd" \
+            | sha256sum --check --strict
+          sudo install -m 0755 "$RUNNER_TEMP/ttyd" /usr/local/bin/ttyd
+          go install github.com/charmbracelet/vhs@v0.11.0
+      - name: Check local demo scripts and tapes
+        run: make demos-check
+      - name: Record nine local examples
+        run: |
+          set -euo pipefail
+          bash docs/demos/record.sh
+          for example in julia-set wave-chamber distance-field cellular-court labyrinth stack-clerk; do
+            test -s "docs/demos/the-$example.gif"
+          done
+          for example in orrery castle procession; do
+            test -s "docs/the-$example.gif"
+          done
+      - name: Upload local recordings and sources for review
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: local-examples-vhs
+          path: |
+            docs/demos/the-julia-set.gif
+            docs/demos/the-julia-set.tape
+            docs/demos/the-wave-chamber.gif
+            docs/demos/the-wave-chamber.tape
+            docs/demos/the-distance-field.gif
+            docs/demos/the-distance-field.tape
+            docs/demos/the-cellular-court.gif
+            docs/demos/the-cellular-court.tape
+            docs/demos/the-labyrinth.gif
+            docs/demos/the-labyrinth.tape
+            docs/demos/the-stack-clerk.gif
+            docs/demos/the-stack-clerk.tape
+            docs/the-orrery.gif
+            docs/the-orrery.tape
+            docs/the-orrery-demo.sh
+            docs/the-castle.gif
+            docs/the-castle.tape
+            docs/the-castle-demo.sh
+            docs/the-procession.gif
+            docs/the-procession.tape
+            docs/the-procession-demo.sh
+            docs/demos/run.sh
+            docs/demos/check.sh
+            docs/demos/record.sh
+            docs/demos/windows-ttyd.go
+            docs/demos/README.md
+            examples/the-julia-set.trial
+            examples/the-julia-set.deposition
+            examples/the-wave-chamber.trial
+            examples/the-wave-chamber.deposition
+            examples/the-distance-field.trial
+            examples/the-distance-field.deposition
+            examples/the-cellular-court.trial
+            examples/the-cellular-court.deposition
+            examples/the-labyrinth.trial
+            examples/the-labyrinth.deposition
+            examples/the-stack-clerk.trial
+            examples/the-stack-clerk.deposition
+            examples/the-orrery.trial
+            examples/the-orrery.deposition
+            examples/the-castle.trial
+            examples/the-castle.deposition
+            examples/the-procession.trial
+            examples/the-procession.deposition
+            canon/statutes-of-trigonometry.trial
           if-no-files-found: error

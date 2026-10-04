@@ -1,0 +1,135 @@
+FORM K-1.
+IN THE MATTER OF: the-distance-field.
+OFF THE RECORD: March rays through two spheres and a floor. The distance
+OFF THE RECORD: field returns the nearest signed distance to their surfaces.
+OFF THE RECORD: Estimate normals from neighboring distances and cast a
+OFF THE RECORD: second ray toward the light for a hard shadow.
+OFF THE RECORD: All world coordinates use 1000 integer units per one.
+
+HEREINAFTER, hit-epsilon SHALL MEAN 4.
+HEREINAFTER, far-limit SHALL MEAN 9000.
+HEREINAFTER, march-limit SHALL MEAN 48.
+THE EXHIBIT OF march-result, COMPRISING hit AND x AND y AND z AND steps.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT wide IS 20.
+    LET IT BE RECORDED THAT tall IS 10.
+    LET IT BE RECORDED THAT ramp IS " .:-=+*#%@".
+    LET IT BE RECORDED THAT frame IS "".
+    LET IT BE RECORDED THAT row IS 0.
+ARTICLE 2.
+    OFF THE RECORD: One row spans twice the angle of one column, to account
+    OFF THE RECORD: for terminal cells that are about twice as tall as wide.
+    LET IT BE RECORDED THAT vy IS ((tall LESS 1) LESS 2 TIMES row) TIMES 3000 APPORTIONED AMONG (wide LESS 1) LESS 400.
+    LET IT BE RECORDED THAT column IS 0.
+ARTICLE 3.
+    OFF THE RECORD: Normalize each perspective ray. Its length is never zero
+    OFF THE RECORD: because its z component is 1800 before normalization.
+    LET IT BE RECORDED THAT vx IS (2 TIMES column LESS (wide LESS 1)) TIMES 1500 APPORTIONED AMONG (wide LESS 1).
+    OFF THE RECORD: Add one to the floor root so normalization never creates
+    OFF THE RECORD: a vector longer than one world unit through rounding.
+    LET IT BE RECORDED THAT vlength IS (THE FINDING OF field-root REGARDING vx TIMES vx PLUS vy TIMES vy PLUS 3240000) PLUS 1.
+    LET IT BE RECORDED THAT direction-x IS vx TIMES 1000 APPORTIONED AMONG vlength.
+    LET IT BE RECORDED THAT direction-y IS vy TIMES 1000 APPORTIONED AMONG vlength.
+    LET IT BE RECORDED THAT direction-z IS 1800000 APPORTIONED AMONG vlength.
+    LET IT BE RECORDED THAT strike IS THE FINDING OF march REGARDING 0 AND 800 AND -3500 AND direction-x AND direction-y AND direction-z.
+    LET IT BE RECORDED THAT pixel IS " ".
+    SHOULD THE hit ENTERED IN strike EQUAL SUSTAINED, LET IT BE RECORDED THAT pixel IS THE FINDING OF surface-shade REGARDING (THE x ENTERED IN strike) AND (THE y ENTERED IN strike) AND (THE z ENTERED IN strike).
+    LET IT BE RECORDED THAT frame IS frame PLUS pixel.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    SHOULD column FALL SHORT OF wide, REFER TO ARTICLE 3.
+    LET IT BE RECORDED THAT frame IS frame PLUS "\n".
+    LET IT BE RECORDED THAT row IS row PLUS 1.
+    SHOULD row FALL SHORT OF tall, REFER TO ARTICLE 2.
+    PROCLAIM frame.
+    ADJOURN INDEFINITELY.
+
+THE OFFICE OF field-root, CONCERNING n.
+    SHOULD n FAIL TO EXCEED 0, REMAND WITH 0.
+    OFF THE RECORD: Half the input plus one stays above its root for n >= 4
+    OFF THE RECORD: without risking an overflowing first Newton average.
+    LET IT BE RECORDED THAT root-current IS n APPORTIONED AMONG 2 PLUS 1.
+    OFF THE RECORD: Start closer to the answer while staying above it.
+    OFF THE RECORD: 32768 squared is 1073741824, and 32 squared is 1024.
+    SHOULD n FAIL TO EXCEED 1073741824, LET IT BE RECORDED THAT root-current IS 32768.
+    SHOULD n FAIL TO EXCEED 1024, LET IT BE RECORDED THAT root-current IS 32.
+    LET IT BE RECORDED THAT root-next IS (root-current PLUS n APPORTIONED AMONG root-current) APPORTIONED AMONG 2.
+SECTION 1.
+    SHOULD root-next FAIL TO FALL SHORT OF root-current, REMAND WITH root-current.
+    LET IT BE RECORDED THAT root-current IS root-next.
+    LET IT BE RECORDED THAT root-next IS (root-current PLUS n APPORTIONED AMONG root-current) APPORTIONED AMONG 2.
+    REFER TO SECTION 1.
+
+THE OFFICE OF scene-distance, CONCERNING x AND y AND z.
+    OFF THE RECORD: The minimum combines sphere radii 750 and 500 with the
+    OFF THE RECORD: floor y = -800. Negative distances are inside a surface.
+    LET IT BE RECORDED THAT nearest IS y PLUS 800.
+    OFF THE RECORD: Neither sphere extends below the floor. Beneath it,
+    OFF THE RECORD: the floor is always the nearest signed surface.
+    SHOULD nearest FALL SHORT OF 0, REMAND WITH nearest.
+    OFF THE RECORD: A squared bound avoids a root when the sphere cannot
+    OFF THE RECORD: improve the minimum. This preserves the exact distance.
+    LET IT BE RECORDED THAT sphere-one-squared IS x TIMES x PLUS y TIMES y PLUS z TIMES z.
+    SHOULD sphere-one-squared FALL SHORT OF (nearest PLUS 750) TIMES (nearest PLUS 750), LET IT BE RECORDED THAT nearest IS (THE FINDING OF field-root REGARDING sphere-one-squared) LESS 750.
+    SHOULD nearest FAIL TO EXCEED -500, REMAND WITH nearest.
+    LET IT BE RECORDED THAT sphere-two-squared IS (x LESS 1100) TIMES (x LESS 1100) PLUS (y PLUS 300) TIMES (y PLUS 300) PLUS (z LESS 700) TIMES (z LESS 700).
+    SHOULD sphere-two-squared FALL SHORT OF (nearest PLUS 500) TIMES (nearest PLUS 500), LET IT BE RECORDED THAT nearest IS (THE FINDING OF field-root REGARDING sphere-two-squared) LESS 500.
+    REMAND WITH nearest.
+
+THE OFFICE OF march, CONCERNING ox AND oy AND oz AND dx AND dy AND dz.
+    OFF THE RECORD: All surfaces lie at or below y = 750. A ray above that
+    OFF THE RECORD: plane and moving level or upward cannot reach the scene.
+    SHOULD oy EXCEED 750 AND ALSO dy FAIL TO FALL SHORT OF 0, REMAND WITH AN EXHIBIT OF march-result WHEREIN hit IS OVERRULED AND x IS ox AND y IS oy AND z IS oz AND steps IS 0.
+    LET IT BE RECORDED THAT ray-travel IS 0.
+    LET IT BE RECORDED THAT ray-steps IS 0.
+SECTION 1.
+    LET IT BE RECORDED THAT ray-x IS ox PLUS dx TIMES ray-travel APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT ray-y IS oy PLUS dy TIMES ray-travel APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT ray-z IS oz PLUS dz TIMES ray-travel APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT ray-distance IS THE FINDING OF scene-distance REGARDING ray-x AND ray-y AND ray-z.
+    LET IT BE RECORDED THAT ray-steps IS ray-steps PLUS 1.
+    SHOULD ray-distance FAIL TO EXCEED hit-epsilon, REMAND WITH AN EXHIBIT OF march-result WHEREIN hit IS SUSTAINED AND x IS ray-x AND y IS ray-y AND z IS ray-z AND steps IS ray-steps.
+    LET IT BE RECORDED THAT ray-travel IS ray-travel PLUS ray-distance.
+    SHOULD ray-travel EXCEED far-limit OR IN THE ALTERNATIVE ray-steps EQUAL march-limit, REMAND WITH AN EXHIBIT OF march-result WHEREIN hit IS OVERRULED AND x IS ray-x AND y IS ray-y AND z IS ray-z AND steps IS ray-steps.
+    REFER TO SECTION 1.
+
+THE OFFICE OF surface-shade, CONCERNING x AND y AND z.
+    OFF THE RECORD: Far from the second sphere, a floor hit has a known
+    OFF THE RECORD: normal. The first sphere ends 50 units above the floor.
+    LET IT BE RECORDED THAT normal-x IS 0.
+    LET IT BE RECORDED THAT normal-y IS 24.
+    LET IT BE RECORDED THAT normal-z IS 0.
+    SHOULD y FAIL TO EXCEED -796 AND ALSO (x LESS 1100) TIMES (x LESS 1100) PLUS (z LESS 700) TIMES (z LESS 700) EXCEED 250000, REFER TO SECTION 1.
+    OFF THE RECORD: Central differences estimate the surface normal. A
+    OFF THE RECORD: 12-unit stencil spans three times the hit tolerance.
+    LET IT BE RECORDED THAT normal-x IS (THE FINDING OF scene-distance REGARDING x PLUS 12 AND y AND z) LESS (THE FINDING OF scene-distance REGARDING x LESS 12 AND y AND z).
+    LET IT BE RECORDED THAT normal-y IS (THE FINDING OF scene-distance REGARDING x AND y PLUS 12 AND z) LESS (THE FINDING OF scene-distance REGARDING x AND y LESS 12 AND z).
+    LET IT BE RECORDED THAT normal-z IS (THE FINDING OF scene-distance REGARDING x AND y AND z PLUS 12) LESS (THE FINDING OF scene-distance REGARDING x AND y AND z LESS 12).
+SECTION 1.
+    LET IT BE RECORDED THAT normal-length IS THE FINDING OF field-root REGARDING normal-x TIMES normal-x PLUS normal-y TIMES normal-y PLUS normal-z TIMES normal-z.
+    SHOULD normal-length EQUAL 0, REMAND WITH ".".
+    OFF THE RECORD: The light points toward (-1, 1, -1). Its normalized
+    OFF THE RECORD: components are approximately (-577, 577, -577).
+    LET IT BE RECORDED THAT diffuse IS (normal-y LESS normal-x LESS normal-z) TIMES 577 APPORTIONED AMONG normal-length.
+    SHOULD diffuse FALL SHORT OF 0, LET IT BE RECORDED THAT diffuse IS 0.
+    SHOULD diffuse EXCEED 1000, LET IT BE RECORDED THAT diffuse IS 1000.
+    OFF THE RECORD: Offset the shadow origin by 24 units along the normal.
+    LET IT BE RECORDED THAT shadow-x IS x PLUS normal-x TIMES 24 APPORTIONED AMONG normal-length.
+    LET IT BE RECORDED THAT shadow-y IS y PLUS normal-y TIMES 24 APPORTIONED AMONG normal-length.
+    LET IT BE RECORDED THAT shadow-z IS z PLUS normal-z TIMES 24 APPORTIONED AMONG normal-length.
+    LET IT BE RECORDED THAT blocked IS THE FINDING OF shadowed REGARDING shadow-x AND shadow-y AND shadow-z.
+    SHOULD blocked EQUAL SUSTAINED, LET IT BE RECORDED THAT diffuse IS 0.
+    LET IT BE RECORDED THAT shade-index IS 2 PLUS diffuse TIMES 8 APPORTIONED AMONG 1000.
+    REMAND WITH AN EXCERPT OF ramp FROM shade-index TO shade-index.
+
+THE OFFICE OF shadowed, CONCERNING ox AND oy AND oz.
+    LET IT BE RECORDED THAT shadow-travel IS 0.
+    LET IT BE RECORDED THAT shadow-steps IS 0.
+SECTION 1.
+    LET IT BE RECORDED THAT shadow-offset IS shadow-travel TIMES 577 APPORTIONED AMONG 1000.
+    LET IT BE RECORDED THAT shadow-distance IS THE FINDING OF scene-distance REGARDING ox LESS shadow-offset AND oy PLUS shadow-offset AND oz LESS shadow-offset.
+    SHOULD shadow-distance FAIL TO EXCEED hit-epsilon, REMAND WITH SUSTAINED.
+    LET IT BE RECORDED THAT shadow-travel IS shadow-travel PLUS shadow-distance.
+    LET IT BE RECORDED THAT shadow-steps IS shadow-steps PLUS 1.
+    SHOULD shadow-travel EXCEED far-limit OR IN THE ALTERNATIVE shadow-steps EQUAL march-limit, REMAND WITH OVERRULED.
+    REFER TO SECTION 1.

@@ -51,6 +51,13 @@ highlighting, and the LSP provides diagnostics, hover text, and completion.
 parser, and code generator as the CLI. The server also provides hover text that
 cites the reference manual and completion for required phrases.
 
+The client must send full-document updates with exactly one text change.
+An explicitly empty string clears a document; missing or null text leaves the
+last accepted document unchanged. Positions use the LSP default
+[UTF-16 encoding](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#position).
+Columns exclude CRLF line endings, and a character offset past a line clamps
+to that line's end.
+
 - **Neovim** (0.10+):
 
   ```lua

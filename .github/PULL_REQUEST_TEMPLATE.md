@@ -6,10 +6,12 @@
 ## Checklist
 
 - [ ] `make verify` and `make vuln` pass with Go 1.27.0
+- [ ] `make spec-check` passes when OpenSpec artifacts change
 - [ ] Behavior changes have deterministic tests with a finite timeout; generated seeds are recorded
 - [ ] `CHANGELOG.md` has an entry under the unreleased version
 - [ ] CLI changes update `cmd/trial/help.go` and `docs/interfaces.md` (the command-table test enforces the help text)
 - [ ] Language or bytecode changes update `spec/` and add or adjust a deposition under `examples/`
+- [ ] New examples have exact depositions, documented limits, and current generated previews
 - [ ] Public, wire, storage, security, or configuration boundary changes have an ADR under `docs/adr/`
 - [ ] `canon` changes update `docs/api.txt` (`make api-check`) and `docs/api-compatibility.md`
 - [ ] No credentials, payloads, personal data, or raw identifiers in diagnostics or fixtures

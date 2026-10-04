@@ -1,0 +1,54 @@
+FORM K-1.
+IN THE MATTER OF: the-julia-set.
+OFF THE RECORD: Compute a Julia set with signed integer arithmetic.
+OFF THE RECORD: Coordinates use 10000 units per one. Every pixel starts its
+OFF THE RECORD: own orbit z <- z*z + c and stops at escape or 32 iterations.
+OFF THE RECORD: No image or orbit is stored in this source.
+
+HEREINAFTER, scale SHALL MEAN 10000.
+HEREINAFTER, escape-squared SHALL MEAN 400000000.
+HEREINAFTER, iteration-limit SHALL MEAN 32.
+
+ARTICLE 1.
+    LET IT BE RECORDED THAT wide IS 49.
+    LET IT BE RECORDED THAT tall IS 17.
+    LET IT BE RECORDED THAT real-c IS -8000.
+    LET IT BE RECORDED THAT imaginary-c IS 1560.
+    LET IT BE RECORDED THAT ramp IS " .:-=+*#%@".
+    LET IT BE RECORDED THAT frame IS "".
+    LET IT BE RECORDED THAT row IS 0.
+ARTICLE 2.
+    OFF THE RECORD: A terminal cell is about twice as tall as it is wide.
+    LET IT BE RECORDED THAT imaginary-z IS ((tall LESS 1) LESS 2 TIMES row) TIMES 32000 APPORTIONED AMONG (wide LESS 1).
+    LET IT BE RECORDED THAT column IS 0.
+ARTICLE 3.
+    OFF THE RECORD: A symmetric grid includes both axes and all four corners.
+    LET IT BE RECORDED THAT real-z IS (2 TIMES column LESS (wide LESS 1)) TIMES 16000 APPORTIONED AMONG (wide LESS 1).
+    LET IT BE RECORDED THAT age IS THE FINDING OF escape-age REGARDING real-z AND imaginary-z AND real-c AND imaginary-c.
+    LET IT BE RECORDED THAT frame IS frame PLUS THE FINDING OF escape-shade REGARDING age.
+    LET IT BE RECORDED THAT column IS column PLUS 1.
+    SHOULD column FALL SHORT OF wide, REFER TO ARTICLE 3.
+    LET IT BE RECORDED THAT frame IS frame PLUS "\n".
+    LET IT BE RECORDED THAT row IS row PLUS 1.
+    SHOULD row FALL SHORT OF tall, REFER TO ARTICLE 2.
+    PROCLAIM frame.
+    ADJOURN INDEFINITELY.
+
+THE OFFICE OF escape-age, CONCERNING zx AND zy AND cx AND cy.
+    LET IT BE RECORDED THAT orbit-age IS 0.
+SECTION 1.
+    OFF THE RECORD: Test the old orbit before computing the next one. The
+    OFF THE RECORD: old real and imaginary values must serve both products.
+    SHOULD zx TIMES zx PLUS zy TIMES zy EXCEED escape-squared, REMAND WITH orbit-age.
+    SHOULD orbit-age EQUAL iteration-limit, REMAND WITH orbit-age.
+    LET IT BE RECORDED THAT next-real IS (zx TIMES zx LESS zy TIMES zy) APPORTIONED AMONG scale PLUS cx.
+    LET IT BE RECORDED THAT zy IS 2 TIMES zx TIMES zy APPORTIONED AMONG scale PLUS cy.
+    LET IT BE RECORDED THAT zx IS next-real.
+    LET IT BE RECORDED THAT orbit-age IS orbit-age PLUS 1.
+    REFER TO SECTION 1.
+
+THE OFFICE OF escape-shade, CONCERNING age.
+    OFF THE RECORD: At the limit, a pixel is unresolved, not proved interior.
+    SHOULD age EQUAL iteration-limit, REMAND WITH "@".
+    LET IT BE RECORDED THAT shade-index IS 1 PLUS age TIMES 9 APPORTIONED AMONG iteration-limit.
+    REMAND WITH AN EXCERPT OF ramp FROM shade-index TO shade-index.

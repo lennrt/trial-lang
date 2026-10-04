@@ -105,7 +105,7 @@ func renderFrame(frame int) string {
 	}
 	lines = append(lines,
 		panelLine(""),
-		panelLine(" RESTART THE RUNNER TO CONTINUE FROM THE RECORDED FRAME."),
+		panelLine(" KAFKA KEEPS FRAME POSITION; LOCAL PLAYBACK IS TRANSIENT."),
 		"+"+strings.Repeat("-", panelWidth)+"+",
 	)
 	return strings.Join(lines, "\n")

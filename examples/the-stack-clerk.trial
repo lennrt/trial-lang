@@ -1,0 +1,74 @@
+FORM K-1.
+IN THE MATTER OF: the-stack-clerk.
+FILED BY: the office of deferred operators.
+
+OFF THE RECORD: A postfix calculator. Serve one expression as a summons.
+OFF THE RECORD: Example: 8 3 - 4 * 2 / means ((8 - 3) * 4) / 2.
+OFF THE RECORD: Separate numbers and + - * / with spaces or tabs.
+OFF THE RECORD: Numbers are signed integers or sums with two decimal places.
+OFF THE RECORD: Line feeds also separate tokens.
+OFF THE RECORD: Nested exhibits hold a stack. The top is removed first.
+OFF THE RECORD: Bound the expression to 128 characters and 32 stack cells.
+OFF THE RECORD: Division truncates toward zero at the result type's precision.
+OFF THE RECORD: Overflow wraps, as it does elsewhere in the language.
+
+THE EXHIBIT OF cell, COMPRISING value AND rest.
+HEREINAFTER, max-characters SHALL MEAN 128.
+HEREINAFTER, max-depth SHALL MEAN 32.
+
+ARTICLE 1.
+    AWAIT SUMMONS, FILED UNDER supplied.
+    LET IT BE RECORDED THAT expression IS THE TRANSCRIPT OF supplied.
+    SHOULD THE LENGTH OF expression EXCEED max-characters, HOLD "Expression exceeds 128 characters." IN CONTEMPT.
+    LET IT BE RECORDED THAT stack IS AN EXHIBIT OF cell WHEREIN value IS 0 AND rest IS 0.
+    LET IT BE RECORDED THAT depth IS 0.
+    LET IT BE RECORDED THAT tokens IS 0.
+    LET IT BE RECORDED THAT position IS 1.
+    LET IT BE RECORDED THAT token IS "".
+
+ARTICLE 2.
+    SHOULD position EXCEED THE LENGTH OF expression, REFER TO ARTICLE 5.
+    LET IT BE RECORDED THAT character IS AN EXCERPT OF expression FROM position TO position.
+    SHOULD character EQUAL " " OR IN THE ALTERNATIVE character EQUAL "\t" OR IN THE ALTERNATIVE character EQUAL "\n", REFER TO ARTICLE 3.
+    LET IT BE RECORDED THAT token IS token PLUS character.
+    REFER TO ARTICLE 4.
+
+ARTICLE 3.
+    SHOULD token DIFFER FROM "", PETITION THE OFFICE OF execute WITH token.
+    LET IT BE RECORDED THAT token IS "".
+
+ARTICLE 4.
+    LET IT BE RECORDED THAT position IS position PLUS 1.
+    REFER TO ARTICLE 2.
+
+ARTICLE 5.
+    SHOULD token DIFFER FROM "", PETITION THE OFFICE OF execute WITH token.
+    SHOULD depth DIFFER FROM 1, HOLD "Expression must leave exactly one value." IN CONTEMPT.
+    LET IT BE RECORDED THAT result IS THE value ENTERED IN stack.
+    PROCLAIM "Result: " PLUS THE TRANSCRIPT OF result.
+    PROCLAIM "Tokens executed: " PLUS THE TRANSCRIPT OF tokens.
+    ADJOURN INDEFINITELY.
+
+THE OFFICE OF execute, CONCERNING instruction.
+    LET IT BE RECORDED THAT tokens IS tokens PLUS 1.
+    SHOULD instruction EQUAL "+" OR IN THE ALTERNATIVE instruction EQUAL "-" OR IN THE ALTERNATIVE instruction EQUAL "*" OR IN THE ALTERNATIVE instruction EQUAL "/", REFER TO SECTION 1.
+    SHOULD depth EQUAL max-depth, HOLD "Stack exceeds 32 values." IN CONTEMPT.
+    LET IT BE RECORDED THAT number IS THE SUM CERTAIN OF instruction.
+    LET IT BE RECORDED THAT stack IS AN EXHIBIT OF cell WHEREIN value IS number AND rest IS stack.
+    LET IT BE RECORDED THAT depth IS depth PLUS 1.
+    REMAND.
+
+SECTION 1.
+    SHOULD depth FALL SHORT OF 2, HOLD "An operator needs two values." IN CONTEMPT.
+    LET IT BE RECORDED THAT right IS THE value ENTERED IN stack.
+    SHOULD instruction EQUAL "/", SHOULD right EQUAL 0, HOLD "Division by zero is not permitted." IN CONTEMPT.
+    LET IT BE RECORDED THAT stack IS THE rest ENTERED IN stack.
+    LET IT BE RECORDED THAT left IS THE value ENTERED IN stack.
+    LET IT BE RECORDED THAT stack IS THE rest ENTERED IN stack.
+    SHOULD instruction EQUAL "+", LET IT BE RECORDED THAT number IS left PLUS right.
+    SHOULD instruction EQUAL "-", LET IT BE RECORDED THAT number IS left LESS right.
+    SHOULD instruction EQUAL "*", LET IT BE RECORDED THAT number IS left TIMES right.
+    SHOULD instruction EQUAL "/", LET IT BE RECORDED THAT number IS left APPORTIONED AMONG right.
+    LET IT BE RECORDED THAT stack IS AN EXHIBIT OF cell WHEREIN value IS number AND rest IS stack.
+    LET IT BE RECORDED THAT depth IS depth LESS 1.
+    REMAND.

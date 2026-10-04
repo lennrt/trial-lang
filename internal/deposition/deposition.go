@@ -202,7 +202,17 @@ func Parse(src string) (*Deposition, error) {
 	if !named {
 		return nil, errors.New("first statement must be DEPOSITION OF: <file.trial>")
 	}
+	if err := validateExpectations(d); err != nil {
+		return nil, err
+	}
 	return d, nil
+}
+
+func validateExpectations(d *Deposition) error {
+	if d.Outcome == "rejection" && (len(d.Proclamations) != 0 || len(d.Records) != 0) {
+		return errors.New("EXPECT REJECTION cannot include proclamation or record expectations: a rejected filing does not execute")
+	}
+	return nil
 }
 
 // value reads a quoted string with the usual escapes, or bare text as written.
@@ -247,7 +257,8 @@ func value(s string, line int) (string, error) {
 	return "", fmt.Errorf("line %d: unterminated quoted value", line)
 }
 
-// LoadEnactments reads ENACT files relative to dir into EnactSources.
+// LoadEnactments reads ENACT files relative to dir into EnactSources. It
+// replaces the sources only after every read succeeds, so retries are safe.
 func LoadEnactments(d *Deposition, dir string) error {
 	if d == nil {
 		return errors.New("deposition is nil")
@@ -255,6 +266,8 @@ func LoadEnactments(d *Deposition, dir string) error {
 	if len(d.Enacts) > maxEnactments {
 		return fmt.Errorf("deposition names %d statutes; limit is %d", len(d.Enacts), maxEnactments)
 	}
+	sources := make([]string, 0, len(d.Enacts))
+	totalBytes := 0
 	for _, name := range d.Enacts {
 		path := filepath.Join(dir, name)
 		file, err := os.Open(path)
@@ -272,8 +285,13 @@ func LoadEnactments(d *Deposition, dir string) error {
 		if len(b) > maxDepositionBytes {
 			return fmt.Errorf("statute %q exceeds the %d-byte limit", name, maxDepositionBytes)
 		}
-		d.EnactSources = append(d.EnactSources, string(b))
+		totalBytes += len(b)
+		if totalBytes > docket.MaxReadBytes {
+			return fmt.Errorf("enacted sources exceed %d bytes", docket.MaxReadBytes)
+		}
+		sources = append(sources, string(b))
 	}
+	d.EnactSources = sources
 	return nil
 }
 
@@ -420,6 +438,9 @@ func Run(ctx context.Context, programSrc string, d *Deposition) *Result {
 func validateRunInputs(programSrc string, d *Deposition) error {
 	if d == nil {
 		return errors.New("deposition is nil")
+	}
+	if err := validateExpectations(d); err != nil {
+		return err
 	}
 	if len(programSrc) > maxDepositionBytes {
 		return fmt.Errorf("program exceeds %d bytes", maxDepositionBytes)

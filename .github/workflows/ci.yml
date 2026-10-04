@@ -31,7 +31,7 @@ jobs:
           cache: true
       - run: >-
           make fmt-check tidy-check vet test lint api-check workflow-check
-          purego arm64 demo-check examples
+          purego arm64 demo-check doc-check gallery-check examples
       - run: go run ./cmd/trial version
 
   race:
@@ -49,7 +49,7 @@ jobs:
       - run: go test -race -timeout=10m ./...
 
   fuzz:
-    name: Fuzz parser and framing
+    name: Fuzz language, deposition, protocols, and sums
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -61,6 +61,38 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
       - run: make fuzz
+
+  specifications:
+    name: OpenSpec requirements
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24"
+      - run: make spec-check
+
+  local-cli:
+    name: Local CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+      - run: go test -timeout=3m ./cmd/trial
+      - run: go run ./cmd/trial run --canon examples/the-wave-chamber.trial
 
   kafka:
     name: Kafka integration

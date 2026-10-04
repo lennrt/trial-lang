@@ -19,7 +19,7 @@ type Incorporation struct { // INCORPORATE BY REFERENCE name.
 
 type ConstDecl struct { // HEREINAFTER, name SHALL MEAN literal.
 	Name string
-	Expr Expr // an IntLit, StrLit, or FindingLit; nothing else may be meant
+	Expr Expr // an IntLit, SumLit, StrLit, or FindingLit; nothing else may be meant
 	Line int
 }
 
