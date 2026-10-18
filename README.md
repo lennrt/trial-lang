@@ -314,6 +314,11 @@ The CI, security, and release workflows do not run on a schedule. See
 [testing](docs/testing.md), [toolchain](docs/toolchain.md), and
 [contributing](CONTRIBUTING.md) for the complete commands and policies.
 
+Maintainers can check release prerequisites with `make release-check TAG=v0.2.0`.
+After owner authorization, `make release TAG=v0.2.0` prepares the annotated tag
+and starts the protected publishing workflow. The owner approves publication.
+See the [release procedure](docs/releasing.md) for metadata, access, and recovery.
+
 ## Interfaces
 
 The CLI includes source checks, local execution, case operations, depositions,
@@ -339,8 +344,10 @@ order. Open dependency buffers update the import context, and diagnostics point
 to the source file that owns the error. Without explicit dependencies, unknown
 imports retain syntax-only diagnostics. See [editor setup](editors/README.md).
 
-`canon` is the only importable Go package. See the
-[Go API compatibility record](docs/api-compatibility.md).
+`canon` is the only importable Go package. It provides embedded standard-library
+source, a dependency-ordered statute list, and executable Go examples. See the
+[package documentation](https://pkg.go.dev/github.com/lennrt/trial-lang/canon)
+and [Go API compatibility record](docs/api-compatibility.md).
 
 ## Feedback and contributions
 

@@ -154,6 +154,21 @@ Residual risks:
 | Concurrent child workers for `run` | 64 |
 | Docket workers | 1,024 |
 
+## Release preparation and publication
+
+The release helper targets the upstream repository explicitly. It checks the
+selected commit, clean source, dated metadata, caller write access, exact
+main-push CI/Security results, and owner-only environment approval before
+preparing an annotated tag. It pushes the validated tag object with GitHub CLI
+credentials, so a changed local tag reference cannot select another object.
+
+The publishing workflow compiles its guard from the main workflow revision and
+rechecks the selected tag, commit ancestry, checks, and approval configuration
+before building and publishing. The owner approves the protected environment.
+Preparation never approves that environment. Existing tags and release assets
+are not overwritten during recovery. The remaining network races and recovery
+steps are described in the [release procedure](releasing.md).
+
 ## Security sinks
 
 The main sinks are Kafka records, standard output, standard error, MCP

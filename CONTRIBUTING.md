@@ -118,12 +118,14 @@ exact command syntax during a prose edit.
 
 ## Releases
 
-Only an owner may approve a release. A tag does not publish by itself. An owner
-must start the Release workflow and supply an existing semantic-version tag.
-The `release` environment must require an owner review. The workflow runs the
-full verification target, cross-builds with `CGO_ENABLED=0`, includes dependency
-licenses, creates checksums, and publishes only after all assets upload to a
-draft release.
+Only an owner may approve publication. An owner or an explicitly authorized
+collaborator may prepare a release with `make release TAG=vX.Y.Z`; use
+`make release-check TAG=vX.Y.Z` for read-only preflight. A tag does not publish
+by itself. The command starts the Release workflow with an annotated tag and
+its exact commit. The `release` environment must require an owner review.
+The workflow runs the full verification target, cross-builds with
+`CGO_ENABLED=0`, includes dependency licenses, creates checksums, and publishes
+only after all assets upload to a draft release.
 
 Follow the [release procedure](docs/releasing.md).
 

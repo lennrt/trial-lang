@@ -86,6 +86,12 @@
 
 ### Added
 
+- Add `make release-check TAG=vX.Y.Z` and `make release TAG=vX.Y.Z` to validate
+  release prerequisites, prepare an immutable annotated tag, and dispatch the
+  protected workflow with an exact commit. Retain owner approval for publication.
+- Expand the public `canon` Go documentation with a statute catalog, dependency
+  loading guidance, a working language example, and executable Go examples.
+  Document the difference between embedded demonstrations and enactable statutes.
 - Add `trial counsel --canon` to compile known bundled imports during editor
   diagnostics, and repeated `--enact` paths for custom statutes. Track source
   ownership for accurate cross-file ranges, refresh imports from open dependency

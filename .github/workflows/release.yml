@@ -1,4 +1,4 @@
-# Build release archives from an existing tag after manual approval.
+# Build archives from an immutable tag and an explicitly selected commit.
 name: Release
 
 on:
@@ -6,6 +6,10 @@ on:
     inputs:
       tag:
         description: Existing semantic-version tag to release
+        required: true
+        type: string
+      expected_sha:
+        description: Full commit SHA selected by make release
         required: true
         type: string
 
@@ -19,6 +23,7 @@ concurrency:
 env:
   GO_VERSION: "1.27.2"
   RELEASE_TAG: ${{ inputs.tag }}
+  EXPECTED_SHA: ${{ inputs.expected_sha }}
 
 jobs:
   release:
@@ -28,31 +33,36 @@ jobs:
     environment: release
     permissions:
       contents: write
+      actions: read
     steps:
+      - name: Require the main workflow
+        run: |
+          test "$GITHUB_REF" = refs/heads/main || {
+            echo "Release must use the workflow on main" >&2
+            exit 1
+          }
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           fetch-depth: 0
           persist-credentials: false
-          ref: ${{ inputs.tag }}
+          ref: ${{ github.workflow_sha }}
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: ${{ env.GO_VERSION }}
-      - name: Validate tag
-        shell: bash
+      - name: Build the trusted release guard
+        run: go build -o "$RUNNER_TEMP/trial-release" ./tools/release
+      - name: Validate the selected remote revision
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-            echo "release tag must be semantic, for example v1.2.3" >&2
-            exit 1
-          fi
-          git show-ref --verify --quiet "refs/tags/$RELEASE_TAG" || {
-            echo "release tag does not exist: $RELEASE_TAG" >&2
-            exit 1
-          }
-          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")" || {
-            echo "checkout does not match release tag: $RELEASE_TAG" >&2
-            exit 1
-          }
+          "$RUNNER_TEMP/trial-release" -mode verify -tag "$RELEASE_TAG" -sha "$EXPECTED_SHA"
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.expected_sha }}
+      - name: Confirm the build revision
+        run: test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
       - name: Verify release revision
         run: make verify
       - name: Scan release revision
@@ -94,6 +104,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          "$RUNNER_TEMP/trial-release" -mode verify -tag "$RELEASE_TAG" -sha "$EXPECTED_SHA"
           prerelease=()
           if [[ "$RELEASE_TAG" == *-* ]]; then
             prerelease=(--prerelease)
