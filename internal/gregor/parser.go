@@ -7,8 +7,9 @@ import (
 )
 
 type parser struct {
-	toks []token
-	pos  int
+	toks  []token
+	pos   int
+	depth int
 }
 
 // Parse reads a complete case file. Errors are *RejectedFiling.
@@ -41,6 +42,9 @@ func ParseSource(src, source string) (*Program, error) {
 	}
 	for i := range prog.Offices {
 		prog.Offices[i].source = source
+	}
+	if err := validateDepth(prog); err != nil {
+		return nil, err
 	}
 	return prog, nil
 }
@@ -280,12 +284,19 @@ func (p *parser) parseNumberedHeading(word string) (int64, int, error) {
 	return n, line, nil
 }
 
+// declarationSpan is called immediately after consuming the header period.
+func (p *parser) declarationSpan(start token) DeclarationSpan {
+	end := p.toks[p.pos-1]
+	return DeclarationSpan{Column: start.col, EndLine: end.line, EndColumn: end.col + 1}
+}
+
 func (p *parser) parseArticle() (Article, error) {
+	start := p.peek()
 	n, line, err := p.parseNumberedHeading("ARTICLE")
 	if err != nil {
 		return Article{}, err
 	}
-	art := Article{Number: n, Line: line}
+	art := Article{Number: n, Line: line, Span: p.declarationSpan(start)}
 	for p.startsStatement() {
 		s, err := p.parseStatement()
 		if err != nil {
@@ -299,7 +310,8 @@ func (p *parser) parseArticle() (Article, error) {
 // parseExhibitDecl reads an exhibit declaration, which establishes a shape and
 // emits no instructions.
 func (p *parser) parseExhibitDecl() (ExhibitDecl, error) {
-	line := p.peek().line
+	start := p.peek()
+	line := start.line
 	if err := p.expectWords("THE", "EXHIBIT", "OF"); err != nil {
 		return ExhibitDecl{}, err
 	}
@@ -329,13 +341,15 @@ func (p *parser) parseExhibitDecl() (ExhibitDecl, error) {
 	if err := p.expectPeriod(); err != nil {
 		return ExhibitDecl{}, err
 	}
+	ex.Span = p.declarationSpan(start)
 	return ex, nil
 }
 
 // parseConstDecl reads HEREINAFTER, name SHALL MEAN literal. The compiler
 // substitutes the literal wherever the name appears.
 func (p *parser) parseConstDecl() (ConstDecl, error) {
-	line := p.peek().line
+	start := p.peek()
+	line := start.line
 	if err := p.expectWords("HEREINAFTER"); err != nil {
 		return ConstDecl{}, err
 	}
@@ -381,11 +395,12 @@ func (p *parser) parseConstDecl() (ConstDecl, error) {
 	if err := p.expectPeriod(); err != nil {
 		return ConstDecl{}, err
 	}
-	return ConstDecl{Name: nameTok.text, Expr: e, Line: line}, nil
+	return ConstDecl{Name: nameTok.text, Expr: e, Line: line, Span: p.declarationSpan(start)}, nil
 }
 
 func (p *parser) parseOffice() (Office, error) {
-	line := p.peek().line
+	start := p.peek()
+	line := start.line
 	if err := p.expectWords("THE", "OFFICE", "OF"); err != nil {
 		return Office{}, err
 	}
@@ -415,6 +430,7 @@ func (p *parser) parseOffice() (Office, error) {
 	if err := p.expectPeriod(); err != nil {
 		return Office{}, err
 	}
+	off.Span = p.declarationSpan(start)
 	for p.startsStatement() {
 		s, err := p.parseStatement()
 		if err != nil {
@@ -423,11 +439,12 @@ func (p *parser) parseOffice() (Office, error) {
 		off.Stmts = append(off.Stmts, s)
 	}
 	for p.atWord("SECTION") {
+		sectionStart := p.peek()
 		n, sline, err := p.parseNumberedHeading("SECTION")
 		if err != nil {
 			return Office{}, err
 		}
-		sec := Section{Number: n, Line: sline}
+		sec := Section{Number: n, Line: sline, Span: p.declarationSpan(sectionStart)}
 		for p.startsStatement() {
 			s, err := p.parseStatement()
 			if err != nil {
@@ -453,6 +470,10 @@ func (p *parser) startsStatement() bool {
 }
 
 func (p *parser) parseStatement() (Stmt, error) {
+	if err := p.enterDepth(); err != nil {
+		return nil, err
+	}
+	defer func() { p.depth-- }()
 	t := p.peek()
 	switch t.text {
 	case "LET":
@@ -1317,6 +1338,10 @@ func (p *parser) parseTerm() (Expr, error) {
 }
 
 func (p *parser) parseFactor() (Expr, error) {
+	if err := p.enterDepth(); err != nil {
+		return nil, err
+	}
+	defer func() { p.depth-- }()
 	t := p.peek()
 	switch t.kind {
 	case tokInt:

@@ -43,7 +43,7 @@ func commandTable() []command {
 		{name: "enact", run: enact, broker: true},
 		{name: "statutes", run: statutes, broker: true},
 		{name: "hearing", run: hearing, broker: true},
-		{name: "test", run: testCmd},
+		{name: "test", run: testCmd, valueFlags: []string{"run"}},
 		{name: "verdict", run: verdict, broker: true},
 		{name: "status", run: status, broker: true},
 		{name: "docket", run: docketCmd, broker: true},

@@ -63,7 +63,11 @@ COURT COMMANDS
     --canon                       Add the bundled canon
   trial statutes                  List statutes
   trial test [path ...]           Run deposition files without Kafka
-    --transcript                  Print all witness output
+    --transcript                  Include all witness output
+    --json                        Stream test results and summary as JSON Lines
+    --run <regexp>                Match cleaned, slash-separated display paths
+    --list                        List selected paths without loading sources
+    --require-tests               Fail when no deposition files are selected
   trial watch                     Show the live docket
     --interval 2s                 Set the refresh interval
     --once                        Print one snapshot and exit

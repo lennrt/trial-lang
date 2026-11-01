@@ -34,7 +34,7 @@ body:
     attributes:
       label: Environment
       description: Operating system and architecture; `go version` if built from source; the Kafka version if a broker other than the Compose one was involved.
-      placeholder: macOS 15 arm64, go1.27.2, Compose broker from docker-compose.yml
+      placeholder: macOS 15 arm64, go1.27.3, Compose broker from docker-compose.yml
   - type: textarea
     id: repro
     attributes:

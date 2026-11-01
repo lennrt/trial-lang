@@ -4,7 +4,7 @@ These examples run without Kafka or external services. Each program uses only
 the language built into triallang. Each successful run ends with
 `ADJOURN INDEFINITELY`.
 
-You need Go 1.27.2 and a checkout of this repository. From the repository root,
+You need Go 1.27.3 and a checkout of this repository. From the repository root,
 run the commands below. `trial run` prints the output and discards its in-memory
 case when the command ends.
 

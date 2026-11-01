@@ -48,7 +48,9 @@ for cleanup. If loading, compilation, or stdout remains blocked, the command
 returns failure and process exit stops that remaining work. The final stderr
 diagnostic shares the same grace. Output and diagnostics can be incomplete.
 
-The timeout does not impose a total heap limit or a parser nesting limit.
+The timeout does not impose a total heap limit. Gregor independently limits
+active statement/factor parser entries and semantic AST paths to 256 each.
+Iterative tree validation precedes recursive examination and generation.
 The stdin helper can live until process exit. Programs can allocate substantial
 memory through retained execution records. Local execution is not a security sandbox. See
 [ADR 0004](adr/0004-brokerless-run.md).
@@ -100,6 +102,11 @@ stored instructions or JSON. See [ADR 0012](adr/0012-custom-statute-editor-diagn
 
 Residual risk: LSP diagnostics may contain source-derived text. Editors must
 treat diagnostics as untrusted display data.
+Document-symbol positions use one source scan and sparse Unicode corrections.
+Outlines are budgeted against the complete 16 MiB response envelope. Oversized
+results return a bounded request error without truncation or session termination;
+transport failures still terminate the session. JSON responses use stdio encoding
+without HTML escaping, and preserve the request ID.
 
 ### Court to Kafka
 
@@ -134,6 +141,7 @@ Residual risks:
 | Resource | Bound |
 | --- | ---: |
 | Record key or value | 16 MiB |
+| Recursive syntax entries / semantic AST path | 256 each |
 | Recovery snapshot | 1,000,000 records and 256 MiB |
 | Execution-step appends | 10,000 |
 | Paperwork-batch appends | 100,000 and 64 MiB |
@@ -153,6 +161,38 @@ Residual risks:
 | Default timeout for `run` | 30 seconds, with a positive override |
 | Concurrent child workers for `run` | 64 |
 | Docket workers | 1,024 |
+
+## Release preparation and publication
+
+The release helper targets the upstream repository explicitly. It checks the
+selected commit, clean source, dated metadata, caller write access, exact
+main-push CI/Security results, and owner-only environment approval before
+preparing an annotated tag. It pushes the validated tag object with GitHub CLI
+credentials, so a changed local tag reference cannot select another object.
+
+The publishing workflow compiles its guard from the main workflow revision and
+rechecks the selected tag, commit ancestry, checks, and approval configuration
+before building and publishing. The owner approves the protected environment.
+Preparation never approves that environment. Existing tags and release assets
+are not overwritten during recovery. The remaining network races and recovery
+steps are described in the [release procedure](releasing.md).
+Pending-tag drafts require a separate authenticated lookup and also block
+preparation; lookup failures do not count as absence. External command ownership
+persists through output draining after the direct process exits. Cancellation,
+timeouts and pipe-wait expiry clean up the owned Unix process group or Windows
+Job Object. Deliberately detached Unix children are outside the group boundary.
+
+## Invalid stored execution data
+
+Recovery rejects missing PUSH payloads, negative cursors, and ledger cursors
+beyond the recovered entry count before dereferencing or indexing. Execution
+validates collection/call counts before allocation and
+retains ordinary underflow verdicts. This prevents the reproduced panic classes;
+it is not comprehensive authentication of externally modified history.
+Kafka append paths account for the accepted key/value limits while retaining
+ordinary batch sizing. Large records are isolated instead of increasing the
+aggregate ordinary batch size. Broker and topic settings can still impose a
+smaller record size.
 
 ## Security sinks
 

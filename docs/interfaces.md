@@ -166,6 +166,10 @@ before any tool runs. Initialization returns the implemented MCP version
 `2025-06-18`, including when a client offers an unsupported version.
 Requests are limited to 16 MiB and source text to 4 MiB. Service batches allow
 1,000 values and 4 MiB; page sizes range from 1 to 1,000 (default 100).
+Observe pages also fit the complete 4 MiB encoded tool-result envelope. JSON
+escaping can reduce the returned item count below the requested limit. Resume
+from `next_offset`; omitted records are not consumed. A single record that cannot
+fit remains an explicit failed-tool result.
 The message limit excludes LF or CRLF framing and accepts a final line at EOF.
 A short stdout write fails the session. See
 [ADR 0006](adr/0006-protocol-input-contracts.md) for both protocol contracts.
@@ -189,12 +193,25 @@ bytes rather than characters. The required `Content-Length` is a nonnegative
 decimal integer; duplicates, unsupported headers, and truncated frames fail.
 `Content-Type` is accepted as an optional header.
 
-The server advertises full-document synchronization, hover, and completion.
+The server advertises full-document synchronization, hover, completion, and
+document symbols.
 It handles `initialize`, `shutdown`, `exit`, `textDocument/didOpen`,
 `textDocument/didChange`, `textDocument/didClose`, `textDocument/hover`, and
-`textDocument/completion`. Requests return JSON-RPC responses; document
+`textDocument/completion`, and `textDocument/documentSymbol`. Requests return JSON-RPC responses; document
 notifications can publish diagnostics. Changes contain one complete document.
 Unsupported request methods return `-32601`.
+
+Document symbols outline constants, exhibits, articles, offices and office
+sections from the current open buffer. Symbols are ordered by source and use
+UTF-16 ranges, including CRLF documents. Syntactically invalid, closed or absent
+documents produce an empty list; parse-valid source can still have an outline
+when compilation reports errors. Outlining does not execute or load dependencies.
+Position conversion scans the source once instead of rescanning each declaration's
+line prefix. If the complete encoded response, including its request ID, exceeds
+16 MiB, the request returns error `-32603` with message
+`document symbols exceed response limit`. The outline is not truncated, and
+subsequent requests can continue in the same session. A transport write failure
+still ends the session.
 
 By default, documents with `INCORPORATE BY REFERENCE` receive syntax-only
 diagnostics. Start `trial counsel --canon` to also compile documents whose
@@ -264,3 +281,11 @@ See [editor setup](../editors/README.md) and the
 public API. See the [API snapshot](api.txt), [compatibility policy](api-compatibility.md),
 and [Go reference](https://pkg.go.dev/github.com/lennrt/trial-lang/canon).
 Run `go doc -all ./canon` locally and `make api-check` to compare the contract.
+
+## Deposition automation
+
+`trial test --json` emits JSON Lines per-test results and a final summary.
+`--run REGEXP`, `--list`, and `--require-tests` support filtered iteration,
+execution-free discovery and strict CI selection. Path selection is independent
+of JSON formatting. See the [deposition reference](depositions.md) for exact
+schemas, normalization, cancellation and exit statuses.

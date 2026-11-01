@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="352" viewBox="0 0 900 352" role="img" aria-labelledby="title desc">
+<title id="title">Brokerless test selection and discovery</title>
+<desc id="desc">Captured output from the two documented triallang commands. The first runs hello and countdown depositions; the second lists the wave chamber deposition without running it.</desc>
+<rect width="900" height="352" rx="12" fill="#0d1117"/>
+<text x="28" y="34" fill="#f0f6fc" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="17" font-weight="600">Brokerless deposition workflow</text>
+<path d="M28 49H872" stroke="#30363d"/>
+<text x="28" y="78" fill="#a5d6ff" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">$ go run ./cmd/trial test --run &#x27;hello|countdown&#x27; examples</text>
+<text x="28" y="100" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">RUNNING DEPOSITIONS</text>
+<text x="28" y="122" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve"></text>
+<text x="28" y="144" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">  ok      examples/countdown.deposition            (0.00s)</text>
+<text x="28" y="166" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">  ok      examples/hello.deposition                (0.00s)</text>
+<text x="28" y="188" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve"></text>
+<text x="28" y="210" fill="#b4e6c0" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">2 deposition(s) passed.</text>
+<text x="28" y="232" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve"></text>
+<text x="28" y="254" fill="#a5d6ff" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">$ go run ./cmd/trial test --list --run wave-chamber examples</text>
+<text x="28" y="276" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve">examples/the-wave-chamber.deposition</text>
+<text x="28" y="298" fill="#d6dde7" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="14" xml:space="preserve"></text>
+<text x="28" y="335" fill="#8b949e" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11">Captured CLI output from this checkout. Timings vary; no Kafka broker is used.</text>
+</svg>

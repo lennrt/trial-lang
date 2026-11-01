@@ -9,11 +9,9 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	fs2 "io/fs"
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
 	"runtime/debug"
 	"sort"
 	"strings"
@@ -24,7 +22,6 @@ import (
 	"github.com/lennrt/trial-lang/internal/advocate"
 	"github.com/lennrt/trial-lang/internal/counsel"
 	"github.com/lennrt/trial-lang/internal/court"
-	"github.com/lennrt/trial-lang/internal/deposition"
 	"github.com/lennrt/trial-lang/internal/docket"
 	"github.com/lennrt/trial-lang/internal/gregor"
 )
@@ -898,128 +895,6 @@ func hearing(ctx context.Context, rest []string) int {
 			return 1
 		}
 	}
-}
-
-func depositionsInterrupted(ctx context.Context) bool {
-	if ctx.Err() == nil {
-		return false
-	}
-	fmt.Fprintln(os.Stderr, "Depositions interrupted; the remaining files were not run.")
-	return true
-}
-
-// testCmd runs each selected deposition against a new in-memory log.
-func testCmd(ctx context.Context, rest []string) int {
-	if depositionsInterrupted(ctx) {
-		return 1
-	}
-	fs := commandFlags("test")
-	transcript := fs.Bool("transcript", false, "print everything each witness proclaimed, verbatim")
-	if err := fs.Parse(rest); err != nil {
-		return 2
-	}
-	paths := fs.Args()
-	if len(paths) == 0 {
-		paths = []string{"."}
-	}
-
-	var files []string
-	for _, p := range paths {
-		info, err := os.Stat(p)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "trial test: %v\n", err)
-			return 2
-		}
-		if !info.IsDir() {
-			files = append(files, p)
-			continue
-		}
-		err = filepath.WalkDir(p, func(path string, d fs2.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() && d.Name() == ".git" {
-				return filepath.SkipDir
-			}
-			if !d.IsDir() && strings.HasSuffix(path, ".deposition") {
-				files = append(files, path)
-			}
-			return nil
-		})
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "trial test: walking %s: %v\n", p, err)
-			return 2
-		}
-	}
-	if len(files) == 0 {
-		fmt.Println("No deposition files were found.")
-		return 0
-	}
-
-	fmt.Println("RUNNING DEPOSITIONS")
-	fmt.Println()
-	contradicted := 0
-	for _, f := range files {
-		// A signal cancels ctx; without this check every remaining deposition
-		// would run, fail instantly, and be reported as contradicted.
-		if depositionsInterrupted(ctx) {
-			return 1
-		}
-		src, err := readSource(ctx, f)
-		if err != nil {
-			fmt.Printf("  FAIL    %s\n          the deposition could not be read: %v\n", f, err)
-			contradicted++
-			continue
-		}
-		dep, err := deposition.Parse(string(src))
-		if err != nil {
-			fmt.Printf("  FAIL    %s\n          %v\n", f, err)
-			contradicted++
-			continue
-		}
-		if err := deposition.LoadEnactments(dep, filepath.Dir(f)); err != nil {
-			fmt.Printf("  FAIL    %s\n          %v\n", f, err)
-			contradicted++
-			continue
-		}
-		prog, err := readSource(ctx, filepath.Join(filepath.Dir(f), dep.Program))
-		if err != nil {
-			fmt.Printf("  FAIL    %s\n          the deposed could not be located: %v\n", f, err)
-			contradicted++
-			continue
-		}
-		res := deposition.Run(ctx, string(prog), dep)
-		if depositionsInterrupted(ctx) {
-			return 1
-		}
-		if res.OK() {
-			fmt.Printf("  ok      %-40s (%.2fs)\n", f, res.Elapsed.Seconds())
-		} else {
-			contradicted++
-			fmt.Printf("  FAIL    %s\n", f)
-			for _, contradiction := range res.Contradictions {
-				fmt.Printf("          %s\n", contradiction)
-			}
-		}
-		if *transcript && len(res.Said) > 0 {
-			fmt.Println()
-			fmt.Printf("          OUTPUT (%d entries):\n", len(res.Said))
-			for _, said := range res.Said {
-				fmt.Println()
-				for line := range strings.SplitSeq(said, "\n") {
-					fmt.Printf("          %s\n", line)
-				}
-			}
-			fmt.Println()
-		}
-	}
-	fmt.Println()
-	if contradicted == 0 {
-		fmt.Printf("%d deposition(s) passed.\n", len(files))
-		return 0
-	}
-	fmt.Printf("%d deposition(s) ran; %d failed.\n", len(files), contradicted)
-	return 1
 }
 
 func docketCmd(ctx context.Context, rest []string) int {

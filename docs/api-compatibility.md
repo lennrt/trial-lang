@@ -25,6 +25,17 @@ compatibility and is deprecated because callers can mutate it.
 All other Go packages are commands or are under `internal`. They are not a
 public Go API.
 
+## Embedded source contract
+
+`FS` exposes source files from the selected module version. It includes both
+Form S-1 statutes and Form K-1 demonstration programs. Use `Files()` for the
+statute paths in dependency order; do not treat every embedded `.trial` file as
+a statute. Paths are relative to the embedded filesystem root.
+
+The package overview and executable examples document reading and ordering
+these sources. They do not add a public compiler or runtime API, change exported
+signatures, or change embedded files. Run the CLI to check or execute a program.
+
 ## Wire compatibility
 
 Stored JSON uses `encoding/json` v1 and the existing tags. This review does not
@@ -36,7 +47,7 @@ use a default limit of 100.
 Run the external-package compile test:
 
 ```console
-go test ./canon
+go test -timeout=3m ./canon
 make api-check
 ```
 

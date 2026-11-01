@@ -1,6 +1,6 @@
 # Testing
 
-Use Go 1.27.2.
+Use Go 1.27.3.
 
 ## Required local checks
 

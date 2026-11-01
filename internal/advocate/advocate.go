@@ -611,11 +611,41 @@ func (s *Server) call(ctx context.Context, name string, rawArgs json.RawMessage)
 			outputBytes += len(record.Value)
 			next = record.Offset + 1
 		}
-		return textResult(map[string]any{
-			"case":          c.ID,
-			"proclamations": out,
-			"next_offset":   next,
-		})
+		// The text result is JSON inside JSON. Raw record bytes underestimate
+		// escaping and envelope overhead. Binary-search a fitting prefix rather
+		// than re-encoding every growing page (quadratic work).
+		encodePrefix := func(count int) (toolResult, bool) {
+			offset := args.FromOffset
+			if count > 0 {
+				offset = out[count-1].Offset + 1
+			}
+			payload, err := json.MarshalIndent(map[string]any{
+				"case": c.ID, "proclamations": out[:count], "next_offset": offset,
+			}, "", "  ")
+			if err != nil {
+				return toolResult{}, false
+			}
+			result := toolResult{Content: []toolContent{{Type: "text", Text: string(payload)}}}
+			encoded, err := json.Marshal(result)
+			return result, err == nil && len(encoded) <= maxToolOutputBytes
+		}
+		if result, fits := encodePrefix(len(out)); fits {
+			return boundedToolResult(result.Content[0].Text, false)
+		}
+		low, high := 0, len(out)
+		for low < high {
+			middle := low + (high-low+1)/2
+			if _, fits := encodePrefix(middle); fits {
+				low = middle
+			} else {
+				high = middle - 1
+			}
+		}
+		if low == 0 {
+			return errorResult("proclamation at offset %d exceeds the %d-byte tool output limit", out[0].Offset, maxToolOutputBytes)
+		}
+		result, _ := encodePrefix(low)
+		return boundedToolResult(result.Content[0].Text, false)
 
 	case "trial_status":
 		st, err := court.Examine(ctx, s.Log, c)

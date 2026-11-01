@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
 
 jobs:
   verify:
@@ -91,7 +91,7 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      - run: go test -timeout=3m ./cmd/trial
+      - run: go test -timeout=3m ./cmd/trial ./tools/release
       - run: go run ./cmd/trial run --canon examples/the-wave-chamber.trial
 
   kafka:
@@ -124,7 +124,7 @@ jobs:
           echo "Kafka did not become ready within 60 seconds" >&2
           exit 1
       - name: Run integration tests
-        run: go test -timeout=10m ./internal/court ./cmd/trial -run '^(TestE2E|TestDifferential|TestCLI)' -count=1 -v
+        run: go test -timeout=10m ./internal/court ./internal/docket ./cmd/trial -run '^(TestE2E|TestDifferential|TestCLI)' -count=1 -v
         env:
           TRIAL_E2E_BROKER: localhost:9092
       - name: Run black-box CLI smoke test

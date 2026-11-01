@@ -22,6 +22,48 @@ passed. Status 1 means a failed or interrupted run. Status 2 means an invalid
 argument or an unreadable search path. An empty search reports that it found no
 files and returns status 0.
 
+## Select a suite without running everything
+
+Put all options before the paths. `--run` uses a Go regular expression against
+`filepath.ToSlash(filepath.Clean(path))` for the first encountered spelling of each
+path. It filters depositions, not names inside a deposition:
+
+```console
+go run ./cmd/trial test --run 'hello|countdown' examples
+go run ./cmd/trial test --list --run 'the-wave-chamber' examples
+go run ./cmd/trial test --require-tests examples
+```
+
+`--list` prints selected paths without reading deposition/program contents or
+executing code. Overlapping directory/file arguments and lexical path aliases
+run once, preserving first occurrence and display order. Symlinks and hardlinks
+are not resolved for deduplication. `--require-tests` makes an empty selection
+fail with status 1; the default empty-selection status remains 0. Invalid
+regular expressions or unreadable search paths return status 2.
+
+## Consume structured results
+
+`--json` streams JSON Lines on stdout, with one `type: "test"` object per result
+and one `type: "summary"` object. Human banners are omitted:
+
+```console
+go run ./cmd/trial test --json --require-tests examples
+go run ./cmd/trial test --json --transcript examples/hello.deposition
+```
+
+Every test object has `path`, `status`, `elapsed_seconds`, and `contradictions`
+(an array). Status is `pass`, `fail`, `interrupted`, or `listed`. Source,
+deposition, and enactment loading failures are failed results. `proclamations`
+appears only when `--transcript` requests output from an executed test.
+Listing reports zero elapsed time and an empty contradictions array.
+
+The summary contains `selected`, `passed`, `failed`, `interrupted`, `unrun`,
+`listed`, and `canceled`. Cancellation can occur between tests, so `canceled`
+can be true even when no active test was interrupted. Unrun tests are not
+reported as ordinary failures. Argument errors go to stderr with status 2;
+execution, cancellation, strict-empty, and incomplete-output errors return 1.
+The default human format remains available without `--json`.
+
 ## Write a deposition
 
 Each statement occupies one line and ends with a period. Blank lines and lines

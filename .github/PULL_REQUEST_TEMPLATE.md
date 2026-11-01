@@ -5,7 +5,7 @@
 
 ## Checklist
 
-- [ ] `make verify` and `make vuln` pass with Go 1.27.2
+- [ ] `make verify` and `make vuln` pass with Go 1.27.3
 - [ ] `make spec-check` passes when OpenSpec artifacts change
 - [ ] Behavior changes have deterministic tests with a finite timeout; generated seeds are recorded
 - [ ] `CHANGELOG.md` has an entry under the unreleased version

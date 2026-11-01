@@ -64,14 +64,19 @@ const (
 	maxDocumentURIBytes = 4096
 )
 
+type responseLimitError struct{ bytes int }
+
+func (e *responseLimitError) Error() string {
+	return fmt.Sprintf("response is %d bytes; limit is %d", e.bytes, maxMessageBytes)
+}
+
 func (s *Server) write(v rpcResponse) error {
-	v.JSONRPC = "2.0"
-	b, err := json.Marshal(v)
+	b, err := marshalResponse(v)
 	if err != nil {
 		return err
 	}
 	if len(b) > maxMessageBytes {
-		return fmt.Errorf("response is %d bytes; limit is %d", len(b), maxMessageBytes)
+		return &responseLimitError{bytes: len(b)}
 	}
 	header := fmt.Sprintf("Content-Length: %d\r\n\r\n", len(b))
 	if n, err := io.WriteString(s.Out, header); err != nil {
@@ -85,6 +90,33 @@ func (s *Server) write(v rpcResponse) error {
 		return io.ErrShortWrite
 	}
 	return nil
+}
+
+func marshalResponse(response rpcResponse) ([]byte, error) {
+	response.JSONRPC = "2.0"
+	id := bytes.TrimSpace(response.ID)
+	response.ID = nil
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	// Stdio JSON is not embedded in HTML.
+	encoder.SetEscapeHTML(false)
+	if err := encoder.Encode(response); err != nil {
+		return nil, err
+	}
+	data := bytes.TrimSuffix(out.Bytes(), []byte{'\n'})
+	if len(id) == 0 {
+		return data, nil
+	}
+	if !json.Valid(id) {
+		return nil, errors.New("response ID is invalid JSON")
+	}
+	// Do not re-encode the validated scalar ID. Besides preserving large
+	// numbers, this avoids expanding HTML or JavaScript-sensitive characters
+	// in a permitted near-limit string ID beyond the response budget.
+	data = append(data[:len(data)-1], `,"id":`...)
+	data = append(data, id...)
+	data = append(data, '}')
+	return data, nil
 }
 
 func (s *Server) respond(req *rpcRequest, response rpcResponse) error {
@@ -236,9 +268,10 @@ func (s *Server) handle(req *rpcRequest) error {
 	case "initialize":
 		return s.respond(req, rpcResponse{Result: map[string]any{
 			"capabilities": map[string]any{
-				"textDocumentSync":   1, // full synchronization
-				"hoverProvider":      true,
-				"completionProvider": map[string]any{},
+				"textDocumentSync":       1, // full synchronization
+				"hoverProvider":          true,
+				"documentSymbolProvider": true,
+				"completionProvider":     map[string]any{},
 			},
 			"serverInfo": map[string]any{"name": "trial counsel", "version": s.Version},
 		}})
@@ -305,6 +338,17 @@ func (s *Server) handle(req *rpcRequest) error {
 			return s.invalidParams(req, err)
 		}
 		return s.closeDocument(p.TextDocument.URI)
+
+	case "textDocument/documentSymbol":
+		var p struct {
+			TextDocument struct {
+				URI string `json:"uri"`
+			} `json:"textDocument"`
+		}
+		if err := decodeStrict(req.Params, &p); err != nil {
+			return s.invalidParams(req, err)
+		}
+		return s.respondDocumentSymbols(req, s.docs[p.TextDocument.URI])
 
 	case "textDocument/hover":
 		var p struct {

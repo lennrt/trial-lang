@@ -1,6 +1,6 @@
 # The triallang Language Specification
 
-*Applies to triallang v0.1.0.*
+*Includes proposed v0.2.0 resource bounds; stored formats remain compatible.*
 
 This is the normative reference manual for triallang. The grammar is
 [`grammar.ebnf`](grammar.ebnf); the instruction set of record is
@@ -2127,7 +2127,14 @@ chain, §18, is *one value*), can exceed it. This is an infrastructure
 error rather than a verdict (the case is innocent): the proceedings
 halt mid-instruction, uncommitted, and resume cleanly only if the
 broker's limit is raised. Break larger values into smaller records or raise the
-broker limit deliberately.
+broker limit deliberately. All append paths accept the existing 16 MiB key and
+16 MiB value bounds plus encoded-record overhead. Ordinary records retain the
+client's 1,000,012-byte batch cap. Records above that cap are sent alone, so
+raising the client bound for one record does not coalesce ordinary records into
+oversized batches. Transactional chunking preserves the single atomic commit.
+This does not raise the broker or topic limit. Configure `max.message.bytes` for
+a topic when accepting large records and account for replica/network limits in
+your broker deployment.
 
 ### 17.7 Throughput, latency, and what this machine is for
 
@@ -2264,3 +2271,18 @@ and joined; `AN EXCERPT OF` also makes a string an addressable tape.
 - Identifiers are ASCII (§3). Strings are where the Unicode lives.
 - Case topics use `retention.ms=-1`. `STRIKE` (§11.10) removes a record from the
   *fold*; the log retains the striking until compaction may remove the key.
+
+### 19.1 Source depth budget
+
+The implementation rejects source exceeding either of two depth budgets of 256.
+The parser counts active statement and factor entries, including the outer
+statement and scalar factor; parentheses and prefix factors add entries. The
+semantic tree counts statement, condition and expression nodes along each path;
+containers do not add nodes. Every body statement starts at depth 1. Iterative
+validation runs before recursive examination/code generation, including for
+manually constructed trees. Rejection retains a useful source position.
+
+For a simple PROCLAIM statement, 254 nested parentheses or prefix factors are
+within the budget; 255 exceed it. Left-associated expressions are also bounded,
+so flat-looking long expressions cannot create arbitrarily deep compiler trees.
+These are resource limits, not changes to evaluation order or stored bytecode.

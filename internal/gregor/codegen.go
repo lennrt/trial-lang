@@ -29,6 +29,9 @@ func CompileAt(prog *Program, base int64) ([]law.Instr, error) {
 // survive compilation. When offices follow, the case body ends with an implicit
 // ADJOURN and a REFER past all office bodies. Each office has an implicit REMAND.
 func Compile(prog *Program) ([]law.Instr, error) {
+	if err := validateDepth(prog); err != nil {
+		return nil, err
+	}
 	// Reject statically visible use after assignment before generating code.
 	if err := examine(prog); err != nil {
 		return nil, err

@@ -18,7 +18,17 @@ type Incorporation struct { // INCORPORATE BY REFERENCE name.
 	Line int
 }
 
+// DeclarationSpan identifies a declaration header in source. Columns are
+// one-based UTF-8 byte columns; the end is exclusive, after its period.
+// This editor metadata is excluded from serialized ASTs and instructions.
+type DeclarationSpan struct {
+	Column    int
+	EndLine   int
+	EndColumn int
+}
+
 type ConstDecl struct { // HEREINAFTER, name SHALL MEAN literal.
+	Span   DeclarationSpan `json:"-"`
 	source string
 	Name   string
 	Expr   Expr // an IntLit, SumLit, StrLit, or FindingLit; nothing else may be meant
@@ -26,6 +36,7 @@ type ConstDecl struct { // HEREINAFTER, name SHALL MEAN literal.
 }
 
 type ExhibitDecl struct { // THE EXHIBIT OF name, COMPRISING f AND g.
+	Span   DeclarationSpan `json:"-"`
 	source string
 	Name   string
 	Fields []string
@@ -33,6 +44,7 @@ type ExhibitDecl struct { // THE EXHIBIT OF name, COMPRISING f AND g.
 }
 
 type Article struct {
+	Span   DeclarationSpan `json:"-"`
 	source string
 	Number int64
 	Stmts  []Stmt
@@ -40,6 +52,7 @@ type Article struct {
 }
 
 type Office struct {
+	Span     DeclarationSpan `json:"-"`
 	source   string
 	Name     string
 	Params   []string
@@ -49,6 +62,7 @@ type Office struct {
 }
 
 type Section struct {
+	Span   DeclarationSpan `json:"-"`
 	Number int64
 	Stmts  []Stmt
 	Line   int

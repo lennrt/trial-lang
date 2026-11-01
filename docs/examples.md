@@ -4,7 +4,7 @@ This guide lists every `.trial` file in `examples/`. Start with the small
 programs, then try the algorithms and rendering examples. The tables identify
 inputs, dependencies, expected failures, and programs that need persistent state.
 
-You need Go 1.27.2 and a source checkout. Run the commands from the repository
+You need Go 1.27.3 and a source checkout. Run the commands from the repository
 root. `go run ./cmd/trial run` uses memory storage and does not need Kafka.
 
 Local runs print the main case's proclamations. Each run gets a new case and
@@ -241,7 +241,7 @@ actual output from successful deposition runs.
 | Castle | The program calculates each view with ray casting | [GIF](the-castle.gif) | [VHS tape](the-castle.tape) |
 | Procession | The program updates its state and selects a stored character track | [GIF](the-procession.gif) | [VHS tape](the-procession.tape) |
 
-To record a demo, use a Bash environment with Go 1.27.2, Charm VHS v0.11.0,
+To record a demo, use a Bash environment with Go 1.27.3, Charm VHS v0.11.0,
 FFmpeg, ttyd, and a Chromium browser. From the repository root, record one example:
 
 ```console

@@ -4,6 +4,27 @@
 
 ### Fixed
 
+- Reject damaged recovery PUSH records, negative execution cursors, ledger cursors
+  beyond the recovered entry count, and invalid collection/call operand counts
+  before dereference, indexing or allocation.
+  Refresh a stale ledger snapshot before rejecting a cursor advanced by concurrent
+  execution, so status remains usable while a case runs.
+- Configure all Kafka producer paths for the documented record bound, including
+  key/value encoding overhead; broker/topic limits remain separately required.
+  Preserve ordinary batch sizing and isolate large records to avoid combining
+  otherwise valid records past an unchanged topic limit.
+- Return resumable MCP observe prefixes that fit the actual encoded result
+  envelope, including JSON escaping expansion and the inclusive size boundary.
+- Reject release versions incompatible with the unsuffixed Go module path and
+  stop verification descendants on timeout, interruption or SIGTERM.
+- Detect pending draft releases before tag preparation or workflow dispatch.
+- Retain command-tree ownership through inherited output pipes after the direct
+  command exits, so cancellation and pipe-wait timeouts also stop descendants.
+- Convert outline positions without repeated line-prefix scans. Return a bounded
+  request error for an oversized outline and keep the editor session alive.
+- Preserve an enclosing source line when manually constructed AST nodes omit
+  their own position in a depth-limit error.
+
 - Run race-test packages sequentially so expensive example suites do not compete
   across packages. Keep every race check and the existing test deadlines.
 - Return docket-audit errors for unreadable commencement, archive, catalog,
@@ -64,6 +85,14 @@
 
 ### Changed
 
+- Pin active builds and checks to Go 1.27.3, fixing reachable standard-library
+  advisory [GO-2026-6809 / CVE-2026-111943](https://pkg.go.dev/vuln/GO-2026-6809)
+  in crypto/x509. Builds with Go 1.27.0–1.27.2 can retain trust in known
+  compromised intermediates in affected trust-store configurations; rebuild with
+  Go 1.27.3.
+- Bound recursive syntax entries and semantic AST paths to 256, with positioned
+  rejection before recursive compiler traversal. Existing ordinary examples fit.
+
 - Pin development, CI, and release builds to Go 1.27.2 to include the standard
   library security fixes reported by the repository's vulnerability scan.
 - Update golangci-lint to v2.15.0 so verification can read Go 1.27.2 export data,
@@ -86,6 +115,19 @@
 
 ### Added
 
+- Add Counsel document symbols for named declarations, articles, offices and
+  sections, using source order and UTF-16 ranges from the current buffer.
+- Add JSON Lines deposition reports with accurate result, cancellation and
+  summary records and opt-in transcripts.
+- Add deposition regex selection, execution-free listing, lexical path
+  deduplication and opt-in empty-suite failure for focused development and CI.
+
+- Add `make release-check TAG=vX.Y.Z` and `make release TAG=vX.Y.Z` to validate
+  release prerequisites, prepare an immutable annotated tag, and dispatch the
+  protected workflow with an exact commit. Retain owner approval for publication.
+- Expand the public `canon` Go documentation with a statute catalog, dependency
+  loading guidance, a working language example, and executable Go examples.
+  Document the difference between embedded demonstrations and enactable statutes.
 - Add `trial counsel --canon` to compile known bundled imports during editor
   diagnostics, and repeated `--enact` paths for custom statutes. Track source
   ownership for accurate cross-file ranges, refresh imports from open dependency
@@ -128,8 +170,11 @@
 
 ### Compatibility
 
-- Stored JSON, opcodes, and the public Go API are unchanged. No new Go dependencies
-  are required. OpenSpec validation uses optional Node.js and npm tooling.
+- Stored JSON, opcodes, and the public Go API are unchanged. Windows release
+  preparation uses the existing transitive `golang.org/x/sys` version directly
+  to own command trees with Job Objects. Kafka wire tests use the existing
+  `franz-go/pkg/kmsg` version directly; no dependency version is upgraded.
+  OpenSpec validation uses optional Node.js and npm tooling.
 - Duplicate office parameters and malformed comment keywords now fail filing.
   Correct those invalid sources before recompiling them.
 - Corrected arithmetic can change replay results for historical cases affected

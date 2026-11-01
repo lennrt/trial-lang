@@ -4,7 +4,7 @@
 
 | Tool or image | Version or digest |
 | --- | --- |
-| Go | 1.27.2 |
+| Go | 1.27.3 |
 | golangci-lint | v2.15.0 |
 | goimports module | `golang.org/x/tools@v0.49.0` |
 | govulncheck | v1.7.0 |

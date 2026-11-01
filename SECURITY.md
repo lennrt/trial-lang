@@ -43,7 +43,7 @@ exists.
 
 ## Security checks
 
-Run these checks with Go 1.27.2:
+Run these checks with Go 1.27.3:
 
 ```console
 make verify

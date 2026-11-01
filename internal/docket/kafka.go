@@ -35,6 +35,18 @@ const (
 	// fetches plus this per-client broker-response bound keep idle cursors from
 	// prefetching indefinitely while still accepting every valid record.
 	maxKafkaFetchBytes = 2*MaxRecordBytes + 1<<20
+	// Records have no headers. A v2 batch header and record varints fit well
+	// inside this fixed allowance, including a maximum-sized key and value.
+	maxKafkaRecordBatchBytes = 2*MaxRecordBytes + 1024
+	// Keep ordinary aggregate batches at franz-go's previous default. Raising
+	// this globally can combine individually small records into a batch that
+	// an unchanged broker/topic rejects.
+	ordinaryKafkaBatchBytes = 1_000_012
+	// A v2 batch has a 61-byte header. A headerless record needs at most 32
+	// further bytes: length, attributes, timestamp/offset deltas, key/value
+	// lengths and the zero header count. Charge the batch header only once.
+	kafkaBatchHeaderBytes    = 61
+	kafkaRecordOverheadBytes = 32
 )
 
 var errKafkaLogClosed = errors.New("kafka log is closed")
@@ -43,6 +55,11 @@ var errKafkaLogClosed = errors.New("kafka log is closed")
 type KafkaLog struct {
 	producer *kgo.Client // plain paperwork: filings, verdicts, summonses, markers
 	adm      *kadm.Client
+	// Large plain records use a separate producer and one cancellable slot.
+	// Only one record is in flight on it, so concurrent Appends cannot form
+	// oversized aggregate batches. Ordinary Appends retain shared batching.
+	largeProducer     *kgo.Client
+	largeProducerSlot chan struct{}
 
 	brokers []string
 
@@ -111,6 +128,49 @@ func WithDiagnostic(report func(error)) KafkaOption {
 	}
 }
 
+// newKafkaProducerClient retains the ordinary aggregate batch limit. Large
+// records use an isolated client or bounded transactional production below.
+func newKafkaProducerClient(brokers []string, options ...kgo.Opt) (*kgo.Client, error) {
+	base := []kgo.Opt{
+		kgo.SeedBrokers(brokers...),
+		kgo.ProducerBatchMaxBytes(ordinaryKafkaBatchBytes),
+	}
+	return kgo.NewClient(append(base, options...)...)
+}
+
+func newKafkaLargeProducerClient(brokers []string, options ...kgo.Opt) (*kgo.Client, error) {
+	return newKafkaProducerClient(brokers, append([]kgo.Opt{
+		kgo.ProducerBatchMaxBytes(maxKafkaRecordBatchBytes),
+	}, options...)...)
+}
+
+func kafkaRecordBudget(record *kgo.Record) int {
+	return len(record.Key) + len(record.Value) + kafkaRecordOverheadBytes
+}
+
+// produceKafkaRecords allows a maximal individual record while keeping ordinary
+// aggregate batches within the previous client limit. Each synchronous chunk
+// finishes before the next is enqueued; an oversized record is sent alone.
+// Callers own one transaction across all chunks and prevent client interleaving.
+func produceKafkaRecords(ctx context.Context, client *kgo.Client, records []*kgo.Record) error {
+	for start := 0; start < len(records); {
+		end, bytes := start, kafkaBatchHeaderBytes
+		for end < len(records) {
+			size := kafkaRecordBudget(records[end])
+			if end > start && size > ordinaryKafkaBatchBytes-bytes {
+				break
+			}
+			bytes += size
+			end++
+		}
+		if err := client.ProduceSync(ctx, records[start:end]...).FirstErr(); err != nil {
+			return err
+		}
+		start = end
+	}
+	return nil
+}
+
 // OpenKafkaLog opens and verifies a Kafka-backed Log. It owns all clients it
 // creates. Close releases them.
 func OpenKafkaLog(ctx context.Context, brokers string, options ...KafkaOption) (*KafkaLog, error) {
@@ -136,8 +196,7 @@ func OpenKafkaLog(ctx context.Context, brokers string, options ...KafkaOption) (
 	if config.diagnose == nil {
 		config.diagnose = func(error) {}
 	}
-	producer, err := kgo.NewClient(
-		kgo.SeedBrokers(seeds...),
+	producer, err := newKafkaProducerClient(seeds,
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 	)
 	if err != nil {
@@ -149,17 +208,26 @@ func OpenKafkaLog(ctx context.Context, brokers string, options ...KafkaOption) (
 		producer.Close()
 		return nil, fmt.Errorf("connect to Kafka: %w", err)
 	}
+	largeProducer, err := newKafkaLargeProducerClient(seeds,
+		kgo.RequiredAcks(kgo.AllISRAcks()),
+	)
+	if err != nil {
+		producer.Close()
+		return nil, err
+	}
 	return &KafkaLog{
-		producer:       producer,
-		adm:            kadm.NewClient(producer),
-		brokers:        seeds,
-		consumers:      make(map[string]*cursor),
-		consumerLRU:    list.New(),
-		proceedings:    make(map[proceedingAddress]*list.Element),
-		proceedingsLRU: list.New(),
-		transactions:   make(map[string]*transactionProducer),
-		transactionLRU: list.New(),
-		diagnose:       config.diagnose,
+		producer:          producer,
+		adm:               kadm.NewClient(producer),
+		largeProducer:     largeProducer,
+		largeProducerSlot: make(chan struct{}, 1),
+		brokers:           seeds,
+		consumers:         make(map[string]*cursor),
+		consumerLRU:       list.New(),
+		proceedings:       make(map[proceedingAddress]*list.Element),
+		proceedingsLRU:    list.New(),
+		transactions:      make(map[string]*transactionProducer),
+		transactionLRU:    list.New(),
+		diagnose:          config.diagnose,
 	}, nil
 }
 
@@ -168,7 +236,17 @@ func (k *KafkaLog) Append(ctx context.Context, topic string, key, value []byte) 
 		return 0, err
 	}
 	rec := &kgo.Record{Topic: topic, Key: cloneBytes(key), Value: cloneBytes(value), Partition: 0}
-	res := k.producer.ProduceSync(ctx, rec)
+	producer := k.producer
+	if kafkaRecordBudget(rec) > ordinaryKafkaBatchBytes-kafkaBatchHeaderBytes {
+		select {
+		case k.largeProducerSlot <- struct{}{}:
+			defer func() { <-k.largeProducerSlot }()
+		case <-ctx.Done():
+			return 0, fmt.Errorf("append record: %w", ctx.Err())
+		}
+		producer = k.largeProducer
+	}
+	res := producer.ProduceSync(ctx, rec)
 	if err := res.FirstErr(); err != nil {
 		return 0, fmt.Errorf("append record: %w", err)
 	}
@@ -198,8 +276,7 @@ func (k *KafkaLog) AppendBatch(ctx context.Context, appends []StepAppend) ([]int
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return nil, fmt.Errorf("create batch transaction ID: %w", err)
 	}
-	client, err := kgo.NewClient(
-		kgo.SeedBrokers(k.brokers...),
+	client, err := newKafkaLargeProducerClient(k.brokers,
 		kgo.RequiredAcks(kgo.AllISRAcks()),
 		kgo.TransactionalID("the-court.append."+hex.EncodeToString(nonce[:])),
 		kgo.TransactionTimeout(60*time.Second),
@@ -211,7 +288,7 @@ func (k *KafkaLog) AppendBatch(ctx context.Context, appends []StepAppend) ([]int
 	if err := client.BeginTransaction(); err != nil {
 		return nil, fmt.Errorf("open append transaction: %w", err)
 	}
-	if err := client.ProduceSync(ctx, records...).FirstErr(); err != nil {
+	if err := produceKafkaRecords(ctx, client, records); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		abortBufferedErr := client.AbortBufferedRecords(cleanupCtx)
@@ -736,8 +813,7 @@ type attentionNote struct {
 }
 
 func (k *KafkaLog) newTransactionClient(c Case) (*kgo.Client, error) {
-	return kgo.NewClient(
-		kgo.SeedBrokers(k.brokers...),
+	return newKafkaLargeProducerClient(k.brokers,
 		kgo.TransactionalID("the-court."+c.ID),
 		kgo.TransactionTimeout(60*time.Second),
 	)
@@ -862,7 +938,7 @@ func (k *KafkaLog) Commit(ctx context.Context, c Case, step Step) error {
 	}
 	recs = append(recs, &kgo.Record{Topic: c.AttentionTopic(), Key: []byte("attention"), Value: note, Partition: 0})
 
-	if err := cl.ProduceSync(ctx, recs...).FirstErr(); err != nil {
+	if err := produceKafkaRecords(ctx, cl, recs); err != nil {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		defer cancel()
 		abortBufferedErr := cl.AbortBufferedRecords(cleanupCtx)
@@ -1068,11 +1144,15 @@ func (k *KafkaLog) Close() {
 		k.proceedings = nil
 		k.proceedingsLRU = nil
 		producer := k.producer
+		largeProducer := k.largeProducer
 		k.mu.Unlock()
 
 		closeKafkaClients(clients)
 		if producer != nil {
 			producer.Close()
+		}
+		if largeProducer != nil {
+			largeProducer.Close()
 		}
 	})
 }

@@ -43,7 +43,7 @@ anywhere TextMate grammars do:
   they should be excluded from language statistics.
 
 A tree-sitter grammar remains on the roadmap. The TextMate grammar provides
-highlighting, and the LSP provides diagnostics, hover text, and completion.
+highlighting, and the LSP provides diagnostics, hover text, completion, and document outlines.
 
 ## The language server: `trial counsel`
 
@@ -120,3 +120,9 @@ details.
 `trial watch` is a live dashboard of cases, their current attention, and
 consumer lag. Use `--once` for one snapshot or `--interval` to set the refresh
 period.
+
+Counsel provides a document outline through `textDocument/documentSymbol`.
+Editors can navigate named constants/exhibits, articles, offices and office
+sections in source order. It uses the current buffer and UTF-16 ranges, without
+executing source or loading dependencies. Syntactically invalid buffers return
+an empty outline until they can be parsed again.

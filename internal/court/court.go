@@ -329,6 +329,9 @@ func (c *Court) Recover(ctx context.Context) error {
 		case "REENACTMENT", "IMPOUND":
 			c.stack = nil
 		case "PUSH":
+			if ev.Value == nil {
+				return fmt.Errorf("the dossier PUSH at offset %d has no value", r.Offset)
+			}
 			c.stack = append(c.stack, *ev.Value)
 		case "POP":
 			if len(c.stack) > 0 {
@@ -428,17 +431,8 @@ func (c *Court) Recover(ctx context.Context) error {
 	}
 
 	// Reenactment reuses recorded nondeterministic results.
-	recs, err = c.Log.ReadAll(ctx, c.Case.Ledger())
-	if err != nil {
+	if err := c.recoverLedger(ctx); err != nil {
 		return err
-	}
-	c.ledger = nil
-	for _, r := range recs {
-		var ev ledgerEvent
-		if err := json.Unmarshal(r.Value, &ev); err != nil {
-			return fmt.Errorf("the ledger contains an entry no one can read: %w", err)
-		}
-		c.ledger = append(c.ledger, ev)
 	}
 
 	// A case that has not started has zero-valued attention.
@@ -446,12 +440,58 @@ func (c *Court) Recover(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err := validateRecoveredAttention(att); err != nil {
+		return err
+	}
+	if att.Ledger > int64(len(c.ledger)) {
+		// A concurrent instruction can commit between the ledger snapshot and
+		// attention read. Refresh only the ledger, retaining captured attention;
+		// a committed prefix must now be visible in its append-only history.
+		if err := c.recoverLedger(ctx); err != nil {
+			return err
+		}
+		if att.Ledger > int64(len(c.ledger)) {
+			return fmt.Errorf("the recorded attention has a Ledger cursor %d beyond the %d recorded ledger entries", att.Ledger, len(c.ledger))
+		}
+	}
 	c.pc = att.PC
 	c.summonsPos = att.Summons
 	c.heard = slices.Clone(att.Heard)
 	c.gazettePos = att.Gazette
 	c.ledgerPos = att.Ledger
 	c.note("The Court's attention rests at instruction %d. Dossier holds %d item(s); %d appeal(s) pending.", c.pc, len(c.stack), len(c.frames))
+	return nil
+}
+
+func (c *Court) recoverLedger(ctx context.Context) error {
+	records, err := c.Log.ReadAll(ctx, c.Case.Ledger())
+	if err != nil {
+		return err
+	}
+	c.ledger = nil
+	for _, record := range records {
+		var event ledgerEvent
+		if err := json.Unmarshal(record.Value, &event); err != nil {
+			return fmt.Errorf("the ledger contains an entry no one can read: %w", err)
+		}
+		c.ledger = append(c.ledger, event)
+	}
+	return nil
+}
+
+// validateRecoveredAttention rejects cursors that cannot name stored positions.
+// Heard is left to the existing selective-receive normalization for legacy logs.
+func validateRecoveredAttention(att docket.Attention) error {
+	for _, cursor := range []struct {
+		name     string
+		position int64
+	}{
+		{"PC", att.PC}, {"Summons", att.Summons}, {"Ledger", att.Ledger}, {"Gazette", att.Gazette},
+	} {
+		if cursor.position < 0 {
+			return fmt.Errorf("the recorded attention has a negative %s cursor: %d", cursor.name, cursor.position)
+		}
+	}
 	return nil
 }
 
@@ -669,9 +709,22 @@ func (c *Court) push(v law.Value) {
 	c.stack = append(c.stack, v)
 }
 
+const dossierUnderflow = "the file you requested does not exist. You are nonetheless responsible for its contents"
+
+// requireOperands checks stored arities before allocating their argument slices.
+func (c *Court) requireOperands(op string, count, extra int) error {
+	if count < 0 {
+		return guilty("instruction %s requests a negative number of operands: %d", op, count)
+	}
+	if count > len(c.stack)-extra {
+		return guilty(dossierUnderflow)
+	}
+	return nil
+}
+
 func (c *Court) pop() (law.Value, error) {
 	if len(c.stack) == 0 {
-		return law.Value{}, guilty("the file you requested does not exist. You are nonetheless responsible for its contents")
+		return law.Value{}, guilty(dossierUnderflow)
 	}
 	b, _ := json.Marshal(dossierEvent{Op: "POP"})
 	c.buffer(c.Case.Dossier(), nil, b)
@@ -1221,6 +1274,9 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpPetitionUnder:
+		if err := c.requireOperands(in.Op, in.Count, 1); err != nil {
+			return 0, err
+		}
 		args := make([]law.Value, in.Count)
 		for i := in.Count - 1; i >= 0; i-- {
 			v, err := c.pop()
@@ -1283,6 +1339,9 @@ func (c *Court) step(ctx context.Context, in law.Instr) (int64, error) {
 		return next, nil
 
 	case law.OpSchedule:
+		if err := c.requireOperands(in.Op, in.Count, 0); err != nil {
+			return 0, err
+		}
 		items := make([]law.Value, in.Count)
 		for i := in.Count - 1; i >= 0; i-- {
 			v, err := c.pop()

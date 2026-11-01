@@ -1,7 +1,7 @@
 schema: spec-driven
 
 context: |
-  triallang is a toy language implemented in Go 1.27.2. The Court executes
+  triallang is a toy language implemented in Go 1.27.3. The Court executes
   compiled instructions against a small docket.Log interface. Kafka provides
   durable transactions; the memory adapter supports local examples and tests.
   Read CONTRIBUTING.md before changing the repository.

@@ -1,4 +1,4 @@
-GO_VERSION := 1.27.2
+GO_VERSION := 1.27.3
 GOLANGCI_LINT_VERSION := v2.15.0
 GOIMPORTS_VERSION := v0.49.0
 GOVULNCHECK_VERSION := v1.7.0
@@ -133,7 +133,16 @@ verify:
 # Listing the targets is the safer default.
 .DEFAULT_GOAL := help
 
-.PHONY: help install clean
+.PHONY: help install clean release release-check
+
+# Pass the explicit tag as data, never interpolate it into a shell command.
+release release-check: export TRIAL_RELEASE_TAG = $(TAG)
+
+release-check:
+	go run ./tools/release -mode check
+
+release:
+	go run ./tools/release -mode release
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo devel)
 
@@ -143,6 +152,8 @@ help:
 	@echo "  help           List development targets (the default)"
 	@echo "  build          Compile ./cmd/trial into ./trial"
 	@echo "  install        go install ./cmd/trial with the git version stamped in"
+	@echo "  release-check  Read-only release preflight (TAG=vX.Y.Z required)"
+	@echo "  release        Verify, prepare/push the tag, and dispatch protected release (TAG required)"
 	@echo "  test           Test suite (Kafka tests require TRIAL_E2E_BROKER)"
 	@echo "  race           Tests under the race detector"
 	@echo "  property       Generated-program property tests"

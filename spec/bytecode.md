@@ -268,3 +268,18 @@ Consequences:
   topics; readers therefore treat "fetch at offset" as "first committed
   record at or after," and full reads terminate against a quiescent
   high watermark rather than by offset arithmetic.
+
+## Validation of damaged stored records
+
+A dossier PUSH event must contain a non-null value. Recorded PC, summons,
+ledger and gazette cursors must be nonnegative. The ledger cursor counts consumed
+entries and must not exceed the recovered ledger length; an earlier prefix,
+including zero during reenactment, remains valid. Recovery returns a contextual
+error for these malformed states. If attention advanced after the initial ledger
+snapshot, recovery refreshes the ledger once before rejecting the captured cursor.
+This upper bound does not apply to physical summons or gazette offsets.
+SCHEDULE and PETITION-UNDER counts must be
+nonnegative and available in the operand stack before allocating argument
+storage. Ordinary underflow retains its existing verdict, and zero counts are
+valid when otherwise supported. Valid legacy selective-receive normalization
+is preserved. These checks add no serialized field or opcode.
